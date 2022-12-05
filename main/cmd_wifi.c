@@ -279,6 +279,7 @@ static int wifi_cmd_query(int argc, char **argv)
 {
     wifi_config_t cfg;
     wifi_mode_t mode;
+    esp_netif_ip_info_t ip;
 
     esp_wifi_get_mode(&mode);
     if (WIFI_MODE_AP == mode) {
@@ -297,6 +298,40 @@ static int wifi_cmd_query(int argc, char **argv)
         return 0;
     }
 
+    memset(&ip, 0, sizeof(esp_netif_ip_info_t));
+
+    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
+        ESP_LOGI(TAG, "IP:"IPSTR, IP2STR(&ip.ip));
+        ESP_LOGI(TAG, "MASK:"IPSTR, IP2STR(&ip.netmask));
+        ESP_LOGI(TAG, "GW:"IPSTR, IP2STR(&ip.gw));
+    }
+    return 0;
+}
+
+static void task_listener(void *arg)
+{
+    int count = 0;
+
+    ESP_LOGI(TAG, "listener task started");
+
+    while(true) {
+        vTaskDelay(1000);
+        ESP_LOGI(TAG, "count %d", count);
+        count++;
+    }
+}
+
+static int wifi_cmd_listen(int argc, char **argv)
+{
+    BaseType_t ret;
+
+    ESP_LOGI(TAG, "starting listener task");
+
+    ret = xTaskCreatePinnedToCore(task_listener, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL, portNUM_PROCESSORS - 1);
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "create task %s failed", IPERF_TRAFFIC_TASK_NAME);
+        return ESP_FAIL;
+    }
     return 0;
 }
 
@@ -479,6 +514,15 @@ void register_wifi(void)
         .func = &wifi_cmd_query,
     };
     ESP_ERROR_CHECK( esp_console_cmd_register(&query_cmd) );
+
+    const esp_console_cmd_t listener_cmd = {
+        .command = "listen",
+        .help = "start listener task",
+        .hint = NULL,
+        .func = &wifi_cmd_listen,
+    };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&listener_cmd) );
+
 
     iperf_args.ip = arg_str0("c", "client", "<ip>", "run in client mode, connecting to <host>");
     iperf_args.server = arg_lit0("s", "server", "run in server mode");
