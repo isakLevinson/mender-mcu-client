@@ -380,8 +380,6 @@ static void task_listener(void *arg)
 
     listen_addr4.sin_family = AF_INET;
     listen_addr4.sin_port = htons(7000);
-    //listen_addr4.sin_addr.s_addr = 0x0100007f;
-    //listen_addr4.sin_addr.s_addr = 192 | (168<<8) | (1<<16) | (94 << 24);
 
     listen_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     ESP_GOTO_ON_FALSE((listen_socket >= 0), ESP_FAIL, exit, TAG, "Unable to create socket: errno %d", errno);
@@ -414,12 +412,6 @@ static void task_listener(void *arg)
 
     socket_recv(client_socket, listen_addr, IPERF_TRANS_TYPE_TCP);
 
-    while(true) {
-        vTaskDelay(1000);
-        ESP_LOGI(TAG, "count %d", count);
-        count++;
-    }
-
 exit:
     if (client_socket != -1) {
         close(client_socket);
@@ -431,6 +423,7 @@ exit:
         ESP_LOGI(TAG, "TCP Socket server is closed.");
     }
     //s_iperf_ctrl.finish = true;
+    vTaskDelete(NULL);
 }
 
 static int wifi_cmd_listen(int argc, char **argv)
