@@ -21,7 +21,6 @@
 #include "iperf.h"
 #include "esp_coexist.h"
 
-
 #include <sys/socket.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -31,6 +30,8 @@
 #include "esp_timer.h"
 #include "iperf.h"
 
+#include "driver/uart.h"
+#include "main.h"
 
 
 typedef struct {
@@ -327,6 +328,10 @@ static void socket_recv(int recv_socket, struct sockaddr_storage listen_addr, ui
     int want_recv = 0;
     int actual_recv = 0;
     socklen_t socklen = sizeof(struct sockaddr_in);
+    char    str[256];
+
+    strcpy(str, "Ready\r\n");
+    uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
 
     buffer = recvBuf;
     want_recv = sizeof(recvBuf);
@@ -342,10 +347,10 @@ static void socket_recv(int recv_socket, struct sockaddr_storage listen_addr, ui
             break;
         } else {
             ESP_LOGI(TAG, "received %d", actual_recv);
+            uart_write_bytes(ECHO_UART_PORT_NUM, buffer, actual_recv);
         }
     }
 }
-
 
 static void task_listener(void *arg)
 {
@@ -361,10 +366,14 @@ static void task_listener(void *arg)
     struct timeval timeout = { 0 };
     socklen_t addr_len = sizeof(struct sockaddr);
     int opt = 1;
+    char    str[256];
 
     int count = 0;
 
     ESP_LOGI(TAG, "listener task started");
+
+    strcpy(str, "Hello");
+    uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
 
     if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
         ESP_LOGI(TAG, "IP:"IPSTR, IP2STR(&ip.ip));
