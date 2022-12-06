@@ -324,32 +324,6 @@ static int wifi_cmd_query(int argc, char **argv)
 uint8_t recvBuf[1024];
 static void socket_recv(int recv_socket, struct sockaddr_storage listen_addr, uint8_t type)
 {
-    uint8_t *buffer;
-    int want_recv = 0;
-    int actual_recv = 0;
-    socklen_t socklen = sizeof(struct sockaddr_in);
-    char    str[256];
-
-    strcpy(str, "Ready\r\n");
-    uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
-
-    buffer = recvBuf;
-    want_recv = sizeof(recvBuf);
-    //while (!s_iperf_ctrl.finish) {
-    while (true) {
-        actual_recv = recvfrom(recv_socket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
-        if (actual_recv < 0) {
-            //iperf_show_socket_error_reason(error_log, recv_socket);
-            //ESP_LOGW(TAG, "error, error code: %d, reason: %s", error_log, strerror(error_log));
-            ESP_LOGW(TAG, "recv error, error code: %d", actual_recv);
-
-            //s_iperf_ctrl.finish = true;
-            break;
-        } else {
-            ESP_LOGI(TAG, "received %d", actual_recv);
-            uart_write_bytes(ECHO_UART_PORT_NUM, buffer, actual_recv);
-        }
-    }
 }
 
 static void task_listener(void *arg)
@@ -419,7 +393,38 @@ static void task_listener(void *arg)
     timeout.tv_sec = IPERF_SOCKET_RX_TIMEOUT;
     setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-    socket_recv(client_socket, listen_addr, IPERF_TRANS_TYPE_TCP);
+/////////////////////////////////////////////////
+    //socket_recv(client_socket, listen_addr, IPERF_TRANS_TYPE_TCP);
+    uint8_t *buffer;
+    int want_recv = 0;
+    int actual_recv = 0;
+    socklen_t socklen = sizeof(struct sockaddr_in);
+
+    strcpy(str, "Ready\r\n");
+    uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
+
+    buffer = recvBuf;
+    want_recv = sizeof(recvBuf);
+    //while (!s_iperf_ctrl.finish) {
+    while (true) {
+        actual_recv = recvfrom(client_socket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
+        if (actual_recv < 0) {
+            //iperf_show_socket_error_reason(error_log, recv_socket);
+            //ESP_LOGW(TAG, "error, error code: %d, reason: %s", error_log, strerror(error_log));
+            ESP_LOGW(TAG, "recv error, error code: %d", actual_recv);
+
+            //s_iperf_ctrl.finish = true;
+            break;
+        } else {
+            memcpy(str, buffer, actual_recv);
+            str[actual_recv] = '\0';
+
+            ESP_LOGI(TAG, "received %d <%s>", actual_recv, str);
+
+            uart_write_bytes(ECHO_UART_PORT_NUM, buffer, actual_recv);
+        }
+    }
+
 
 exit:
     if (client_socket != -1) {
