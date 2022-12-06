@@ -21,6 +21,18 @@
 #include "iperf.h"
 #include "esp_coexist.h"
 
+
+#include <sys/socket.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_check.h"
+#include "esp_log.h"
+#include "esp_rom_sys.h"
+#include "esp_timer.h"
+#include "iperf.h"
+
+
+
 typedef struct {
     struct arg_str *ip;
     struct arg_lit *server;
@@ -308,17 +320,117 @@ static int wifi_cmd_query(int argc, char **argv)
     return 0;
 }
 
+uint8_t recvBuf[1024];
+static void socket_recv(int recv_socket, struct sockaddr_storage listen_addr, uint8_t type)
+{
+    uint8_t *buffer;
+    int want_recv = 0;
+    int actual_recv = 0;
+    socklen_t socklen = sizeof(struct sockaddr_in);
+
+    buffer = recvBuf;
+    want_recv = sizeof(recvBuf);
+    //while (!s_iperf_ctrl.finish) {
+    while (true) {
+        actual_recv = recvfrom(recv_socket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
+        if (actual_recv < 0) {
+            //iperf_show_socket_error_reason(error_log, recv_socket);
+            //ESP_LOGW(TAG, "error, error code: %d, reason: %s", error_log, strerror(error_log));
+            ESP_LOGW(TAG, "recv error, error code: %d", actual_recv);
+
+            //s_iperf_ctrl.finish = true;
+            break;
+        } else {
+            ESP_LOGI(TAG, "received %d", actual_recv);
+        }
+    }
+}
+
+
 static void task_listener(void *arg)
 {
+    esp_err_t ret;// = ESP_OK;
+    int err = 0;
+
+    esp_netif_ip_info_t ip;
+    int listen_socket = -1;
+    int client_socket = -1;
+    struct sockaddr_in listen_addr4 = { 0 };
+    struct sockaddr_storage listen_addr = { 0 };
+    struct sockaddr_in remote_addr;
+    struct timeval timeout = { 0 };
+    socklen_t addr_len = sizeof(struct sockaddr);
+    int opt = 1;
+
     int count = 0;
 
     ESP_LOGI(TAG, "listener task started");
+
+    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
+        ESP_LOGI(TAG, "IP:"IPSTR, IP2STR(&ip.ip));
+        ESP_LOGI(TAG, "MASK:"IPSTR, IP2STR(&ip.netmask));
+        ESP_LOGI(TAG, "GW:"IPSTR, IP2STR(&ip.gw));
+
+        listen_addr4.sin_addr.s_addr = ip.ip.addr;
+
+    } else {
+        ESP_LOGE(TAG, "esp_netif_get_ip_info failed");
+        return;
+    }
+
+    listen_addr4.sin_family = AF_INET;
+    listen_addr4.sin_port = htons(7000);
+    //listen_addr4.sin_addr.s_addr = 0x0100007f;
+    //listen_addr4.sin_addr.s_addr = 192 | (168<<8) | (1<<16) | (94 << 24);
+
+    listen_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ESP_GOTO_ON_FALSE((listen_socket >= 0), ESP_FAIL, exit, TAG, "Unable to create socket: errno %d", errno);
+
+    setsockopt(listen_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    ESP_LOGI(TAG, "Socket created");
+
+    err = bind(listen_socket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
+    ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Socket unable to bind: errno %d, IPPROTO: %d", errno, AF_INET);
+
+    err = listen(listen_socket, 5);
+    ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Error occurred during listen: errno %d", errno);
+    memcpy(&listen_addr, &listen_addr4, sizeof(listen_addr4));
+
+   //ESP_LOGI(TAG, "listen on:"IPSTR, IP2STR(&listen_addr4));
+
+    ESP_LOGI(TAG, "listen on addr %d.%d.%d.%d:%d",
+             listen_addr4.sin_addr.s_addr & 0xFF,
+             (listen_addr4.sin_addr.s_addr >> 8) & 0xFF,
+             (listen_addr4.sin_addr.s_addr >> 16) & 0xFF,
+             (listen_addr4.sin_addr.s_addr >> 24) & 0xFF);
+
+    client_socket = accept(listen_socket, (struct sockaddr *)&remote_addr, &addr_len);
+    ESP_GOTO_ON_FALSE((client_socket >= 0), ESP_FAIL, exit, TAG, "Unable to accept connection: errno %d", errno);
+    ESP_LOGI(TAG, "accept: %s,%d\n", inet_ntoa(remote_addr.sin_addr), htons(remote_addr.sin_port));
+
+    timeout.tv_sec = IPERF_SOCKET_RX_TIMEOUT;
+    setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+    socket_recv(client_socket, listen_addr, IPERF_TRANS_TYPE_TCP);
 
     while(true) {
         vTaskDelay(1000);
         ESP_LOGI(TAG, "count %d", count);
         count++;
     }
+
+exit:
+    if (client_socket != -1) {
+        close(client_socket);
+    }
+
+    if (listen_socket != -1) {
+        shutdown(listen_socket, 0);
+        close(listen_socket);
+        ESP_LOGI(TAG, "TCP Socket server is closed.");
+    }
+    //s_iperf_ctrl.finish = true;
 }
 
 static int wifi_cmd_listen(int argc, char **argv)
@@ -447,7 +559,6 @@ static int wifi_cmd_iperf(int argc, char **argv)
             cfg.bw_lim = IPERF_DEFAULT_NO_BW_LIMIT;
         }
     }
-
 
     ESP_LOGI(TAG, "mode=%s-%s sip=%d.%d.%d.%d:%d, dip=%d.%d.%d.%d:%d, interval=%d, time=%d",
              cfg.flag & IPERF_FLAG_TCP ? "tcp" : "udp",
