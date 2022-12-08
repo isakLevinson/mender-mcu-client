@@ -1,6 +1,8 @@
-idf_component_register(SRCS "cmd_wifi.c"
+idf_component_register(SRCS "iperf_example_main.c"
                             "cmd_ble.c"
-                            "iperf_example_main.c"
+                            "gatt_svr.c"
+                            "cmd_wifi.c"
+                            
                     INCLUDE_DIRS ".")
 
 target_compile_options(${COMPONENT_LIB} PRIVATE "-Wno-format")
