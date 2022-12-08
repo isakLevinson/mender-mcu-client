@@ -390,8 +390,8 @@ static void task_listener(void *arg)
     ESP_GOTO_ON_FALSE((client_socket >= 0), ESP_FAIL, exit, TAG, "Unable to accept connection: errno %d", errno);
     ESP_LOGI(TAG, "accept: %s,%d\n", inet_ntoa(remote_addr.sin_addr), htons(remote_addr.sin_port));
 
-    timeout.tv_sec = IPERF_SOCKET_RX_TIMEOUT;
-    setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    //timeout.tv_sec = IPERF_SOCKET_RX_TIMEOUT;
+    //setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
 /////////////////////////////////////////////////
     //socket_recv(client_socket, listen_addr, IPERF_TRANS_TYPE_TCP);
