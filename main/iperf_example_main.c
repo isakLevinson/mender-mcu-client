@@ -19,6 +19,8 @@
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "sdkconfig.h"
+#include "cmd_ble.h"
+#include "cmd_wifi.h"
 
 #include "main.h"
 
@@ -58,6 +60,7 @@ void app_main(void)
     ESP_ERROR_CHECK( ret );
 
     initialise_wifi();
+    initialise_ble();
 
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
@@ -78,6 +81,7 @@ void app_main(void)
     /* Register commands */
     register_system();
     register_wifi();
+    register_ble();
     uart_init();
 
     printf("\n ==================================================\n");

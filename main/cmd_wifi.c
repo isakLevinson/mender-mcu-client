@@ -120,7 +120,6 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     xEventGroupSetBits(wifi_event_group, DISCONNECTED_BIT);
 }
 
-
 void initialise_wifi(void)
 {
     esp_log_level_set("wifi", ESP_LOG_WARN);
