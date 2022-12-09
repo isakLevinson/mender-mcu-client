@@ -84,6 +84,39 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
     },
 };
 
+static void _handleData(void* pBuf, int len)
+{
+    char*   str;
+    char*   passwd;
+
+    str = malloc(len+1);
+    if (!str) {
+        return;
+    }
+
+    memcpy(str, pBuf, len);
+    str[len] = '\0';
+
+    passwd = strstr(str, ";");
+    if (!passwd) {
+        ESP_LOGW(TAG, "no ';' detected");
+        goto exit;
+    }
+
+    *passwd = '\0';
+    passwd++;
+    if (passwd - str >= len) {
+        ESP_LOGW(TAG, "passwd size too small");
+        goto exit;
+    }
+
+    ESP_LOGI(TAG, "ssid  : <%s>", str);
+    ESP_LOGI(TAG, "passwd: <%s>", passwd);
+
+    exit:
+    free(str);
+}
+
 static int gatt_svr_chr_write(struct os_mbuf *om, uint16_t min_len, uint16_t max_len, void *dst, uint16_t *len)
 {
     uint16_t om_len;
@@ -91,6 +124,7 @@ static int gatt_svr_chr_write(struct os_mbuf *om, uint16_t min_len, uint16_t max
 
     ESP_LOGI(TAG, "gatt_svr_chr_write %d %d %d", min_len, max_len, len);
     ESP_LOG_BUFFER_HEXDUMP(TAG, om->om_data, om->om_len, ESP_LOG_INFO);
+    _handleData(om->om_data, om->om_len);
 
 
     om_len = OS_MBUF_PKTLEN(om);
