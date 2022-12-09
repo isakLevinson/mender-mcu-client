@@ -101,7 +101,6 @@ static void bleprph_print_conn_desc(struct ble_gap_conn_desc *desc)
                 desc->sec_state.bonded);
 }
 
-
 static void bleprph_advertise(void)
 {
     struct ble_gap_adv_params adv_params;
@@ -280,6 +279,9 @@ static int bleprph_gap_event(struct ble_gap_event *event, void *arg)
          * continue with the pairing operation.
          */
         return BLE_GAP_REPEAT_PAIRING_RETRY;
+
+        default:
+            ESP_LOGI(TAG, "unhandled event %d", event->type);
     }
 
     return 0;

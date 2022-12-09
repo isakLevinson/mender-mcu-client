@@ -53,8 +53,7 @@ static const char* TAG = "wifi_prph_coex";
 
 static uint8_t gatt_svr_sec_test_static_val;
 
-static int
-gatt_svr_chr_access_sec_test(uint16_t conn_handle, uint16_t attr_handle,
+static int gatt_svr_chr_access_sec_test(uint16_t conn_handle, uint16_t attr_handle,
                              struct ble_gatt_access_ctxt *ctxt,
                              void *arg);
 
@@ -68,13 +67,12 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
                 /*** Characteristic: Random number generator. */
                 .uuid = &gatt_svr_chr_sec_test_rand_uuid.u,
                 .access_cb = gatt_svr_chr_access_sec_test,
-                .flags = BLE_GATT_CHR_F_READ
+                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE
             }, {
                 /*** Characteristic: Static value. */
                 .uuid = &gatt_svr_chr_sec_test_static_uuid.u,
                 .access_cb = gatt_svr_chr_access_sec_test,
-                .flags = BLE_GATT_CHR_F_READ |
-                BLE_GATT_CHR_F_WRITE
+                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_PROP_INDICATE | BLE_GATT_CHR_PROP_INDICATE
             }, {
                 0, /* No more characteristics in this service. */
             }
@@ -86,12 +84,14 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
     },
 };
 
-static int
-gatt_svr_chr_write(struct os_mbuf *om, uint16_t min_len, uint16_t max_len,
-                   void *dst, uint16_t *len)
+static int gatt_svr_chr_write(struct os_mbuf *om, uint16_t min_len, uint16_t max_len, void *dst, uint16_t *len)
 {
     uint16_t om_len;
     int rc;
+
+    ESP_LOGI(TAG, "gatt_svr_chr_write %d %d %d", min_len, max_len, len);
+    ESP_LOG_BUFFER_HEXDUMP(TAG, om->om_data, om->om_len, ESP_LOG_INFO);
+
 
     om_len = OS_MBUF_PKTLEN(om);
     if (om_len < min_len || om_len > max_len) {
@@ -106,10 +106,9 @@ gatt_svr_chr_write(struct os_mbuf *om, uint16_t min_len, uint16_t max_len,
     return 0;
 }
 
-static int
-gatt_svr_chr_access_sec_test(uint16_t conn_handle, uint16_t attr_handle,
-                             struct ble_gatt_access_ctxt *ctxt,
-                             void *arg)
+static int gatt_svr_chr_access_sec_test(uint16_t conn_handle, uint16_t attr_handle,
+                                        struct ble_gatt_access_ctxt *ctxt,
+                                        void *arg)
 {
     const ble_uuid_t *uuid;
     int rand_num;
@@ -117,17 +116,34 @@ gatt_svr_chr_access_sec_test(uint16_t conn_handle, uint16_t attr_handle,
 
     uuid = ctxt->chr->uuid;
 
+    ESP_LOGI(TAG, "gatt_svr_chr_access_sec_test op=%x", ctxt->op);
+
     /* Determine which characteristic is being accessed by examining its
      * 128-bit UUID.
      */
 
     if (ble_uuid_cmp(uuid, &gatt_svr_chr_sec_test_rand_uuid.u) == 0) {
-        assert(ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR);
+    switch (ctxt->op) {
+        case BLE_GATT_ACCESS_OP_READ_CHR:
+            /* Respond with a 32-bit random number. */
+            rand_num = rand();
+            rc = os_mbuf_append(ctxt->om, &rand_num, sizeof rand_num);
+            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
 
-        /* Respond with a 32-bit random number. */
-        rand_num = rand();
-        rc = os_mbuf_append(ctxt->om, &rand_num, sizeof rand_num);
-        return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+        case BLE_GATT_ACCESS_OP_WRITE_CHR:
+            rc = gatt_svr_chr_write(ctxt->om,
+                                    sizeof gatt_svr_sec_test_static_val,
+                                    sizeof gatt_svr_sec_test_static_val,
+                                    &gatt_svr_sec_test_static_val, NULL);
+            return rc;
+
+        default:
+            assert(0);
+            return BLE_ATT_ERR_UNLIKELY;
+        }
+
+
+
     }
 
     if (ble_uuid_cmp(uuid, &gatt_svr_chr_sec_test_static_uuid.u) == 0) {
@@ -157,8 +173,7 @@ gatt_svr_chr_access_sec_test(uint16_t conn_handle, uint16_t attr_handle,
     return BLE_ATT_ERR_UNLIKELY;
 }
 
-void
-gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
+void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
 {
     char buf[BLE_UUID_STR_LEN];
 
