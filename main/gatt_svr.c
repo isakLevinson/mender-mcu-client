@@ -25,6 +25,7 @@
 #include "bleprph.h"
 #include "services/ans/ble_svc_ans.h"
 #include "esp_log.h"
+#include "cmd_wifi.h"
 
 
 /**
@@ -84,10 +85,14 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
     },
 };
 
+char ipStr[32];
+
 static void _handleData(void* pBuf, int len)
 {
     char*   str;
     char*   passwd;
+    esp_ip4_addr_t  ip;
+    uint8_t* ipArray = (uint8_t*)&ip;
 
     str = malloc(len+1);
     if (!str) {
@@ -112,6 +117,12 @@ static void _handleData(void* pBuf, int len)
 
     ESP_LOGI(TAG, "ssid  : <%s>", str);
     ESP_LOGI(TAG, "passwd: <%s>", passwd);
+
+    wifi_cmd_sta_join(str, passwd);
+
+    ip = wifi_getSelfIp();
+    sprintf(ipStr, "%d.%d.%d.%d", ipArray[0], ipArray[1], ipArray[2], ipArray[3]);
+    ESP_LOGI(TAG, "ip: <%s>", ipStr);
 
     exit:
     free(str);
@@ -145,8 +156,9 @@ static int gatt_svr_chr_access_sec_test(uint16_t conn_handle, uint16_t attr_hand
                                         void *arg)
 {
     const ble_uuid_t *uuid;
-    int rand_num;
     int rc;
+    esp_ip4_addr_t  ip;
+    uint8_t* ipArray = (uint8_t*)&ip;
 
     uuid = ctxt->chr->uuid;
 
@@ -159,9 +171,11 @@ static int gatt_svr_chr_access_sec_test(uint16_t conn_handle, uint16_t attr_hand
     if (ble_uuid_cmp(uuid, &gatt_svr_chr_sec_test_rand_uuid.u) == 0) {
     switch (ctxt->op) {
         case BLE_GATT_ACCESS_OP_READ_CHR:
-            /* Respond with a 32-bit random number. */
-            rand_num = rand();
-            rc = os_mbuf_append(ctxt->om, &rand_num, sizeof rand_num);
+            ip = wifi_getSelfIp();
+            sprintf(ipStr, "%d.%d.%d.%d", ipArray[0], ipArray[1], ipArray[2], ipArray[3]);
+            ESP_LOGI(TAG, "ip: <%s>", ipStr);
+
+            rc = os_mbuf_append(ctxt->om, ipStr, strlen(ipStr));
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
 
         case BLE_GATT_ACCESS_OP_WRITE_CHR:

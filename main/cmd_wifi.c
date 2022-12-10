@@ -32,6 +32,7 @@
 
 #include "driver/uart.h"
 #include "main.h"
+#include "cmd_wifi.h"
 
 
 typedef struct {
@@ -169,7 +170,7 @@ void initialise_wifi(void)
     initialized = true;
 }
 
-static bool wifi_cmd_sta_join(const char *ssid, const char *pass)
+bool wifi_cmd_sta_join(const char *ssid, const char *pass)
 {
     int bits = xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, 0, 1, 0);
 
@@ -318,6 +319,17 @@ static int wifi_cmd_query(int argc, char **argv)
         ESP_LOGI(TAG, "GW:"IPSTR, IP2STR(&ip.gw));
     }
     return 0;
+}
+
+esp_ip4_addr_t  wifi_getSelfIp(void)
+{
+    esp_netif_ip_info_t ip;
+
+    memset(&ip, 0, sizeof(esp_netif_ip_info_t));
+
+    esp_netif_get_ip_info(netif_sta, &ip);
+
+    return ip.ip;
 }
 
 uint8_t recvBuf[1024];
