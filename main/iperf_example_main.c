@@ -84,6 +84,19 @@ void app_main(void)
     register_ble();
     uart_init();
 
+    {
+        bool    ret = true;
+        char    ssid[32];
+        char    passwd[32];
+
+        ret = wifi_nvs_get_ssid(ssid, passwd);
+        if (ret) {
+            printf("ssid  : %s\n", ssid);
+            printf("passwd: %s\n", passwd);
+            wifi_cmd_sta_join(ssid, passwd);
+        }
+    }
+
     printf("\n ==================================================\n");
     printf(" |       Steps to test WiFi throughput            |\n");
     printf(" |                                                |\n");

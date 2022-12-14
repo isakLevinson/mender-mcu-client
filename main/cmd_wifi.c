@@ -51,6 +51,13 @@ typedef struct {
 } wifi_iperf_t;
 static wifi_iperf_t iperf_args;
 
+static struct {
+    nvs_handle_t nvsHandle;
+    char    currentSsid[32];
+    char    currentPasswd[32];
+} g_wifi;
+
+
 typedef struct {
     struct arg_str *ssid;
     struct arg_str *password;
@@ -73,6 +80,94 @@ static esp_netif_t *netif_sta = NULL;
 static EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
 const int DISCONNECTED_BIT = BIT1;
+
+#define NVS_NAMESPACE_WIFI      "wifi"
+#define NVS_KEY_WIFI_SSID       "ssid"
+#define NVS_KEY_WIFI_PASSWD     "passwd"
+
+bool    wifi_nvs_get_ssid(char* ssid, char* passwd)
+{
+    bool    ret = true;
+    esp_err_t err = ESP_OK;
+    nvs_handle_t handle;
+    size_t length;
+    char* pStr = NULL;
+
+    err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        printf("nvs_open failed %x\n", err);
+        return false;
+    }
+
+    err =  nvs_get_str(handle, NVS_KEY_WIFI_SSID, ssid, &length);
+    if (err != ESP_OK) {
+        printf("nvs_get_str ssid failed\n");
+        ret = false;
+        goto exit;
+    }
+    ssid[length] = '\0';
+
+    err =  nvs_get_str(handle, NVS_KEY_WIFI_PASSWD, passwd, &length);
+    if (err != ESP_OK) {
+        printf("nvs_get_str passwd failed\n");
+        ret = false;
+        goto exit;
+    }
+    passwd[length] = '\0';
+
+    exit:
+    nvs_close(handle);
+
+    switch(err) {
+    case ESP_OK:    break;
+    case ESP_ERR_NVS_NOT_FOUND:         pStr = "ESP_ERR_NVS_NOT_FOUND"; break;
+    case ESP_ERR_NVS_NOT_INITIALIZED:   pStr = "ESP_ERR_NVS_NOT_INITIALIZED";  break;
+    case ESP_ERR_NO_MEM:                pStr = "ESP_ERR_NO_MEM";  break;
+    case ESP_ERR_INVALID_ARG:           pStr = "ESP_ERR_INVALID_ARG";  break;
+    default:
+    }
+
+    if (pStr) {
+        printf("%s\n", pStr);
+    } else {
+        if (ESP_OK != err) {
+            printf("0x%x", err);
+        }
+    }
+
+    return ret;
+}
+
+bool    wifi_nvs_set_ssid(char* ssid, char* passwd)
+{
+    bool    ret = true;
+    esp_err_t err = ESP_OK;
+    nvs_handle_t handle;
+
+    err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        printf("nvs_open failed");
+        return false;
+    }
+
+    err = nvs_set_str (handle, NVS_KEY_WIFI_SSID, ssid);
+    if (err != ESP_OK) {
+        printf("nvs_set_str ssid failed %x\n", err);
+        ret = false;
+        goto exit;
+    }
+
+    err = nvs_set_str (handle, NVS_KEY_WIFI_PASSWD, passwd);
+    if (err != ESP_OK) {
+        printf("nvs_set_str passwd failed %x\n", err);
+        ret = false;
+        goto exit;
+    }
+
+    exit:
+    nvs_close(handle);
+    return ret;
+}
 
 static void scan_done_handler(void *arg, esp_event_base_t event_base,
                               int32_t event_id, void *event_data)
@@ -466,8 +561,6 @@ static int wifi_cmd_listen(int argc, char **argv)
     return 0;
 }
 
-nvs_handle_t nvsHandle;
-
 static int wifi_cmd_nvs(int argc, char **argv)
 {
     esp_err_t err = ESP_OK;
@@ -475,11 +568,11 @@ static int wifi_cmd_nvs(int argc, char **argv)
     if (argc == 2) {
         if (!strcmp(argv[1], "close")) {
             printf("close\n");
-            nvs_close(nvsHandle);
-            nvsHandle = NULL;
+            nvs_close(g_wifi.nvsHandle);
+            g_wifi.nvsHandle = NULL;
         } else if (!strcmp(argv[1], "commit")) {
             printf("commit\n");
-            err = nvs_commit(nvsHandle);
+            err = nvs_commit(g_wifi.nvsHandle);
         } else if (!strcmp(argv[1], "stats")) {
             nvs_stats_t nvs_stats;
 
@@ -499,20 +592,44 @@ static int wifi_cmd_nvs(int argc, char **argv)
             while (err == ESP_OK) {
                 nvs_entry_info_t info;
                 nvs_entry_info(it, &info); // Can omit error check if parameters are guaranteed to be non-NULL
-                printf("ns: '%s', key: '%s', type: '%d' \n", info.namespace_name, info.key, info.type);
+                printf("ns: '%s', key: '%s', type: '%x' \n", info.namespace_name, info.key, info.type);
+
+                switch (info.type) {
+                    case NVS_TYPE_U8:   printf("U8");  break;
+                    case NVS_TYPE_I8:   printf("I8");  break;
+                    case NVS_TYPE_U16:  printf("U16");  break;
+                    case NVS_TYPE_I16:  printf("I16");  break;
+                    case NVS_TYPE_U32:  printf("U32");  break;
+                    case NVS_TYPE_I32:  printf("I32");  break;
+                    case NVS_TYPE_U64:  printf("U64");  break;
+                    case NVS_TYPE_I64:  printf("I64");  break;
+                    case NVS_TYPE_STR:  printf("STR");  break;
+                    case NVS_TYPE_BLOB: printf("BLOB");  break;
+                    default:
+                }
+                printf("\n");
+
                 err = nvs_entry_next(&it);
+            }
+        } else if (!strcmp(argv[1], "ssid")) {
+            bool ret;
+            char ssid[32] = "";
+            char passwd[32] = "";
+            ret = wifi_nvs_get_ssid(ssid, passwd);
+            if (ret) {
+                printf("%s:%s\n", ssid, passwd);
             }
         }
     } else if (argc == 3) {
         if (!strcmp(argv[1], "open")) {
             printf("open %s\n", argv[2]);
-            err = nvs_open(argv[2], NVS_READWRITE, &nvsHandle);
+            err = nvs_open(argv[2], NVS_READWRITE, &g_wifi.nvsHandle);
         } else if (!strcmp(argv[1], "get")) {
             char    str[256];
              size_t length;
 
             printf("get %s\n", argv[2]);
-            err =  nvs_get_str (nvsHandle, argv[2], str, &length);
+            err =  nvs_get_str(g_wifi.nvsHandle, argv[2], str, &length);
             if (err == ESP_OK) {
                 str[length] = '\0';
                 printf("str=<%s>\n", str);
@@ -521,7 +638,9 @@ static int wifi_cmd_nvs(int argc, char **argv)
     } else if (argc == 4) {
         if (!strcmp(argv[1], "set")) {
             printf("set %s <- %s\n", argv[2], argv[3]);
-            err = nvs_set_str (nvsHandle, argv[2], argv[3]);
+            err = nvs_set_str(g_wifi.nvsHandle, argv[2], argv[3]);
+        } else if (!strcmp(argv[1], "ssid")) {
+            wifi_nvs_set_ssid(argv[2], argv[3]);
         }
     }
 
