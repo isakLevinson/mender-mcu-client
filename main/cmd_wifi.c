@@ -217,6 +217,62 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     xEventGroupSetBits(wifi_event_group, DISCONNECTED_BIT);
 }
 
+
+static void task_dummy(void *arg)
+{
+    bool    ret = true;
+    char    ssid[32];
+    char    passwd[32];
+
+    //vTaskDelay(1000);
+#if 0
+    printf("-----------------------------\n");
+    ret = wifi_nvs_get_ssid(ssid, passwd);
+    if (ret) {
+        printf("ssid  : %s\n", ssid);
+        printf("passwd: %s\n", passwd);
+        wifi_cmd_sta_join(ssid, passwd);
+    }
+    printf("-----------------------------\n");
+#endif
+
+#if 0
+    {
+        esp_err_t err = ESP_OK;
+        nvs_iterator_t it;
+        printf("list\n");
+        
+        err =  nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it);
+        while (err == ESP_OK) {
+            nvs_entry_info_t info;
+            nvs_entry_info(it, &info); // Can omit error check if parameters are guaranteed to be non-NULL
+            printf("ns: '%s', key: '%s', type: '%x' \n", info.namespace_name, info.key, info.type);
+
+            switch (info.type) {
+                case NVS_TYPE_U8:   printf("U8");  break;
+                case NVS_TYPE_I8:   printf("I8");  break;
+                case NVS_TYPE_U16:  printf("U16");  break;
+                case NVS_TYPE_I16:  printf("I16");  break;
+                case NVS_TYPE_U32:  printf("U32");  break;
+                case NVS_TYPE_I32:  printf("I32");  break;
+                case NVS_TYPE_U64:  printf("U64");  break;
+                case NVS_TYPE_I64:  printf("I64");  break;
+                case NVS_TYPE_STR:  printf("STR");  break;
+                case NVS_TYPE_BLOB: printf("BLOB");  break;
+                default:
+            }
+            printf("\n");
+
+            err = nvs_entry_next(&it);
+        }
+    }
+
+    printf("-----------------------------\n");
+#endif
+
+    vTaskDelete(NULL);
+}
+
 void initialise_wifi(void)
 {
     esp_log_level_set("wifi", ESP_LOG_WARN);
@@ -262,6 +318,8 @@ void initialise_wifi(void)
 
     ESP_ERROR_CHECK( esp_enable_extern_coex_gpio_pin(EXTERN_COEX_WIRE_3, gpio_pin) );
 #endif
+
+    xTaskCreatePinnedToCore(task_dummy, "dummy", IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL, portNUM_PROCESSORS - 1);
 
     initialized = true;
 }
