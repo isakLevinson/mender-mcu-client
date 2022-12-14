@@ -33,6 +33,7 @@
 #include "driver/uart.h"
 #include "main.h"
 #include "cmd_wifi.h"
+#include "nvs.h"
 
 
 typedef struct {
@@ -348,12 +349,12 @@ static void task_listener(void *arg)
     struct sockaddr_in listen_addr4 = { 0 };
     struct sockaddr_storage listen_addr = { 0 };
     struct sockaddr_in remote_addr;
-    struct timeval timeout = { 0 };
+    //struct timeval timeout = { 0 };
     socklen_t addr_len = sizeof(struct sockaddr);
     int opt = 1;
     char    str[256];
 
-    int count = 0;
+    //int count = 0;
 
     ESP_LOGI(TAG, "listener task started");
 
@@ -462,6 +463,85 @@ static int wifi_cmd_listen(int argc, char **argv)
         ESP_LOGE(TAG, "create task %s failed", IPERF_TRAFFIC_TASK_NAME);
         return ESP_FAIL;
     }
+    return 0;
+}
+
+nvs_handle_t nvsHandle;
+
+static int wifi_cmd_nvs(int argc, char **argv)
+{
+    esp_err_t err = ESP_OK;
+
+    if (argc == 2) {
+        if (!strcmp(argv[1], "close")) {
+            printf("close\n");
+            nvs_close(nvsHandle);
+            nvsHandle = NULL;
+        } else if (!strcmp(argv[1], "commit")) {
+            printf("commit\n");
+            err = nvs_commit(nvsHandle);
+        } else if (!strcmp(argv[1], "stats")) {
+            nvs_stats_t nvs_stats;
+
+            printf("stats\n");
+            err =  nvs_get_stats(NULL, &nvs_stats);
+            if (err == ESP_OK) {
+                printf("used_entries   : %d\n", nvs_stats.used_entries);
+                printf("free_entries   : %d\n", nvs_stats.free_entries);
+                printf("total_entries  : %d\n", nvs_stats.total_entries);
+                printf("namespace_count: %d\n", nvs_stats.namespace_count);
+            }
+        } else if (!strcmp(argv[1], "list")) {
+            nvs_iterator_t it;
+            printf("list\n");
+            
+            err =  nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it);
+            while (err == ESP_OK) {
+                nvs_entry_info_t info;
+                nvs_entry_info(it, &info); // Can omit error check if parameters are guaranteed to be non-NULL
+                printf("ns: '%s', key: '%s', type: '%d' \n", info.namespace_name, info.key, info.type);
+                err = nvs_entry_next(&it);
+            }
+        }
+    } else if (argc == 3) {
+        if (!strcmp(argv[1], "open")) {
+            printf("open %s\n", argv[2]);
+            err = nvs_open(argv[2], NVS_READWRITE, &nvsHandle);
+        } else if (!strcmp(argv[1], "get")) {
+            char    str[256];
+             size_t length;
+
+            printf("get %s\n", argv[2]);
+            err =  nvs_get_str (nvsHandle, argv[2], str, &length);
+            if (err == ESP_OK) {
+                str[length] = '\0';
+                printf("str=<%s>\n", str);
+            }
+        }
+    } else if (argc == 4) {
+        if (!strcmp(argv[1], "set")) {
+            printf("set %s <- %s\n", argv[2], argv[3]);
+            err = nvs_set_str (nvsHandle, argv[2], argv[3]);
+        }
+    }
+
+    if (err != ESP_OK) {
+        char* pStr = NULL;
+
+        switch(err) {
+        case ESP_ERR_NVS_NOT_FOUND:         pStr = "ESP_ERR_NVS_NOT_FOUND"; break;
+        case ESP_ERR_NVS_NOT_INITIALIZED:   pStr = "ESP_ERR_NVS_NOT_INITIALIZED";  break;
+        case ESP_ERR_NO_MEM:                pStr = "ESP_ERR_NO_MEM";  break;
+        case ESP_ERR_INVALID_ARG:           pStr = "ESP_ERR_INVALID_ARG";  break;
+        }
+
+        if (pStr) {
+            printf("failed %s\n", pStr);
+        } else {
+            printf("failed 0x%x\n", err);
+        }
+    }
+
     return 0;
 }
 
@@ -651,6 +731,14 @@ void register_wifi(void)
         .func = &wifi_cmd_listen,
     };
     ESP_ERROR_CHECK( esp_console_cmd_register(&listener_cmd) );
+
+    const esp_console_cmd_t nvs_cmd = {
+        .command = "nvs",
+        .help = "<key> [value]",
+        .hint = NULL,
+        .func = &wifi_cmd_nvs,
+    };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&nvs_cmd) );
 
 
     iperf_args.ip = arg_str0("c", "client", "<ip>", "run in client mode, connecting to <host>");
