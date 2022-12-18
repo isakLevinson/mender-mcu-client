@@ -55,7 +55,9 @@ static struct {
     nvs_handle_t nvsHandle;
     char    currentSsid[32];
     char    currentPasswd[32];
+    uint8_t recvBuf[1024];
 } g_wifi;
+
 
 
 typedef struct {
@@ -217,62 +219,6 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     xEventGroupSetBits(wifi_event_group, DISCONNECTED_BIT);
 }
 
-
-static void task_dummy(void *arg)
-{
-    bool    ret = true;
-    char    ssid[32];
-    char    passwd[32];
-
-    //vTaskDelay(1000);
-#if 0
-    printf("-----------------------------\n");
-    ret = wifi_nvs_get_ssid(ssid, passwd);
-    if (ret) {
-        printf("ssid  : %s\n", ssid);
-        printf("passwd: %s\n", passwd);
-        wifi_cmd_sta_join(ssid, passwd);
-    }
-    printf("-----------------------------\n");
-#endif
-
-#if 0
-    {
-        esp_err_t err = ESP_OK;
-        nvs_iterator_t it;
-        printf("list\n");
-        
-        err =  nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it);
-        while (err == ESP_OK) {
-            nvs_entry_info_t info;
-            nvs_entry_info(it, &info); // Can omit error check if parameters are guaranteed to be non-NULL
-            printf("ns: '%s', key: '%s', type: '%x' \n", info.namespace_name, info.key, info.type);
-
-            switch (info.type) {
-                case NVS_TYPE_U8:   printf("U8");  break;
-                case NVS_TYPE_I8:   printf("I8");  break;
-                case NVS_TYPE_U16:  printf("U16");  break;
-                case NVS_TYPE_I16:  printf("I16");  break;
-                case NVS_TYPE_U32:  printf("U32");  break;
-                case NVS_TYPE_I32:  printf("I32");  break;
-                case NVS_TYPE_U64:  printf("U64");  break;
-                case NVS_TYPE_I64:  printf("I64");  break;
-                case NVS_TYPE_STR:  printf("STR");  break;
-                case NVS_TYPE_BLOB: printf("BLOB");  break;
-                default:
-            }
-            printf("\n");
-
-            err = nvs_entry_next(&it);
-        }
-    }
-
-    printf("-----------------------------\n");
-#endif
-
-    vTaskDelete(NULL);
-}
-
 void initialise_wifi(void)
 {
     esp_log_level_set("wifi", ESP_LOG_WARN);
@@ -318,8 +264,6 @@ void initialise_wifi(void)
 
     ESP_ERROR_CHECK( esp_enable_extern_coex_gpio_pin(EXTERN_COEX_WIRE_3, gpio_pin) );
 #endif
-
-    xTaskCreatePinnedToCore(task_dummy, "dummy", IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL, portNUM_PROCESSORS - 1);
 
     initialized = true;
 }
@@ -486,14 +430,9 @@ esp_ip4_addr_t  wifi_getSelfIp(void)
     return ip.ip;
 }
 
-uint8_t recvBuf[1024];
-static void socket_recv(int recv_socket, struct sockaddr_storage listen_addr, uint8_t type)
+static void task_listener(void)
 {
-}
-
-static void task_listener(void *arg)
-{
-    esp_err_t ret;// = ESP_OK;
+    esp_err_t ret = ESP_OK;
     int err = 0;
 
     esp_netif_ip_info_t ip;
@@ -559,7 +498,6 @@ static void task_listener(void *arg)
     //setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
 /////////////////////////////////////////////////
-    //socket_recv(client_socket, listen_addr, IPERF_TRANS_TYPE_TCP);
     uint8_t *buffer;
     int want_recv = 0;
     int actual_recv = 0;
@@ -568,9 +506,8 @@ static void task_listener(void *arg)
     strcpy(str, "Ready\r\n");
     uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
 
-    buffer = recvBuf;
-    want_recv = sizeof(recvBuf);
-    //while (!s_iperf_ctrl.finish) {
+    buffer = g_wifi.recvBuf;
+    want_recv = sizeof(g_wifi.recvBuf);
     while (true) {
         actual_recv = recvfrom(client_socket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
         if (actual_recv < 0) {
@@ -590,7 +527,6 @@ static void task_listener(void *arg)
         }
     }
 
-
 exit:
     if (client_socket != -1) {
         close(client_socket);
@@ -601,7 +537,28 @@ exit:
         close(listen_socket);
         ESP_LOGI(TAG, "TCP Socket server is closed.");
     }
-    //s_iperf_ctrl.finish = true;
+
+    if (ESP_OK != ret) {
+        ESP_LOGW(TAG, "listener exit with ret=0x%x", ret);
+    }
+}
+
+static void task_server(void *arg)
+{
+    esp_ip4_addr_t  ip;
+
+    while(true) {
+        ip = wifi_getSelfIp();
+        if (!ip.addr) {
+            vTaskDelay(1000);
+            continue;
+        }
+
+
+    }
+
+    task_listener();
+
     vTaskDelete(NULL);
 }
 
@@ -611,7 +568,7 @@ static int wifi_cmd_listen(int argc, char **argv)
 
     ESP_LOGI(TAG, "starting listener task");
 
-    ret = xTaskCreatePinnedToCore(task_listener, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL, portNUM_PROCESSORS - 1);
+    ret = xTaskCreatePinnedToCore(task_server, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL, portNUM_PROCESSORS - 1);
     if (ret != pdPASS) {
         ESP_LOGE(TAG, "create task %s failed", IPERF_TRAFFIC_TASK_NAME);
         return ESP_FAIL;
@@ -627,7 +584,7 @@ static int wifi_cmd_nvs(int argc, char **argv)
         if (!strcmp(argv[1], "close")) {
             printf("close\n");
             nvs_close(g_wifi.nvsHandle);
-            g_wifi.nvsHandle = NULL;
+            g_wifi.nvsHandle = (nvs_handle_t)NULL;
         } else if (!strcmp(argv[1], "commit")) {
             printf("commit\n");
             err = nvs_commit(g_wifi.nvsHandle);
