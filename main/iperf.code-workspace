@@ -8,6 +8,26 @@
 		},
 		{
 			"path": "../../../../../esp/esp-idf/components"
+		},
+		{
+			"name": "hello_world",
+			"path": "../../../../pavel/nordic/hello_world"
+		},
+		{
+			"name": "peripheral",
+			"path": "../../../../pavel/nordic/peripheral"
+		},
+		{
+			"name": "peripheral_gatt_dm",
+			"path": "../../../../pavel/nordic/peripheral_gatt_dm"
+		},
+		{
+			"name": "peripheral_uart",
+			"path": "../../../../pavel/nordic/peripheral_uart"
+		},
+		{
+			"name": "serial_lte_modem",
+			"path": "../../../../pavel/nordic/serial_lte_modem"
 		}
 	],
 	"settings": {
@@ -16,6 +36,29 @@
 		"files.associations": {
 			"main.h": "c",
 			"cmd_wifi.h": "c"
+		},
+		"nrf-connect.applications": [
+			"/home/isak/git/pavel/nordic/hello_world",
+			"/home/isak/git/pavel/nordic/peripheral",
+			"/home/isak/git/pavel/nordic/peripheral_gatt_dm",
+			"/home/isak/git/pavel/nordic/peripheral_uart",
+			"/home/isak/git/pavel/nordic/serial_lte_modem"
+		],
+		"nrf-connect.debugging.bindings": {
+			"${workspaceFolder:hello_world}/build": "Launch build",
+			"${workspaceFolder:hello_world}/build_2": "Launch build_2"
 		}
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"type": "nrf-connect",
+				"request": "launch",
+				"name": "Launch build",
+				"config": "${workspaceFolder:hello_world}/build",
+				"runToEntryPoint": "main"
+			}
+		]
 	}
 }

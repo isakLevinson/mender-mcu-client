@@ -220,6 +220,7 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
 }
 
 
+int client_socket = -1;
 static void task_listener(void)
 {
     esp_err_t ret = ESP_OK;
@@ -227,7 +228,6 @@ static void task_listener(void)
 
     esp_netif_ip_info_t ip;
     int listen_socket = -1;
-    int client_socket = -1;
     struct sockaddr_in listen_addr4 = { 0 };
     struct sockaddr_storage listen_addr = { 0 };
     struct sockaddr_in remote_addr;
@@ -292,8 +292,9 @@ static void task_listener(void)
     int want_recv = 0;
     int actual_recv = 0;
     socklen_t socklen = sizeof(struct sockaddr_in);
+    uint8_t uartRx;
 
-    strcpy(str, "Ready\r\n");
+    strcpy(str, "\r\nReady.\r\n");
     uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
 
     buffer = g_wifi.recvBuf;
@@ -315,11 +316,16 @@ static void task_listener(void)
 
             uart_write_bytes(ECHO_UART_PORT_NUM, buffer, actual_recv);
         }
+        //actual_recv = uart_read_bytes(ECHO_UART_PORT_NUM, uartRx, sizeof(uartRx), 20 / portTICK_PERIOD_MS);
+        //if (actual_recv) {
+                //send(client_socket, )
+        //}
     }
 
 exit:
     if (client_socket != -1) {
         close(client_socket);
+        client_socket = -1;
     }
 
     if (listen_socket != -1) {
@@ -351,6 +357,35 @@ static void task_server(void *arg)
     vTaskDelete(NULL);
 }
 
+static void task_uart_rx(void *arg)
+{
+    size_t length;
+    uint8_t buf[256];
+
+    while(true) {
+        uart_get_buffered_data_len(ECHO_UART_PORT_NUM, &length);
+
+        if (length > sizeof(buf)) {
+            length = sizeof(buf);
+        }
+
+        if (!length) {
+            vTaskDelay(10);
+        } else {
+            length = uart_read_bytes(ECHO_UART_PORT_NUM, buf, length, 1);
+            if (length) {
+                //uart_write_bytes(ECHO_UART_PORT_NUM, &c, 1);
+                if (client_socket > 0) {
+                    send(client_socket, buf, length, 0);
+                }
+            }
+        }
+    }
+
+    vTaskDelete(NULL);
+}
+
+
 static int _startServer(void)
 {
     BaseType_t ret;
@@ -362,6 +397,14 @@ static int _startServer(void)
         ESP_LOGE(TAG, "create task %s failed", IPERF_TRAFFIC_TASK_NAME);
         return ESP_FAIL;
     }
+
+    ret = xTaskCreatePinnedToCore(task_uart_rx, "uartRx", 4096, NULL, 4, NULL, portNUM_PROCESSORS - 1);
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "create task %s failed", "uartRx");
+        return ESP_FAIL;
+    }
+
+
     return ESP_OK;
 }
 
@@ -486,7 +529,6 @@ static int wifi_cmd_scan(int argc, char **argv)
     }
     return 0;
 }
-
 
 static bool wifi_cmd_ap_set(const char *ssid, const char *pass)
 {
