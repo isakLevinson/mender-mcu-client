@@ -59,6 +59,8 @@ void app_main(void)
     }
     ESP_ERROR_CHECK( ret );
 
+    uart_init();
+
     initialise_wifi();
     initialise_ble();
 
@@ -82,7 +84,6 @@ void app_main(void)
     register_system();
     register_wifi();
     register_ble();
-    uart_init();
 #if 0
     {
         bool    ret = true;

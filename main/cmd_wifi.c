@@ -386,37 +386,27 @@ exit:
 
 static void task_server(void *arg)
 {
-    esp_ip4_addr_t  ip;
-
-#if 1
-    {
-        bool    ret = true;
-        char    ssid[32];
-        char    passwd[32];
-
-        ret = wifi_nvs_get_ssid(ssid, passwd);
-        if (ret) {
-            ESP_LOGI(TAG, "ssid  : %s\n", ssid);
-            ESP_LOGI(TAG, "passwd: %s\n", passwd);
-            wifi_cmd_sta_join(ssid, passwd);
-        }
-    }
-#endif
+    esp_ip4_addr_t  ip  = {0};
 
     while(true) {
-        int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP, 1, 1, 1000);
+        if (!ip.addr) {
+            ESP_LOGI(TAG, "waiting for FLAG_GOT_IP");
+            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP, 1, 1, 1000);
 
-        if (bits & FLAG_GOT_IP) {
-            ip = wifi_getSelfIp();
-            if (!ip.addr) {
-                ESP_LOGW(TAG, "connected without ip");
-                //xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP);
-                //vTaskDelay(10);
-                continue;
+            if (bits & FLAG_GOT_IP) {
+                ESP_LOGI(TAG, "got FLAG_GOT_IP");
+                ip = wifi_getSelfIp();
+                ESP_LOGI(TAG, "got ip=%08x", ip.addr);
             }
         }
+    
+        if (!ip.addr) {
+            continue;
+        }
+
         wifi_nvs_set_ssid(g_wifi.currentSsid, g_wifi.currentPasswd);
         task_listener();
+        ip = wifi_getSelfIp();
     }
 
     vTaskDelete(NULL);
@@ -521,6 +511,19 @@ void initialise_wifi(void)
 
     _startServer();
 
+    {
+        bool    ret = true;
+        char    ssid[32];
+        char    passwd[32];
+
+        ret = wifi_nvs_get_ssid(ssid, passwd);
+        if (ret) {
+            ESP_LOGI(TAG, "ssid  : %s\n", ssid);
+            ESP_LOGI(TAG, "passwd: %s\n", passwd);
+            wifi_cmd_sta_join(ssid, passwd);
+        }
+    }
+
     initialized = true;
 }
 
@@ -552,7 +555,7 @@ bool wifi_cmd_sta_join(const char *ssid, const char *pass)
 
     xEventGroupWaitBits(wifi_event_group, FLAG_DISCONNECT, 0, 1, 5000 / portTICK_PERIOD_MS);
 
-    ESP_LOGI(TAG, "sta connecting to '%s'", sta_args.ssid->sval[0]);
+//    ESP_LOGI(TAG, "sta connecting to '%s'", sta_args.ssid->sval[0]);
 
     return true;
 }
