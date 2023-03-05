@@ -245,6 +245,9 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
     xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP);
 }
 
+int client_socket = -1;
+int listen_socket = -1;
+
 static void disconnect_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
 {
@@ -256,17 +259,18 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     }
     xEventGroupClearBits(wifi_event_group, FLAG_CONNECTED);
     xEventGroupSetBits(wifi_event_group, FLAG_DISCONNECT);
+
+    shutdown(listen_socket, 0);
+    close(listen_socket);
+    listen_socket = -1;
 }
 
-
-int client_socket = -1;
 static void task_listener(void)
 {
     esp_err_t ret = ESP_OK;
     int err = 0;
 
     esp_netif_ip_info_t ip;
-    int listen_socket = -1;
     struct sockaddr_in listen_addr4 = { 0 };
     struct sockaddr_storage listen_addr = { 0 };
     struct sockaddr_in remote_addr;
@@ -371,6 +375,7 @@ exit:
     if (listen_socket != -1) {
         shutdown(listen_socket, 0);
         close(listen_socket);
+        listen_socket = -1;
         ESP_LOGI(TAG, "listener socket closed.");
     }
 
@@ -383,19 +388,34 @@ static void task_server(void *arg)
 {
     esp_ip4_addr_t  ip;
 
-    while(true) {
-        xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP, 0, 1, 1000);
+#if 1
+    {
+        bool    ret = true;
+        char    ssid[32];
+        char    passwd[32];
 
-        ip = wifi_getSelfIp();
-        if (!ip.addr) {
-            ESP_LOGW(TAG, "connected without ip");
-
-            //vTaskDelay(10);
-            continue;
+        ret = wifi_nvs_get_ssid(ssid, passwd);
+        if (ret) {
+            ESP_LOGI(TAG, "ssid  : %s\n", ssid);
+            ESP_LOGI(TAG, "passwd: %s\n", passwd);
+            wifi_cmd_sta_join(ssid, passwd);
         }
+    }
+#endif
 
+    while(true) {
+        int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP, 1, 1, 1000);
+
+        if (bits & FLAG_GOT_IP) {
+            ip = wifi_getSelfIp();
+            if (!ip.addr) {
+                ESP_LOGW(TAG, "connected without ip");
+                //xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP);
+                //vTaskDelay(10);
+                continue;
+            }
+        }
         wifi_nvs_set_ssid(g_wifi.currentSsid, g_wifi.currentPasswd);
-
         task_listener();
     }
 

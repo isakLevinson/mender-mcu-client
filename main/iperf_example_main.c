@@ -83,7 +83,7 @@ void app_main(void)
     register_wifi();
     register_ble();
     uart_init();
-#if 1
+#if 0
     {
         bool    ret = true;
         char    ssid[32];
@@ -98,7 +98,7 @@ void app_main(void)
             wifi_cmd_sta_join(ssid, passwd);
         }
 
-        printf("###################################\n");
+        //printf("###################################\n");
     }
 #endif
 
