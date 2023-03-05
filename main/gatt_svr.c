@@ -114,9 +114,9 @@ static void _handleData(void* pBuf, int len)
     sprintf(ipStr, "%d.%d.%d.%d", ipArray[0], ipArray[1], ipArray[2], ipArray[3]);
     ESP_LOGI(TAG, "ip: <%s>", ipStr);
 
-    if (ipArray[0] || ipArray[1] || ipArray[2] || ipArray[3]) {
-        wifi_nvs_set_ssid(str, passwd);
-    }
+//    if (ipArray[0] || ipArray[1] || ipArray[2] || ipArray[3]) {
+//       wifi_nvs_set_ssid(str, passwd);
+//    }
 
     exit:
     free(str);

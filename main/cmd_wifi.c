@@ -35,6 +35,12 @@
 #include "cmd_wifi.h"
 #include "nvs.h"
 
+typedef bool (*CMD_RESPONSE_CB)(void* pArg, void* i_pBuf);
+
+
+#define   WIFI_MAX_SSID_LENGTH    32
+#define   WIFI_MAX_PASSWD_LENGTH  32
+
 
 typedef struct {
     struct arg_str *ip;
@@ -58,8 +64,6 @@ static struct {
     uint8_t recvBuf[1024];
 } g_wifi;
 
-
-
 typedef struct {
     struct arg_str *ssid;
     struct arg_str *password;
@@ -80,8 +84,9 @@ static esp_netif_t *netif_ap = NULL;
 static esp_netif_t *netif_sta = NULL;
 
 static EventGroupHandle_t wifi_event_group;
-const int CONNECTED_BIT = BIT0;
-const int DISCONNECTED_BIT = BIT1;
+const int FLAG_CONNECTED  = BIT0;
+const int FLAG_DISCONNECT = BIT1;
+const int FLAG_GOT_IP     = BIT2;
 
 #define NVS_NAMESPACE_WIFI      "wifi"
 #define NVS_KEY_WIFI_SSID       "ssid"
@@ -97,10 +102,11 @@ bool    wifi_nvs_get_ssid(char* ssid, char* passwd)
 
     err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READONLY, &handle);
     if (err != ESP_OK) {
-        printf("nvs_open failed %x\n", err);
+        printf("nvs_open <%s> failed %x\n",  NVS_NAMESPACE_WIFI, err);
         return false;
     }
 
+    length = WIFI_MAX_SSID_LENGTH;
     err =  nvs_get_str(handle, NVS_KEY_WIFI_SSID, ssid, &length);
     if (err != ESP_OK) {
         printf("nvs_get_str ssid failed\n");
@@ -109,6 +115,7 @@ bool    wifi_nvs_get_ssid(char* ssid, char* passwd)
     }
     ssid[length] = '\0';
 
+    length = WIFI_MAX_PASSWD_LENGTH;
     err =  nvs_get_str(handle, NVS_KEY_WIFI_PASSWD, passwd, &length);
     if (err != ESP_OK) {
         printf("nvs_get_str passwd failed\n");
@@ -145,30 +152,60 @@ bool    wifi_nvs_set_ssid(char* ssid, char* passwd)
     bool    ret = true;
     esp_err_t err = ESP_OK;
     nvs_handle_t handle;
+    char    str[WIFI_MAX_SSID_LENGTH];
+    size_t  length;
 
     err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READWRITE, &handle);
     if (err != ESP_OK) {
-        printf("nvs_open failed");
+        ESP_LOGE(TAG, "nvs_open failed");
         return false;
     }
 
-    err = nvs_set_str (handle, NVS_KEY_WIFI_SSID, ssid);
+    length = WIFI_MAX_SSID_LENGTH;
+    err =  nvs_get_str(handle, NVS_KEY_WIFI_SSID, str, &length);
     if (err != ESP_OK) {
-        printf("nvs_set_str ssid failed %x\n", err);
-        ret = false;
-        goto exit;
+        ESP_LOGW(TAG, "nvs_get_str ssid failed");
+        goto    store;
+    }
+    str[length] = '\0';
+    if (strcmp(str, ssid)) {
+        ESP_LOGI(TAG, "ssid mismatch. storing new <%s> <%s>", ssid, passwd);
+        goto store;
+    }
+    length = WIFI_MAX_PASSWD_LENGTH;
+    err =  nvs_get_str(handle, NVS_KEY_WIFI_PASSWD, str, &length);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "nvs_get_str passwd failed");
+        goto    store;
+    }
+    str[length] = '\0';
+    if (strcmp(str, passwd)) {
+        ESP_LOGI(TAG, "passwd mismatch. storing new <%s> <%s>", ssid, passwd);
+        goto store;
     }
 
-    err = nvs_set_str (handle, NVS_KEY_WIFI_PASSWD, passwd);
-    if (err != ESP_OK) {
-        printf("nvs_set_str passwd failed %x\n", err);
-        ret = false;
-        goto exit;
-    }
+    ESP_LOGI(TAG, "no need to store ssid or passwd");
+    goto exit;
+
+    store:
+        err = nvs_set_str (handle, NVS_KEY_WIFI_SSID, ssid);
+        if (err != ESP_OK) {
+            printf("nvs_set_str ssid failed %x\n", err);
+            ret = false;
+            goto exit;
+        }
+
+        err = nvs_set_str (handle, NVS_KEY_WIFI_PASSWD, passwd);
+        if (err != ESP_OK) {
+            printf("nvs_set_str passwd failed %x\n", err);
+            ret = false;
+            goto exit;
+        }
+
 
     exit:
-    nvs_close(handle);
-    return ret;
+        nvs_close(handle);
+        return ret;
 }
 
 static void scan_done_handler(void *arg, esp_event_base_t event_base,
@@ -202,8 +239,10 @@ static void scan_done_handler(void *arg, esp_event_base_t event_base,
 static void got_ip_handler(void *arg, esp_event_base_t event_base,
                            int32_t event_id, void *event_data)
 {
-    xEventGroupClearBits(wifi_event_group, DISCONNECTED_BIT);
-    xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
+    ESP_LOGI(TAG, "got_ip_handler");
+    xEventGroupClearBits(wifi_event_group, FLAG_DISCONNECT);
+    xEventGroupSetBits(wifi_event_group, FLAG_CONNECTED);
+    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP);
 }
 
 static void disconnect_handler(void *arg, esp_event_base_t event_base,
@@ -215,8 +254,8 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     } else {
         ESP_LOGI(TAG, "sta disconnect");
     }
-    xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
-    xEventGroupSetBits(wifi_event_group, DISCONNECTED_BIT);
+    xEventGroupClearBits(wifi_event_group, FLAG_CONNECTED);
+    xEventGroupSetBits(wifi_event_group, FLAG_DISCONNECT);
 }
 
 
@@ -238,10 +277,10 @@ static void task_listener(void)
 
     //int count = 0;
 
-    ESP_LOGI(TAG, "listener task started");
+    ESP_LOGI(TAG, "listener loop started");
 
-    strcpy(str, "Hello");
-    uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
+//    strcpy(str, "Hello");
+//    uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
 
     if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
         ESP_LOGI(TAG, "IP:"IPSTR, IP2STR(&ip.ip));
@@ -263,7 +302,7 @@ static void task_listener(void)
 
     setsockopt(listen_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    ESP_LOGI(TAG, "Socket created");
+    ESP_LOGI(TAG, "listen socket created");
 
     err = bind(listen_socket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
     ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Socket unable to bind: errno %d, IPPROTO: %d", errno, AF_INET);
@@ -272,7 +311,7 @@ static void task_listener(void)
     ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Error occurred during listen: errno %d", errno);
     memcpy(&listen_addr, &listen_addr4, sizeof(listen_addr4));
 
-   //ESP_LOGI(TAG, "listen on:"IPSTR, IP2STR(&listen_addr4));
+ //   ESP_LOGI(TAG, "listen on:"IPSTR, IP2STR(&listen_addr4));
 
     ESP_LOGI(TAG, "listen on addr %d.%d.%d.%d",
              listen_addr4.sin_addr.s_addr & 0xFF,
@@ -294,8 +333,8 @@ static void task_listener(void)
     socklen_t socklen = sizeof(struct sockaddr_in);
     uint8_t uartRx;
 
-    strcpy(str, "\r\nReady.\r\n");
-    uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
+ //   strcpy(str, "\r\nReady.\r\n");
+ //   uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
 
     buffer = g_wifi.recvBuf;
     want_recv = sizeof(g_wifi.recvBuf);
@@ -324,6 +363,7 @@ static void task_listener(void)
 
 exit:
     if (client_socket != -1) {
+        ESP_LOGI(TAG, "client socket closed.");
         close(client_socket);
         client_socket = -1;
     }
@@ -331,7 +371,7 @@ exit:
     if (listen_socket != -1) {
         shutdown(listen_socket, 0);
         close(listen_socket);
-        ESP_LOGI(TAG, "TCP Socket server is closed.");
+        ESP_LOGI(TAG, "listener socket closed.");
     }
 
     if (ESP_OK != ret) {
@@ -344,14 +384,19 @@ static void task_server(void *arg)
     esp_ip4_addr_t  ip;
 
     while(true) {
+        xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP, 0, 1, 1000);
+
         ip = wifi_getSelfIp();
         if (!ip.addr) {
-            vTaskDelay(1000);
+            ESP_LOGW(TAG, "connected without ip");
+
+            //vTaskDelay(10);
             continue;
         }
 
-        task_listener();
+        wifi_nvs_set_ssid(g_wifi.currentSsid, g_wifi.currentPasswd);
 
+        task_listener();
     }
 
     vTaskDelete(NULL);
@@ -461,7 +506,10 @@ void initialise_wifi(void)
 
 bool wifi_cmd_sta_join(const char *ssid, const char *pass)
 {
-    int bits = xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, 0, 1, 0);
+    strcpy(g_wifi.currentSsid, ssid);
+    strcpy(g_wifi.currentPasswd, pass);
+
+    int bits = xEventGroupWaitBits(wifi_event_group, FLAG_CONNECTED, 0, 1, 0);
 
     wifi_config_t wifi_config = { 0 };
 
@@ -470,11 +518,11 @@ bool wifi_cmd_sta_join(const char *ssid, const char *pass)
         strlcpy((char *) wifi_config.sta.password, pass, sizeof(wifi_config.sta.password));
     }
 
-    if (bits & CONNECTED_BIT) {
+    if (bits & FLAG_CONNECTED) {
         reconnect = false;
-        xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
+        xEventGroupClearBits(wifi_event_group, FLAG_CONNECTED);
         ESP_ERROR_CHECK( esp_wifi_disconnect() );
-        xEventGroupWaitBits(wifi_event_group, DISCONNECTED_BIT, 0, 1, portTICK_PERIOD_MS);
+        xEventGroupWaitBits(wifi_event_group, FLAG_DISCONNECT, 0, 1, portTICK_PERIOD_MS);
     }
 
     reconnect = true;
@@ -482,7 +530,9 @@ bool wifi_cmd_sta_join(const char *ssid, const char *pass)
     ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     esp_wifi_connect();
 
-    xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, 0, 1, 5000 / portTICK_PERIOD_MS);
+    xEventGroupWaitBits(wifi_event_group, FLAG_DISCONNECT, 0, 1, 5000 / portTICK_PERIOD_MS);
+
+    ESP_LOGI(TAG, "sta connecting to '%s'", sta_args.ssid->sval[0]);
 
     return true;
 }
@@ -530,52 +580,6 @@ static int wifi_cmd_scan(int argc, char **argv)
     return 0;
 }
 
-static bool wifi_cmd_ap_set(const char *ssid, const char *pass)
-{
-    wifi_config_t wifi_config = {
-        .ap = {
-            .ssid = "",
-            .ssid_len = 0,
-            .max_connection = 4,
-            .password = "",
-            .authmode = WIFI_AUTH_WPA_WPA2_PSK
-        },
-    };
-
-    reconnect = false;
-    strlcpy((char *) wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid));
-    if (pass) {
-        if (strlen(pass) != 0 && strlen(pass) < 8) {
-            reconnect = true;
-            ESP_LOGE(TAG, "password less than 8");
-            return false;
-        }
-        strlcpy((char *) wifi_config.ap.password, pass, sizeof(wifi_config.ap.password));
-    }
-
-    if (strlen(pass) == 0) {
-        wifi_config.ap.authmode = WIFI_AUTH_OPEN;
-    }
-
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
-    return true;
-}
-
-static int wifi_cmd_ap(int argc, char **argv)
-{
-    int nerrors = arg_parse(argc, argv, (void **) &ap_args);
-
-    if (nerrors != 0) {
-        arg_print_errors(stderr, ap_args.end, argv[0]);
-        return 1;
-    }
-
-    wifi_cmd_ap_set(ap_args.ssid->sval[0], ap_args.password->sval[0]);
-    ESP_LOGI(TAG, "AP mode, %s %s", ap_args.ssid->sval[0], ap_args.password->sval[0]);
-    return 0;
-}
-
 static int wifi_cmd_query(int argc, char **argv)
 {
     wifi_config_t cfg;
@@ -587,8 +591,8 @@ static int wifi_cmd_query(int argc, char **argv)
         esp_wifi_get_config(WIFI_IF_AP, &cfg);
         ESP_LOGI(TAG, "AP mode, %s %s", cfg.ap.ssid, cfg.ap.password);
     } else if (WIFI_MODE_STA == mode) {
-        int bits = xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, 0, 1, 0);
-        if (bits & CONNECTED_BIT) {
+        int bits = xEventGroupWaitBits(wifi_event_group, FLAG_CONNECTED, 0, 1, 0);
+        if (bits & FLAG_CONNECTED) {
             esp_wifi_get_config(WIFI_IF_STA, &cfg);
             ESP_LOGI(TAG, "sta mode, connected %s", cfg.ap.ssid);
         } else {
@@ -678,8 +682,8 @@ static int wifi_cmd_nvs(int argc, char **argv)
             }
         } else if (!strcmp(argv[1], "ssid")) {
             bool ret;
-            char ssid[32] = "";
-            char passwd[32] = "";
+            char ssid[WIFI_MAX_SSID_LENGTH] = "";
+            char passwd[WIFI_MAX_PASSWD_LENGTH] = "";
             ret = wifi_nvs_get_ssid(ssid, passwd);
             if (ret) {
                 printf("%s:%s\n", ssid, passwd);
@@ -731,15 +735,17 @@ static int wifi_cmd_nvs(int argc, char **argv)
 
 static uint32_t wifi_get_local_ip(void)
 {
-    int bits = xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, 0, 1, 0);
+    int bits;
     esp_netif_t *netif = netif_ap;
     esp_netif_ip_info_t ip_info;
     wifi_mode_t mode;
 
     esp_wifi_get_mode(&mode);
+//    ESP_LOGI(TAG, "wifi_get_local_ip mode=%d", mode);
     if (WIFI_MODE_STA == mode) {
-        bits = xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, 0, 1, 0);
-        if (bits & CONNECTED_BIT) {
+        bits = xEventGroupWaitBits(wifi_event_group, FLAG_CONNECTED, 0, 1, 100);
+        if (bits & FLAG_CONNECTED) {
+            ESP_LOGI(TAG, "FLAG_CONNECTED ip=%08x", ip_info.ip.addr);
             netif = netif_sta;
         } else {
             ESP_LOGE(TAG, "sta has no IP");
@@ -889,16 +895,6 @@ void register_wifi(void)
 
 
     ESP_ERROR_CHECK( esp_console_cmd_register(&scan_cmd) );
-
-    const esp_console_cmd_t ap_cmd = {
-        .command = "ap",
-        .help = "AP mode, configure ssid and password",
-        .hint = NULL,
-        .func = &wifi_cmd_ap,
-        .argtable = &ap_args
-    };
-
-    ESP_ERROR_CHECK( esp_console_cmd_register(&ap_cmd) );
 
     const esp_console_cmd_t query_cmd = {
         .command = "query",
