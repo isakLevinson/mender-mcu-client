@@ -1,4 +1,4 @@
-idf_component_register(SRCS "iperf_example_main.c"
+idf_component_register(SRCS "main.c" "cmd_pwm.c"
                             "cmd_ble.c"
                             "gatt_svr.c"
                             "cmd_wifi.c"

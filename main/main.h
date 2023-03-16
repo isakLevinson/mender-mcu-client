@@ -15,8 +15,8 @@ extern "C" {
 // As a temporary solution, untila more proper place is found.
 #define CONFIG_EXAMPLE_UART_PORT_NUM    2
 #define CONFIG_EXAMPLE_UART_BAUD_RATE   115200
-#define CONFIG_EXAMPLE_UART_RXD         5
-#define CONFIG_EXAMPLE_UART_TXD         4
+#define CONFIG_EXAMPLE_UART_RXD         11
+#define CONFIG_EXAMPLE_UART_TXD         10
 
 #define ECHO_TEST_TXD (CONFIG_EXAMPLE_UART_TXD)
 #define ECHO_TEST_RXD (CONFIG_EXAMPLE_UART_RXD)

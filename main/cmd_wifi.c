@@ -35,8 +35,6 @@
 #include "cmd_wifi.h"
 #include "nvs.h"
 
-typedef bool (*CMD_RESPONSE_CB)(void* pArg, void* i_pBuf);
-
 
 #define   WIFI_MAX_SSID_LENGTH    32
 #define   WIFI_MAX_PASSWD_LENGTH  32
@@ -283,8 +281,8 @@ static void task_listener(void)
 
     ESP_LOGI(TAG, "listener loop started");
 
-//    strcpy(str, "Hello");
-//    uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
+    strcpy(str, "Ready\r\n");
+    uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
 
     if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
         ESP_LOGI(TAG, "IP:"IPSTR, IP2STR(&ip.ip));

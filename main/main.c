@@ -21,6 +21,7 @@
 #include "sdkconfig.h"
 #include "cmd_ble.h"
 #include "cmd_wifi.h"
+#include "cmd_pwm.h"
 
 #include "main.h"
 
@@ -83,6 +84,7 @@ void app_main(void)
     /* Register commands */
     register_system();
     register_wifi();
+    register_pwm();
     register_ble();
 #if 0
     {
