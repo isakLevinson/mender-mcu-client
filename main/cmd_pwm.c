@@ -37,15 +37,14 @@
 #include "driver/mcpwm_gen.h"
 #include "driver/gpio.h"
 
-static const char *TAG = "cmd_wifi";
+static const char *TAG = "cmd_pwm";
 
 
-#define SERVO_PULSE_GPIO 4
-#define SERVO_TIMEBASE_RESOLUTION_HZ 1000000  // 1MHz, 1us per tick
-#define SERVO_TIMEBASE_PERIOD        20000    // 20000 ticks, 20ms
+#define SERVO_TIMEBASE_RESOLUTION_HZ 10000000  // 1MHz, 1us per tick
+#define SERVO_TIMEBASE_PERIOD        400    // 20000 ticks, 20ms
 
 mcpwm_cmpr_handle_t comparator = NULL;
-
+mcpwm_gen_handle_t generator[2] = {0};
 
 static void _init(void)
 {
@@ -58,6 +57,9 @@ static void _init(void)
         .period_ticks = SERVO_TIMEBASE_PERIOD,
         .count_mode = MCPWM_TIMER_COUNT_MODE_UP,
     };
+
+    int i;
+
     ESP_ERROR_CHECK(mcpwm_new_timer(&timer_config, &timer));
 
     mcpwm_oper_handle_t oper = NULL;
@@ -76,32 +78,46 @@ static void _init(void)
 
     ESP_ERROR_CHECK(mcpwm_new_comparator(oper, &comparator_config, &comparator));
 
-    mcpwm_gen_handle_t generator = NULL;
-    mcpwm_generator_config_t generator_config = {
-        .gen_gpio_num = SERVO_PULSE_GPIO,
+    mcpwm_generator_config_t generator_config[2] = {
+        {.gen_gpio_num = 4},
+        {.gen_gpio_num = 5},
     };
-    ESP_ERROR_CHECK(mcpwm_new_generator(oper, &generator_config, &generator));
+
+    ESP_ERROR_CHECK(mcpwm_new_generator(oper, &generator_config[0], &generator[0]));
+    ESP_ERROR_CHECK(mcpwm_new_generator(oper, &generator_config[1], &generator[1]));
 
     // set the initial compare value, so that the servo will spin to the center position
     ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, 0));
 
     ESP_LOGI(TAG, "Set generator action on timer and compare event");
     // go high on counter empty
-    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator,
+    for (i=0; i<2; i++) {
+    }
+
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator[0],
                     MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH),
                     MCPWM_GEN_TIMER_EVENT_ACTION_END()));
+
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator[1],
+                    MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH),
+                    MCPWM_GEN_TIMER_EVENT_ACTION_END()));
+
     // go low on compare threshold
-    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator,
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator[0],
                     MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator, MCPWM_GEN_ACTION_LOW),
                     MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
+
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator[1],
+                    MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator, MCPWM_GEN_ACTION_LOW),
+                    MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
+
+
 
     ESP_LOGI(TAG, "Enable and start timer");
     ESP_ERROR_CHECK(mcpwm_timer_enable(timer));
     ESP_ERROR_CHECK(mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP));
 
 }
-
-
 
 static int _cmd_pwm(int argc, char **argv)
 {
@@ -118,16 +134,42 @@ static int _cmd_pwm(int argc, char **argv)
     return 0;
 }
 
+static int _cmd_deadTime(int argc, char **argv)
+{
+    //int genIdx;
+    mcpwm_dead_time_config_t dt_config = {0};
+
+    if (argc < 3) {
+        return 0;
+    }
+
+    //genIdx  =   strtoul(argv[1], NULL, 10);
+    dt_config.posedge_delay_ticks = strtoul(argv[1], NULL, 10);
+    dt_config.negedge_delay_ticks = strtoul(argv[2], NULL, 10);
+
+    ESP_ERROR_CHECK(mcpwm_generator_set_dead_time(generator[0], generator[1], &dt_config));
+
+    return 0;
+}
+
 
 void register_pwm(void)
 {
-    const esp_console_cmd_t query_cmd = {
+    const esp_console_cmd_t pwm_cmd = {
         .command = "pwm",
         .help = "set pwm value",
         .hint = NULL,
         .func = &_cmd_pwm,
     };
-    ESP_ERROR_CHECK( esp_console_cmd_register(&query_cmd) );
+    ESP_ERROR_CHECK( esp_console_cmd_register(&pwm_cmd) );
+
+    const esp_console_cmd_t dead_cmd = {
+        .command = "pwmDeadTime",
+        .help = "set pwm dead time",
+        .hint = NULL,
+        .func = &_cmd_deadTime,
+    };
+    ESP_ERROR_CHECK( esp_console_cmd_register(&dead_cmd) );
 
 
     _init();
