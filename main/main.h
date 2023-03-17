@@ -12,19 +12,11 @@
 extern "C" {
 #endif
 
-// As a temporary solution, untila more proper place is found.
-#define CONFIG_EXAMPLE_UART_PORT_NUM    2
-#define CONFIG_EXAMPLE_UART_BAUD_RATE   115200
-#define CONFIG_EXAMPLE_UART_RXD         11
-#define CONFIG_EXAMPLE_UART_TXD         10
+#define ECHO_TEST_TXD (10)
+#define ECHO_TEST_RXD (11)
 
-#define ECHO_TEST_TXD (CONFIG_EXAMPLE_UART_TXD)
-#define ECHO_TEST_RXD (CONFIG_EXAMPLE_UART_RXD)
-#define ECHO_TEST_RTS (UART_PIN_NO_CHANGE)
-#define ECHO_TEST_CTS (UART_PIN_NO_CHANGE)
-
-#define ECHO_UART_PORT_NUM      (CONFIG_EXAMPLE_UART_PORT_NUM)
-#define ECHO_UART_BAUD_RATE     (CONFIG_EXAMPLE_UART_BAUD_RATE)
+#define ECHO_UART_PORT_NUM      (2)
+#define ECHO_UART_BAUD_RATE     (115200)
 
 #ifdef __cplusplus
 }

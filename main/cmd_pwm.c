@@ -37,6 +37,9 @@
 #include "driver/mcpwm_gen.h"
 #include "driver/gpio.h"
 
+
+#define ESP_LOGI(...)
+
 static const char *TAG = "cmd_pwm";
 
 

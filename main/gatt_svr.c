@@ -27,6 +27,7 @@
 #include "esp_log.h"
 #include "cmd_wifi.h"
 
+#define ESP_LOGI(...)
 
 /**
  * The vendor specific security test service consists of two characteristics:
