@@ -7,6 +7,8 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
+#include <sys_def.h>
+
 #include <errno.h>
 #include <string.h>
 #include "esp_wifi.h"
@@ -22,8 +24,8 @@
 #include "cmd_ble.h"
 #include "cmd_wifi.h"
 #include "cmd_pwm.h"
-
 #include "main.h"
+#include "cli.h"
 
 #define BUF_SIZE    1024
 
@@ -71,22 +73,6 @@ void app_main(void)
     initialise_wifi();
     initialise_ble();
 
-    esp_console_repl_t *repl = NULL;
-    esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
-    repl_config.prompt = "iperf>";
-
-    // init console REPL environment
-#if CONFIG_ESP_CONSOLE_UART
-    //esp_console_dev_uart_config_t uart_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
-    //ESP_ERROR_CHECK(esp_console_new_repl_uart(&uart_config, &repl_config, &repl));
-#elif CONFIG_ESP_CONSOLE_USB_CDC
-    esp_console_dev_usb_cdc_config_t cdc_config = ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_console_new_repl_usb_cdc(&cdc_config, &repl_config, &repl));
-#elif CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
-    esp_console_dev_usb_serial_jtag_config_t usbjtag_config = ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&usbjtag_config, &repl_config, &repl));
-#endif
-
     /* Register commands */
     register_system();
     register_wifi();
@@ -121,6 +107,5 @@ void app_main(void)
     printf(" |                                                |\n");
     printf(" =================================================\n\n");
 
-    // start console REPL
-    //ESP_ERROR_CHECK(esp_console_start_repl(repl));
+    CLI_init();
 }
