@@ -3,6 +3,6 @@
 
 #include <sys_def.h>
 
-void CLI_init(void);
+bool CLI_init(void);
 
 #endif // _CLI_H_
