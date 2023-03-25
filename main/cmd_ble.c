@@ -42,6 +42,7 @@
 #include "services/gap/ble_svc_gap.h"
 #include "bleprph.h"
 
+#undef ESP_LOGI
 #define ESP_LOGI(...)
 
 void ble_store_config_init(void);

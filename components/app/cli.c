@@ -96,6 +96,7 @@ static bool dbgVer(uint8_t argc, char** argv)
 }
 
 
+
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_CMD("ver",			NULL,		NULL, dbgVer)
 DEBUG_MENU_END

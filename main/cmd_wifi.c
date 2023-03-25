@@ -35,6 +35,7 @@
 #include "cmd_wifi.h"
 #include "nvs.h"
 
+#undef ESP_LOGI
 #define ESP_LOGI(...)
 
 #define   WIFI_MAX_SSID_LENGTH    32
@@ -336,7 +337,6 @@ static void task_listener(void)
     int want_recv = 0;
     int actual_recv = 0;
     socklen_t socklen = sizeof(struct sockaddr_in);
-    uint8_t uartRx;
 
  //   strcpy(str, "\r\nReady.\r\n");
  //   uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
@@ -346,11 +346,7 @@ static void task_listener(void)
     while (true) {
         actual_recv = recvfrom(client_socket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
         if (actual_recv < 0) {
-            //iperf_show_socket_error_reason(error_log, recv_socket);
-            //ESP_LOGW(TAG, "error, error code: %d, reason: %s", error_log, strerror(error_log));
             ESP_LOGW(TAG, "recv error, error code: %d", actual_recv);
-
-            //s_iperf_ctrl.finish = true;
             break;
         } else {
             memcpy(str, buffer, actual_recv);
@@ -360,10 +356,6 @@ static void task_listener(void)
 
             uart_write_bytes(ECHO_UART_PORT_NUM, buffer, actual_recv);
         }
-        //actual_recv = uart_read_bytes(ECHO_UART_PORT_NUM, uartRx, sizeof(uartRx), 20 / portTICK_PERIOD_MS);
-        //if (actual_recv) {
-                //send(client_socket, )
-        //}
     }
 
 exit:

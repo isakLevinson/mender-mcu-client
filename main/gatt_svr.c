@@ -27,6 +27,7 @@
 #include "esp_log.h"
 #include "cmd_wifi.h"
 
+#undef ESP_LOGI
 #define ESP_LOGI(...)
 
 /**

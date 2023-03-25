@@ -38,10 +38,8 @@
 #include "driver/gpio.h"
 
 
+#undef ESP_LOGI
 #define ESP_LOGI(...)
-
-static const char *TAG = "cmd_pwm";
-
 
 #define SERVO_TIMEBASE_RESOLUTION_HZ 10000000  // 1MHz, 1us per tick
 #define SERVO_TIMEBASE_PERIOD        400    // 20000 ticks, 20ms
@@ -51,7 +49,6 @@ mcpwm_gen_handle_t generator[2] = {0};
 
 static void _init(void)
 {
-   ESP_LOGI(TAG, "Create timer and operator");
     mcpwm_timer_handle_t timer = NULL;
     mcpwm_timer_config_t timer_config = {
         .group_id = 0,
@@ -71,10 +68,8 @@ static void _init(void)
     };
     ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &oper));
 
-    ESP_LOGI(TAG, "Connect timer and operator");
     ESP_ERROR_CHECK(mcpwm_operator_connect_timer(oper, timer));
 
-    ESP_LOGI(TAG, "Create comparator and generator from the operator");
     mcpwm_comparator_config_t comparator_config = {
         .flags.update_cmp_on_tez = true,
     };
@@ -92,7 +87,6 @@ static void _init(void)
     // set the initial compare value, so that the servo will spin to the center position
     ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, 0));
 
-    ESP_LOGI(TAG, "Set generator action on timer and compare event");
     // go high on counter empty
     for (i=0; i<2; i++) {
     }
@@ -115,8 +109,6 @@ static void _init(void)
                     MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
 
 
-
-    ESP_LOGI(TAG, "Enable and start timer");
     ESP_ERROR_CHECK(mcpwm_timer_enable(timer));
     ESP_ERROR_CHECK(mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP));
 
