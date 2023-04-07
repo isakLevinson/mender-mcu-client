@@ -1,4 +1,12 @@
 
+#define DEF_DBG_MODULE	DBG_MODULE_PWM
+
+#include <sys_def.h>
+#include "dbgMenus.h"
+#include "dbgPrint.h"
+#include "parseArgs.h"
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -114,28 +122,33 @@ static void _init(void)
 
 }
 
-static int _cmd_pwm(int argc, char **argv)
+static bool dbgPwm(uint8_t argc, char** argv)
 {
     int pwm;
     
     if (argc < 2) {
-        return 0;
+        return false;
     }
 
     pwm = strtoul(argv[1], NULL, 10);
 
+    if (pwm >= SERVO_TIMEBASE_PERIOD) {
+        pwm = SERVO_TIMEBASE_PERIOD - 1;
+        INFO("setting pwm to %d\n", pwm);
+    }
+
     ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, pwm));
 
-    return 0;
+    return true;
 }
 
-static int _cmd_deadTime(int argc, char **argv)
+static bool dbgDead(uint8_t argc, char** argv)
 {
     //int genIdx;
     mcpwm_dead_time_config_t dt_config = {0};
 
     if (argc < 3) {
-        return 0;
+        return false;
     }
 
     //genIdx  =   strtoul(argv[1], NULL, 10);
@@ -144,28 +157,20 @@ static int _cmd_deadTime(int argc, char **argv)
 
     ESP_ERROR_CHECK(mcpwm_generator_set_dead_time(generator[0], generator[1], &dt_config));
 
-    return 0;
+    return true;
 }
 
+DEBUG_MENU_START(g_menu)
+    DEBUG_MENU_DIR("pwm", NULL)
+	    DEBUG_MENU_CMD("pwm",			NULL,		NULL, dbgPwm)
+	    DEBUG_MENU_CMD("dead",			NULL,		NULL, dbgDead)
+    DEBUG_MENU_DIR_END
+DEBUG_MENU_END
 
-void register_pwm(void)
+
+void PWM_init(void)
 {
-    const esp_console_cmd_t pwm_cmd = {
-        .command = "pwm",
-        .help = "set pwm value",
-        .hint = NULL,
-        .func = &_cmd_pwm,
-    };
-    ESP_ERROR_CHECK( esp_console_cmd_register(&pwm_cmd) );
-
-    const esp_console_cmd_t dead_cmd = {
-        .command = "pwmDeadTime",
-        .help = "set pwm dead time",
-        .hint = NULL,
-        .func = &_cmd_deadTime,
-    };
-    ESP_ERROR_CHECK( esp_console_cmd_register(&dead_cmd) );
-
+    DBG_TREE_add("/",		g_menu);
 
     _init();
 }

@@ -76,7 +76,6 @@ void app_main(void)
     /* Register commands */
     register_system();
     register_wifi();
-    register_pwm();
     register_ble();
 #if 0
     {
@@ -108,4 +107,6 @@ void app_main(void)
     printf(" =================================================\n\n");
 
     CLI_init();
+    PWM_init();
+
 }

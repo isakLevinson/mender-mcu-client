@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-void register_pwm(void);
+void PWM_init(void);
 
 #ifdef __cplusplus
 }

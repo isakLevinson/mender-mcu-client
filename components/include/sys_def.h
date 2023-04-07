@@ -14,9 +14,9 @@
 #define MAX_PROMPT_SIZE 16
 
 
-#define MENU_LOC      const
-#define DBG_MENU_STORAGE    __attribute__ ((section(".dbgMenus")))  const
-#define DBG_MENU_ROOT_STORAGE __attribute__ ((section(".dbgMenusRoot")))  const
+#define MENU_LOC      
+#define DBG_MENU_STORAGE    
+#define DBG_MENU_ROOT_STORAGE 
 
 #define DBGMENU_IN_FLASH            0
 #define PROJ_OPT_FEATURE_GEN_DEBUG_MENUS
