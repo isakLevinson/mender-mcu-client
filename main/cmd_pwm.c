@@ -85,8 +85,8 @@ static void _init(void)
     ESP_ERROR_CHECK(mcpwm_new_comparator(oper, &comparator_config, &comparator));
 
     mcpwm_generator_config_t generator_config[2] = {
+        {.gen_gpio_num = 7},
         {.gen_gpio_num = 4},
-        {.gen_gpio_num = 5},
     };
 
     ESP_ERROR_CHECK(mcpwm_new_generator(oper, &generator_config[0], &generator[0]));
@@ -122,22 +122,78 @@ static void _init(void)
 
 }
 
+void _setPwm(uint8_t gen)
+{
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator[gen],
+                    MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH),
+                    MCPWM_GEN_TIMER_EVENT_ACTION_END()));
+
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator[gen],
+                    MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator, MCPWM_GEN_ACTION_LOW),
+                    MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
+
+}
+
+void _setZero(uint8_t gen)
+{
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator[gen],
+                    MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_LOW),
+                    MCPWM_GEN_TIMER_EVENT_ACTION_END()));
+
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator[gen],
+                    MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator, MCPWM_GEN_ACTION_LOW),
+                    MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
+
+}
+
+void _setOne(uint8_t gen)
+{
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator[gen],
+                    MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH),
+                    MCPWM_GEN_TIMER_EVENT_ACTION_END()));
+
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator[gen],
+                    MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator, MCPWM_GEN_ACTION_HIGH),
+                    MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
+}
+
+
+void PWM_set(uint8_t gen, uint8_t percent)
+{
+    uint32_t pwm;
+    switch (percent) {
+        case 0:
+            _setZero(gen);
+            break;
+        case 100:
+            _setOne(gen);
+            break;
+        default:
+            _setPwm(gen);
+            pwm = SERVO_TIMEBASE_PERIOD * percent / 100;
+            if (pwm >= SERVO_TIMEBASE_PERIOD) {
+                pwm = SERVO_TIMEBASE_PERIOD - 1;
+            }
+            INFO("setting pwm to %d\n", pwm);
+            ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, pwm));
+    }
+}
+
+
 static bool dbgPwm(uint8_t argc, char** argv)
 {
-    int pwm;
+    int gen;
+    int percent;
     
-    if (argc < 2) {
+    if (argc < 3) {
         return false;
     }
 
-    pwm = strtoul(argv[1], NULL, 10);
+    gen     = strtoul(argv[1], NULL, 10);
+    percent = strtoul(argv[2], NULL, 10);
 
-    if (pwm >= SERVO_TIMEBASE_PERIOD) {
-        pwm = SERVO_TIMEBASE_PERIOD - 1;
-        INFO("setting pwm to %d\n", pwm);
-    }
-
-    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, pwm));
+    PWM_set(gen, percent);
+//    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, pwm));
 
     return true;
 }
