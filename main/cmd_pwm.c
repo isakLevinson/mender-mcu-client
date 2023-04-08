@@ -49,6 +49,8 @@
 #undef ESP_LOGI
 #define ESP_LOGI(...)
 
+#define MAX_SPEED 95
+
 #define SERVO_TIMEBASE_RESOLUTION_HZ 10000000  // 1MHz, 1us per tick
 #define SERVO_TIMEBASE_PERIOD        400    // 20000 ticks, 20ms
 
@@ -231,8 +233,39 @@ void PWM_setLoad(uint8_t percent)
     uint32_t pwm;
 
     pwm = SERVO_TIMEBASE_PERIOD * percent / 100;
+
+    _channelSetGpio(0, 0, 0);
+    _channelSetGpio(1, 1, 0);
+
     _setLoadPwm(pwm);
 }
+
+bool PWM_setSpeed(int speed)
+{
+    if (speed > MAX_SPEED) {
+        speed = MAX_SPEED;
+    }
+
+    if (speed < -MAX_SPEED) {
+        speed = -MAX_SPEED;
+    }
+
+    _setLoadPwm(0);
+
+    if (speed == 0) {
+        _channelSetGpio(0, 0, 0);
+        _channelSetGpio(1, 0, 0);
+    } else if (speed > 0) {
+        _channelSetGpio(0, 0, 0);
+        PWM_set(1, speed);
+    } else if (speed < 0) {
+        _channelSetGpio(1, 0, 0);
+        PWM_set(0, -speed);
+    }
+
+    return true;
+}
+
 
 static bool dbgPwm(uint8_t argc, char** argv)
 {
@@ -304,12 +337,29 @@ static bool dbgLoad(uint8_t argc, char** argv)
     return true;
 }
 
+
+static bool dbgSpeed(uint8_t argc, char** argv)
+{
+    int speed;
+
+    if (argc < 2) {
+        return false;
+    }
+
+    speed = strtoul(argv[1], NULL, 10);
+
+     PWM_setSpeed(speed);
+
+    return true;
+}
+
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("pwm", NULL)
 	    DEBUG_MENU_CMD("pwm",			NULL,		NULL, dbgPwm)
 	    DEBUG_MENU_CMD("gpio",			NULL,		NULL, dbgGpio)
 	    DEBUG_MENU_CMD("dead",			NULL,		NULL, dbgDead)
 	    DEBUG_MENU_CMD("load",			NULL,		NULL, dbgLoad)
+	    DEBUG_MENU_CMD("speed",			NULL,		NULL, dbgSpeed)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
