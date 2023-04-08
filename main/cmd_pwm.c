@@ -52,19 +52,27 @@
 #define SERVO_TIMEBASE_RESOLUTION_HZ 10000000  // 1MHz, 1us per tick
 #define SERVO_TIMEBASE_PERIOD        400    // 20000 ticks, 20ms
 
-#define GENERATOR_COUNT 4
+#define GENERATOR_COUNT 2
 
-mcpwm_cmpr_handle_t comparator = NULL;
-mcpwm_gen_handle_t generator[GENERATOR_COUNT] = {0};
+mcpwm_oper_handle_t oper_bridge = NULL;
+mcpwm_cmpr_handle_t comparator_bridge = NULL;
+mcpwm_gen_handle_t generator_bridge[GENERATOR_COUNT] = {0};
 
-mcpwm_oper_handle_t oper = NULL;
+mcpwm_oper_handle_t oper_load = NULL;
+mcpwm_cmpr_handle_t comparator_load = NULL;
+mcpwm_gen_handle_t generator_load = {0};
 
-const mcpwm_generator_config_t generator_config[GENERATOR_COUNT] = {
+static const mcpwm_generator_config_t generator_bridge_config[] = {
     {.gen_gpio_num = 7},
     {.gen_gpio_num = 4},
     {.gen_gpio_num = 5},
     {.gen_gpio_num = 6},
 };
+
+static const mcpwm_generator_config_t generator_load_config = {
+    .gen_gpio_num = 13,
+};
+
 
 static struct {
     bool        isPwm;
@@ -80,7 +88,7 @@ static bool _channelSetGpio(int ch, uint8_t lowGpio, uint8_t highGpio)
 
     if (channels[ch].isPwm) {
         for (i=0; i<2; i++) {
-            err = mcpwm_del_generator(generator[i]);
+            err = mcpwm_del_generator(generator_bridge[i]);
             if (ESP_OK != err) {
                 ERROR("mcpwm_del_generator %d (i=%x)\n", err, i);
                 return false;
@@ -92,10 +100,10 @@ static bool _channelSetGpio(int ch, uint8_t lowGpio, uint8_t highGpio)
     channels[ch].highGpio = highGpio;
     channels[ch].lowGpio  = lowGpio;
 
-    gpio_set_direction(generator_config[ch*2 + 0].gen_gpio_num, GPIO_MODE_OUTPUT);
-    gpio_set_direction(generator_config[ch*2 + 1].gen_gpio_num, GPIO_MODE_OUTPUT);
-    gpio_set_level(generator_config[ch*2 + 0].gen_gpio_num, lowGpio);
-    gpio_set_level(generator_config[ch*2 + 1].gen_gpio_num, highGpio);
+    gpio_set_direction(generator_bridge_config[ch*2 + 0].gen_gpio_num, GPIO_MODE_OUTPUT);
+    gpio_set_direction(generator_bridge_config[ch*2 + 1].gen_gpio_num, GPIO_MODE_OUTPUT);
+    gpio_set_level(generator_bridge_config[ch*2 + 0].gen_gpio_num, lowGpio);
+    gpio_set_level(generator_bridge_config[ch*2 + 1].gen_gpio_num, highGpio);
 
     return true;
 }
@@ -117,19 +125,19 @@ static bool _channelSetPwm(int ch, int pwm)
 
     if (!channels[ch].isPwm) {
         for (i=0; i<2; i++) {
-            err = mcpwm_new_generator(oper, &generator_config[ch*2 + i], &generator[i]);
+            err = mcpwm_new_generator(oper_bridge, &generator_bridge_config[ch*2 + i], &generator_bridge[i]);
             if (ESP_OK != err) {
                 ERROR("mcpwm_new_generator %d (i=%x)\n", err, i);
                 return false;
             }
 
-            ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator[i],
+            ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator_bridge[i],
                             MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH),
                             MCPWM_GEN_TIMER_EVENT_ACTION_END()));
 
             // go low on compare threshold
-            ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator[i],
-                            MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator, MCPWM_GEN_ACTION_LOW),
+            ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator_bridge[i],
+                            MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator_bridge, MCPWM_GEN_ACTION_LOW),
                             MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
         }
         channels[ch].isPwm = true;
@@ -139,8 +147,18 @@ static bool _channelSetPwm(int ch, int pwm)
         pwm = SERVO_TIMEBASE_PERIOD - 1;
     }
     INFO("setting pwm to %d\n", pwm);
-    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, pwm));
+    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator_bridge, pwm));
 
+    return true;
+}
+
+static bool _setLoadPwm(int pwm)
+{
+    if (pwm >= SERVO_TIMEBASE_PERIOD) {
+        pwm = SERVO_TIMEBASE_PERIOD - 1;
+    }
+    INFO("setting load pwm to %d\n", pwm);
+    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator_load, pwm));
     return true;
 }
 
@@ -165,44 +183,31 @@ static bool _init(void)
         .flags.update_cmp_on_tez = true,
     };
 
-    ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &oper));
-    ESP_ERROR_CHECK(mcpwm_operator_connect_timer(oper, timer));
-    ESP_ERROR_CHECK(mcpwm_new_comparator(oper, &comparator_config, &comparator));
+    ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &oper_bridge));
+    ESP_ERROR_CHECK(mcpwm_operator_connect_timer(oper_bridge, timer));
+    ESP_ERROR_CHECK(mcpwm_new_comparator(oper_bridge, &comparator_config, &comparator_bridge));
+    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator_bridge, 0));
 
-    // set the initial compare value, so that the servo will spin to the center position
-    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, 0));
 
-    // go high on counter empty
-    //_channelSetPwm(0);
+    ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &oper_load));
+    ESP_ERROR_CHECK(mcpwm_operator_connect_timer(oper_load, timer));
+    ESP_ERROR_CHECK(mcpwm_new_comparator(oper_load, &comparator_config, &comparator_load));
+
+    ESP_ERROR_CHECK(mcpwm_new_generator(oper_load, &generator_load_config, &generator_load));
+
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator_load,
+                    MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH),
+                    MCPWM_GEN_TIMER_EVENT_ACTION_END()));
+
+    // go low on compare threshold
+    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator_load,
+                    MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator_load, MCPWM_GEN_ACTION_LOW),
+                    MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
 
     ESP_ERROR_CHECK(mcpwm_timer_enable(timer));
     ESP_ERROR_CHECK(mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP));
     return true;
 }
-
-void _setZero(uint8_t gen)
-{
-    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator[gen],
-                    MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_LOW),
-                    MCPWM_GEN_TIMER_EVENT_ACTION_END()));
-
-    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator[gen],
-                    MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator, MCPWM_GEN_ACTION_LOW),
-                    MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
-
-}
-
-void _setOne(uint8_t gen)
-{
-    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator[gen],
-                    MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH),
-                    MCPWM_GEN_TIMER_EVENT_ACTION_END()));
-
-    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator[gen],
-                    MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator, MCPWM_GEN_ACTION_HIGH),
-                    MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
-}
-
 
 void PWM_set(uint8_t ch, uint8_t percent)
 {
@@ -221,6 +226,14 @@ void PWM_set(uint8_t ch, uint8_t percent)
 }
 
 
+void PWM_setLoad(uint8_t percent)
+{
+    uint32_t pwm;
+
+    pwm = SERVO_TIMEBASE_PERIOD * percent / 100;
+    _setLoadPwm(pwm);
+}
+
 static bool dbgPwm(uint8_t argc, char** argv)
 {
     int gen;
@@ -234,7 +247,6 @@ static bool dbgPwm(uint8_t argc, char** argv)
     percent = strtoul(argv[2], NULL, 10);
 
     PWM_set(gen, percent);
-//    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, pwm));
 
     return true;
 }
@@ -252,8 +264,8 @@ static bool dbgDead(uint8_t argc, char** argv)
     dt_config.posedge_delay_ticks = strtoul(argv[1], NULL, 10);
     dt_config.negedge_delay_ticks = strtoul(argv[2], NULL, 10);
 
-    ESP_ERROR_CHECK(mcpwm_generator_set_dead_time(generator[0], generator[1], &dt_config));
-    ESP_ERROR_CHECK(mcpwm_generator_set_dead_time(generator[2], generator[3], &dt_config));
+    ESP_ERROR_CHECK(mcpwm_generator_set_dead_time(generator_bridge[0], generator_bridge[1], &dt_config));
+    ESP_ERROR_CHECK(mcpwm_generator_set_dead_time(generator_bridge[2], generator_bridge[3], &dt_config));
 
     return true;
 }
@@ -277,11 +289,27 @@ static bool dbgGpio(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgLoad(uint8_t argc, char** argv)
+{
+    int load;
+
+    if (argc < 2) {
+        return false;
+    }
+
+    load = strtoul(argv[1], NULL, 10);
+
+     PWM_setLoad(load);
+
+    return true;
+}
+
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("pwm", NULL)
 	    DEBUG_MENU_CMD("pwm",			NULL,		NULL, dbgPwm)
 	    DEBUG_MENU_CMD("gpio",			NULL,		NULL, dbgGpio)
 	    DEBUG_MENU_CMD("dead",			NULL,		NULL, dbgDead)
+	    DEBUG_MENU_CMD("load",			NULL,		NULL, dbgLoad)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
