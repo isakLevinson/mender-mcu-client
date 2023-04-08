@@ -73,9 +73,7 @@ static struct {
     uint8_t     highGpio;
 } channels[2] = {0};
 
-
-
-static bool _channelDisable(int ch, uint8_t lowGpio, uint8_t highGpio)
+static bool _channelSetGpio(int ch, uint8_t lowGpio, uint8_t highGpio)
 {
     esp_err_t   err;
     int i;
@@ -102,7 +100,7 @@ static bool _channelDisable(int ch, uint8_t lowGpio, uint8_t highGpio)
     return true;
 }
 
-static bool _channelEnable(int ch)
+static bool _channelSetPwm(int ch, int pwm)
 {
     esp_err_t   err;
     int i;
@@ -114,7 +112,7 @@ static bool _channelEnable(int ch)
 
     if (channels[1-ch].isPwm) {
         WARN("forcing disabling channel %d\n", 1-ch);
-        _channelDisable(1-ch, channels[1-ch].lowGpio, channels[1-ch].lowGpio);
+        _channelSetGpio(1-ch, channels[1-ch].lowGpio, channels[1-ch].lowGpio);
     }
 
     if (!channels[ch].isPwm) {
@@ -136,6 +134,13 @@ static bool _channelEnable(int ch)
         }
         channels[ch].isPwm = true;
     }
+
+    if (pwm >= SERVO_TIMEBASE_PERIOD) {
+        pwm = SERVO_TIMEBASE_PERIOD - 1;
+    }
+    INFO("setting pwm to %d\n", pwm);
+    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, pwm));
+
     return true;
 }
 
@@ -168,23 +173,11 @@ static bool _init(void)
     ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, 0));
 
     // go high on counter empty
-    _channelEnable(0);
+    //_channelSetPwm(0);
 
     ESP_ERROR_CHECK(mcpwm_timer_enable(timer));
     ESP_ERROR_CHECK(mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP));
     return true;
-}
-
-void _setPwm(uint8_t gen)
-{
-    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_timer_event(generator[gen],
-                    MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH),
-                    MCPWM_GEN_TIMER_EVENT_ACTION_END()));
-
-    ESP_ERROR_CHECK(mcpwm_generator_set_actions_on_compare_event(generator[gen],
-                    MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator, MCPWM_GEN_ACTION_LOW),
-                    MCPWM_GEN_COMPARE_EVENT_ACTION_END()));
-
 }
 
 void _setZero(uint8_t gen)
@@ -211,24 +204,19 @@ void _setOne(uint8_t gen)
 }
 
 
-void PWM_set(uint8_t gen, uint8_t percent)
+void PWM_set(uint8_t ch, uint8_t percent)
 {
     uint32_t pwm;
     switch (percent) {
         case 0:
-            _setZero(gen);
+            _channelSetGpio(ch, 0, 0);
             break;
         case 100:
-            _setOne(gen);
+            _channelSetGpio(ch, 1, 1);
             break;
         default:
-            _setPwm(gen);
             pwm = SERVO_TIMEBASE_PERIOD * percent / 100;
-            if (pwm >= SERVO_TIMEBASE_PERIOD) {
-                pwm = SERVO_TIMEBASE_PERIOD - 1;
-            }
-            INFO("setting pwm to %d\n", pwm);
-            ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator, pwm));
+            _channelSetPwm(ch, pwm);
     }
 }
 
@@ -270,27 +258,21 @@ static bool dbgDead(uint8_t argc, char** argv)
     return true;
 }
 
-static bool dbgChannel(uint8_t argc, char** argv)
+static bool dbgGpio(uint8_t argc, char** argv)
 {
     int ch;
-    int en;
     int low;
     int high;
 
-    if (argc < 5) {
+    if (argc < 4) {
         return false;
     }
 
     ch = strtoul(argv[1], NULL, 10);
-    en = strtoul(argv[2], NULL, 10);
-    low = strtoul(argv[3], NULL, 10);
-    high = strtoul(argv[4], NULL, 10);
+    low = strtoul(argv[2], NULL, 10);
+    high = strtoul(argv[3], NULL, 10);
 
-    if (en) {
-        _channelEnable(ch);
-    } else {
-        _channelDisable(ch, low, high);
-    }
+    _channelSetGpio(ch, low, high);
 
     return true;
 }
@@ -298,7 +280,7 @@ static bool dbgChannel(uint8_t argc, char** argv)
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("pwm", NULL)
 	    DEBUG_MENU_CMD("pwm",			NULL,		NULL, dbgPwm)
-	    DEBUG_MENU_CMD("ch",			NULL,		NULL, dbgChannel)
+	    DEBUG_MENU_CMD("gpio",			NULL,		NULL, dbgGpio)
 	    DEBUG_MENU_CMD("dead",			NULL,		NULL, dbgDead)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
