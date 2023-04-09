@@ -234,8 +234,8 @@ void PWM_setLoad(uint8_t percent)
 
     pwm = SERVO_TIMEBASE_PERIOD * percent / 100;
 
-    _channelSetGpio(0, 0, 0);
-    _channelSetGpio(1, 1, 0);
+    _channelSetGpio(0, 1, 0);
+    _channelSetGpio(1, 0, 0);
 
     _setLoadPwm(pwm);
 }
@@ -256,11 +256,11 @@ bool PWM_setSpeed(int speed)
         _channelSetGpio(0, 0, 0);
         _channelSetGpio(1, 0, 0);
     } else if (speed > 0) {
-        _channelSetGpio(0, 0, 0);
-        PWM_set(1, speed);
-    } else if (speed < 0) {
         _channelSetGpio(1, 0, 0);
-        PWM_set(0, -speed);
+        PWM_set(0, speed);
+    } else if (speed < 0) {
+        _channelSetGpio(0, 0, 0);
+        PWM_set(1, -speed);
     }
 
     return true;
@@ -286,19 +286,27 @@ static bool dbgPwm(uint8_t argc, char** argv)
 
 static bool dbgDead(uint8_t argc, char** argv)
 {
-    //int genIdx;
+    int pos;
+    int neg;
     mcpwm_dead_time_config_t dt_config = {0};
 
     if (argc < 3) {
         return false;
     }
 
-    //genIdx  =   strtoul(argv[1], NULL, 10);
-    dt_config.posedge_delay_ticks = strtoul(argv[1], NULL, 10);
-    dt_config.negedge_delay_ticks = strtoul(argv[2], NULL, 10);
+    pos = strtoul(argv[1], NULL, 10);
+    neg = strtoul(argv[2], NULL, 10);
+
+    dt_config.posedge_delay_ticks = pos;
+    dt_config.negedge_delay_ticks = 0;
+
+    ESP_ERROR_CHECK(mcpwm_generator_set_dead_time(generator_bridge[0], generator_bridge[0], &dt_config));
+
+    dt_config.posedge_delay_ticks = 0;
+    dt_config.negedge_delay_ticks = neg;
 
     ESP_ERROR_CHECK(mcpwm_generator_set_dead_time(generator_bridge[0], generator_bridge[1], &dt_config));
-    ESP_ERROR_CHECK(mcpwm_generator_set_dead_time(generator_bridge[2], generator_bridge[3], &dt_config));
+
 
     return true;
 }
