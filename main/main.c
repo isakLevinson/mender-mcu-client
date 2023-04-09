@@ -23,9 +23,10 @@
 #include "sdkconfig.h"
 #include "cmd_ble.h"
 #include "wifi.h"
-#include "motor.h"
 #include "main.h"
 #include "cli.h"
+#include "motor.h"
+#include "adc.h"
 
 #define BUF_SIZE    1024
 
@@ -52,8 +53,6 @@ void uart_init(void)
     ESP_ERROR_CHECK(uart_driver_install(CONFIG_ESP_CONSOLE_UART_NUM, BUF_SIZE * 2, 0, 0, NULL, intr_alloc_flags));
     ESP_ERROR_CHECK(uart_param_config(CONFIG_ESP_CONSOLE_UART_NUM, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(CONFIG_ESP_CONSOLE_UART_NUM, -1, -1, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-
-
 
 //        int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 20 / portTICK_PERIOD_MS);
 //        uart_write_bytes(ECHO_UART_PORT_NUM, (const char *) data, len);
@@ -108,5 +107,5 @@ void app_main(void)
 
     CLI_init();
     MOT_init();
-
+    ADC_init();
 }

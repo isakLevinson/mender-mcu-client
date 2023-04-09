@@ -215,7 +215,7 @@ static bool _init(void)
     return true;
 }
 
-void PWM_set(uint8_t ch, uint8_t percent)
+static void _pwmSet(uint8_t ch, uint8_t percent)
 {
     uint32_t pwm;
     switch (percent) {
@@ -231,7 +231,7 @@ void PWM_set(uint8_t ch, uint8_t percent)
     }
 }
 
-void PWM_setLoad(uint8_t percent)
+void MOT_setLoad(uint8_t percent)
 {
     int pwm;
 
@@ -244,7 +244,7 @@ void PWM_setLoad(uint8_t percent)
     _setLoadPwm(pwm);
 }
 
-bool PWM_setSpeed(int speed)
+bool MOT_setSpeed(int speed)
 {
     if (speed > MAX_SPEED) {
         speed = MAX_SPEED;
@@ -261,10 +261,10 @@ bool PWM_setSpeed(int speed)
         _channelSetGpio(1, 0, 0);
     } else if (speed > 0) {
         _channelSetGpio(1, 0, 0);
-        PWM_set(0, speed);
+        _pwmSet(0, speed);
     } else if (speed < 0) {
         _channelSetGpio(0, 0, 0);
-        PWM_set(1, -speed);
+        _pwmSet(1, -speed);
     }
 
     return true;
@@ -283,7 +283,7 @@ static bool dbgPwm(uint8_t argc, char** argv)
     gen     = strtoul(argv[1], NULL, 10);
     percent = strtoul(argv[2], NULL, 10);
 
-    PWM_set(gen, percent);
+    _pwmSet(gen, percent);
 
     return true;
 }
@@ -344,7 +344,7 @@ static bool dbgLoad(uint8_t argc, char** argv)
 
     load = strtoul(argv[1], NULL, 10);
 
-     PWM_setLoad(load);
+     MOT_setLoad(load);
 
     return true;
 }
@@ -360,7 +360,7 @@ static bool dbgSpeed(uint8_t argc, char** argv)
 
     speed = strtoul(argv[1], NULL, 10);
 
-     PWM_setSpeed(speed);
+     MOT_setSpeed(speed);
 
     return true;
 }
