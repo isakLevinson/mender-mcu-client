@@ -34,21 +34,90 @@
 #include "soc/soc_caps.h"
 #include "driver/gpio.h"
 
+#include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
+
+
 #include "main.h"
 #include "adc.h"
 
+#define EXAMPLE_ADC1_CHAN0          ADC_CHANNEL_7 /* gpio8 IMOT */
 
 
+#define EXAMPLE_ADC2_CHAN0          ADC_CHANNEL_7 /* gpio18 VMOT */
+#define EXAMPLE_ADC2_CHAN1          ADC_CHANNEL_4 /* gpio15 MOT+ */
+#define EXAMPLE_ADC2_CHAN2          ADC_CHANNEL_5 /* gpio16 MOT- */
+
+adc_oneshot_unit_handle_t adc1_handle;
+adc_oneshot_unit_handle_t adc2_handle;
 
 
 
 static void _init(void)
 {
+   //-------------ADC1 Init---------------//
+    adc_oneshot_unit_init_cfg_t init_config1 = {
+        .unit_id = ADC_UNIT_1,
+    };
 
+    adc_oneshot_unit_init_cfg_t init_config2 = {
+        .unit_id = ADC_UNIT_2,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+    };
+
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config1, &adc1_handle));
+
+    //-------------ADC1 Config---------------//
+    adc_oneshot_chan_cfg_t config = {
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+        .atten = ADC_ATTEN_DB_11,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, EXAMPLE_ADC1_CHAN0, &config));
+
+    //-------------ADC1 Calibration Init---------------//
+    //adc_cali_handle_t adc1_cali_handle = NULL;
+    //bool do_calibration1 = example_adc_calibration_init(ADC_UNIT_1, ADC_ATTEN_DB_11, &adc1_cali_handle);
+
+
+   //-------------ADC2 Init---------------//
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config2, &adc2_handle));
+
+    //-------------ADC2 Config---------------//
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc2_handle, EXAMPLE_ADC2_CHAN0, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc2_handle, EXAMPLE_ADC2_CHAN1, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc2_handle, EXAMPLE_ADC2_CHAN2, &config));
+
+    //-------------ADC2 Calibration Init---------------//
+    //adc_cali_handle_t adc2_cali_handle = NULL;
+    //bool do_calibration2 = example_adc_calibration_init(ADC_UNIT_2, ADC_ATTEN_DB_11, &adc2_cali_handle);
 }
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
+    int val1[3];
+    int val2[3];
+
+    adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN0, &val1[0]);
+
+    adc_oneshot_read(adc2_handle, EXAMPLE_ADC2_CHAN0, &val2[0]);
+    adc_oneshot_read(adc2_handle, EXAMPLE_ADC2_CHAN1, &val2[1]);
+    adc_oneshot_read(adc2_handle, EXAMPLE_ADC2_CHAN2, &val2[2]);
+
+    PRINT("adc1 0: %d\n", val1[0]);
+
+    PRINT("adc2 0: %d\n", val2[0]);
+    PRINT("adc2 1: %d\n", val2[1]);
+    PRINT("adc2 2: %d\n", val2[2]);
+
+
+    //PRINT("ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, EXAMPLE_ADC1_CHAN0, adc_raw[0][0]);
+    //if (do_calibration1) {
+    //    ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_handle, adc_raw[0][0], &voltage[0][0]));
+    //    ESP_LOGI(TAG, "ADC%d Channel[%d] Cali Voltage: %d mV", ADC_UNIT_1 + 1, EXAMPLE_ADC1_CHAN0, voltage[0][0]);
+    //}
+
+
     return true;
 }
 

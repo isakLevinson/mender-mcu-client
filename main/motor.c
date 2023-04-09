@@ -254,7 +254,7 @@ bool MOT_setSpeed(int speed)
         speed = -MAX_SPEED;
     }
 
-    _setLoadPwm(0);
+    _setLoadPwm(SERVO_TIMEBASE_PERIOD-1);
 
     if (speed == 0) {
         _channelSetGpio(0, 0, 0);
