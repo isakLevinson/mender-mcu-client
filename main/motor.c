@@ -366,7 +366,7 @@ static bool dbgSpeed(uint8_t argc, char** argv)
 }
 
 DEBUG_MENU_START(g_menu)
-    DEBUG_MENU_DIR("pwm", NULL)
+    DEBUG_MENU_DIR("motor", NULL)
 	    DEBUG_MENU_CMD("pwm",			NULL,		NULL, dbgPwm)
 	    DEBUG_MENU_CMD("gpio",			NULL,		NULL, dbgGpio)
 	    DEBUG_MENU_CMD("dead",			NULL,		NULL, dbgDead)
@@ -376,7 +376,7 @@ DEBUG_MENU_START(g_menu)
 DEBUG_MENU_END
 
 
-void PWM_init(void)
+void MOT_init(void)
 {
     DBG_TREE_add("/",		g_menu);
 

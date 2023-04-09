@@ -6,7 +6,9 @@
 extern "C" {
 #endif
 
-void PWM_init(void);
+void MOT_init(void);
+bool MOT_setSpeed(int speed);
+void MOT_setLoad(uint8_t percent);
 
 #ifdef __cplusplus
 }

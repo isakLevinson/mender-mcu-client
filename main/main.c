@@ -22,8 +22,8 @@
 #include "driver/gpio.h"
 #include "sdkconfig.h"
 #include "cmd_ble.h"
-#include "cmd_wifi.h"
-#include "cmd_pwm.h"
+#include "wifi.h"
+#include "motor.h"
 #include "main.h"
 #include "cli.h"
 
@@ -107,6 +107,6 @@ void app_main(void)
     printf(" =================================================\n\n");
 
     CLI_init();
-    PWM_init();
+    MOT_init();
 
 }

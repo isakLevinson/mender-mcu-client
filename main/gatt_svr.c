@@ -25,7 +25,7 @@
 #include "bleprph.h"
 #include "services/ans/ble_svc_ans.h"
 #include "esp_log.h"
-#include "cmd_wifi.h"
+#include "wifi.h"
 
 #undef ESP_LOGI
 #define ESP_LOGI(...)

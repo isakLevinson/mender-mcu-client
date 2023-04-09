@@ -32,7 +32,7 @@
 
 #include "driver/uart.h"
 #include "main.h"
-#include "cmd_wifi.h"
+#include "wifi.h"
 #include "nvs.h"
 
 #undef ESP_LOGI
