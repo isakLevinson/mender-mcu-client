@@ -156,6 +156,10 @@ static bool _channelSetPwm(int ch, int pwm)
 
 static bool _setLoadPwm(int pwm)
 {
+    if (pwm < 0) {
+        pwm = 0;
+    }
+
     if (pwm >= SERVO_TIMEBASE_PERIOD) {
         pwm = SERVO_TIMEBASE_PERIOD - 1;
     }
@@ -227,12 +231,12 @@ void PWM_set(uint8_t ch, uint8_t percent)
     }
 }
 
-
 void PWM_setLoad(uint8_t percent)
 {
-    uint32_t pwm;
+    int pwm;
 
-    pwm = SERVO_TIMEBASE_PERIOD * percent / 100;
+    //pwm = SERVO_TIMEBASE_PERIOD * percent / 100;
+    pwm = SERVO_TIMEBASE_PERIOD/2 - SERVO_TIMEBASE_PERIOD/2 * percent / 100;
 
     _channelSetGpio(0, 1, 0);
     _channelSetGpio(1, 0, 0);
