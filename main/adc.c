@@ -167,10 +167,13 @@ static bool dbgStatus(uint8_t argc, char** argv)
     int val1[3];
     int val2[3];
 
-    int current_ma;
+    int current_ma = 0;
+    int max_ma = 0;
+    int min_ma = 0;
     int voltage[4];
 
     int delay = 10;
+    TickType_t  tick = 0;
 
     if (argc >= 2) {
         delay = strtoul(argv[1], NULL, 10);
@@ -182,16 +185,33 @@ static bool dbgStatus(uint8_t argc, char** argv)
         adc_oneshot_read(adc2_handle, EXAMPLE_ADC2_CHAN1, &val2[1]);
         adc_oneshot_read(adc2_handle, EXAMPLE_ADC2_CHAN2, &val2[2]);
 
-        PRINT("%6d %6d %6d %6d", val1[0], val2[0], val2[1], val2[2]);
         if (do_calibration1) {
             int shuntVoltage_uv;
-            int current_a;
-            int current_sign;
 
             ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_handle, val1[0], &voltage[0]));
 
             shuntVoltage_uv = (1625 - voltage[0]) * 1000 / CURRENT_AMP_GAIN;
             current_ma = shuntVoltage_uv * 1000 / SHUNT_RESISTOR_UOHM;
+            if (current_ma > max_ma) {
+                max_ma = current_ma;
+            }
+            if (current_ma < min_ma) {
+                min_ma = current_ma;
+            }
+        }
+
+        if (do_calibration2) {
+            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc2_cali_handle, val2[0], &voltage[0]));
+            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc2_cali_handle, val2[1], &voltage[1]));
+            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc2_cali_handle, val2[2], &voltage[2]));
+        }
+
+        if (xTaskGetTickCount() - tick > delay) {
+            int current_sign = 1;
+            int current_a  = 0;
+
+            PRINT("%6d %6d %6d %6d", val1[0], val2[0], val2[1], val2[2]);
+
             if (current_ma >= 0) {
                 current_sign = 1;
             } else {
@@ -202,18 +222,16 @@ static bool dbgStatus(uint8_t argc, char** argv)
             current_a = current_ma / 1000;
 
             PRINT("0:(%6d) %c%2d.%03dA", voltage[0], (current_sign<0)?'-':' ', current_a, current_ma - current_a*1000);
-        }
 
-        if (do_calibration2) {
-            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc2_cali_handle, val2[0], &voltage[0]));
-            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc2_cali_handle, val2[1], &voltage[1]));
-            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc2_cali_handle, val2[2], &voltage[2]));
+            PRINT("(%d ~ %d) ", min_ma, max_ma);
+ 
             PRINT("1: (%6d) (%6d) (%6d)", voltage[0], voltage[1], voltage[2]);
+            PRINT("\n");
+
+            tick = xTaskGetTickCount();
         }
 
-        PRINT("\n");
-
-        vTaskDelay(delay);
+        //vTaskDelay(delay);
         ret = CLI_getc(&c);
     } while (!ret);
 
