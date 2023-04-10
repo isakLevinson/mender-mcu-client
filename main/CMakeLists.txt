@@ -1,6 +1,7 @@
 idf_component_register(SRCS	"main.c" 
 				"motor.c"
 				"adc.c"
+				"cmd.c"
                            	"cmd_ble.c"
                            	"gatt_svr.c"
                            	"wifi.c"

@@ -27,6 +27,7 @@
 #include "cli.h"
 #include "motor.h"
 #include "adc.h"
+#include "cmd.h"
 
 #define BUF_SIZE    1024
 
@@ -108,4 +109,5 @@ void app_main(void)
     CLI_init();
     MOT_init();
     ADC_init();
+    CMD_init();
 }

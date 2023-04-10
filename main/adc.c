@@ -69,7 +69,7 @@ static bool example_adc_calibration_init(adc_unit_t unit, adc_atten_t atten, adc
 
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
     if (!calibrated) {
-        INFO("calibration scheme version is %s", "Curve Fitting");
+        INFO("calibration scheme version is %s", "Curve Fitting\n");
         adc_cali_curve_fitting_config_t cali_config = {
             .unit_id = unit,
             .atten = atten,
@@ -99,16 +99,17 @@ static bool example_adc_calibration_init(adc_unit_t unit, adc_atten_t atten, adc
 
     *out_handle = handle;
     if (ret == ESP_OK) {
-        INFO("Calibration Success");
+        INFO("Calibration Success\n");
     } else if (ret == ESP_ERR_NOT_SUPPORTED || !calibrated) {
-        WARN("eFuse not burnt, skip software calibration");
+        WARN("eFuse not burnt, skip software calibration\n");
     } else {
-        ERROR("Invalid arg or no memory");
+        ERROR("Invalid arg or no memory\n");
     }
 
     return calibrated;
 }
 
+#if 0
 static void example_adc_calibration_deinit(adc_cali_handle_t handle)
 {
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
@@ -120,6 +121,7 @@ static void example_adc_calibration_deinit(adc_cali_handle_t handle)
     ESP_ERROR_CHECK(adc_cali_delete_scheme_line_fitting(handle));
 #endif
 }
+#endif
 
 static void _init(void)
 {
