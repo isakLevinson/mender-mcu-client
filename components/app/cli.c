@@ -89,6 +89,16 @@ static void _task(void *arg)
     vTaskDelete(NULL);
 }
 
+bool CLI_getc(char* o_pChar)
+{
+    size_t length;
+
+    length = uart_read_bytes(CONFIG_ESP_CONSOLE_UART_NUM, o_pChar, 1, 1);
+
+	return (length > 0);
+}
+
+
 static bool dbgVer(uint8_t argc, char** argv)
 {
     PRINT("ver\n");
