@@ -15,32 +15,81 @@
 #include "cmd_decl.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
-#include "esp_wifi.h"
-#include "esp_netif.h"
 #include "esp_event.h"
-#include "iperf.h"
-#include "esp_coexist.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_check.h"
-#include "esp_log.h"
-#include "esp_rom_sys.h"
-#include "esp_timer.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "unity.h"
 #include "soc/soc_caps.h"
 #include "driver/gpio.h"
+#include "driver/uart.h"
 
 #include "main.h"
 #include "cmd.h"
 #include "cli.h"
 
 
-static void _init(void)
+static void _task(void *arg)
 {
+    char c;
+    size_t length;
+
+    PRINT("CMD Ready.\n");
+
+    char* str="Ready\n";
+    uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
+
+    while(true) {
+        length = uart_read_bytes(ECHO_UART_PORT_NUM, &c, 1, 1);
+        if (length) {
+            TRACE("%02x\n", c);
+            uart_write_bytes(ECHO_UART_PORT_NUM, &c, 1);
+        }
+    }
+
+    vTaskDelete(NULL);
+}
+
+static bool _init(void)
+{
+    int ret;
+
+    #if 0
+    /* Configure parameters of an UART driver,
+     * communication pins and install the driver */
+    uart_config_t uart_config = {
+        .baud_rate = ECHO_UART_BAUD_RATE,
+        .data_bits = UART_DATA_8_BITS,
+        .parity    = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    int intr_alloc_flags = 0;
+
+#if CONFIG_UART_ISR_IN_IRAM
+    intr_alloc_flags = ESP_INTR_FLAG_IRAM;
+#endif
+
+    ESP_ERROR_CHECK(uart_driver_install(ECHO_UART_PORT_NUM, BUF_SIZE * 2, 0, 0, NULL, intr_alloc_flags));
+    ESP_ERROR_CHECK(uart_param_config(ECHO_UART_PORT_NUM, &uart_config));
+    ESP_ERROR_CHECK(uart_set_pin(ECHO_UART_PORT_NUM, ECHO_TEST_TXD, ECHO_TEST_RXD, ECHO_TEST_RTS, ECHO_TEST_CTS));
+
+    // Configure a temporary buffer for the incoming data
+    uint8_t *data = (uint8_t *) malloc(BUF_SIZE);
+#endif
+
+    ret = xTaskCreate(_task, "cmd", 4096, NULL, 7, NULL);
+    if (ret != pdPASS) {
+        //ERROR
+        return false;
+    }
+
+    return true;
 }
 
 static bool dbgStatus(uint8_t argc, char** argv)
@@ -48,9 +97,25 @@ static bool dbgStatus(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgTx(uint8_t argc, char** argv)
+{
+	uint8_t	buf[256];
+	uint16_t	size = sizeof(buf);
+
+	if (argc < 2) {
+		return false;
+	}
+
+	DBG_PRINT_hex2buf(argv[1], buf, &size);
+    uart_write_bytes(ECHO_UART_PORT_NUM, buf, size);
+
+	return true;
+}
+
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("cmd", NULL)
-	    DEBUG_MENU_CMD("status",			NULL,		NULL, dbgStatus)
+	    DEBUG_MENU_CMD("status",		NULL,		NULL, dbgStatus)
+	    DEBUG_MENU_CMD("tx",			NULL,		NULL, dbgTx)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
