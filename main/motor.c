@@ -235,8 +235,11 @@ void MOT_setLoad(uint8_t percent)
 {
     int pwm;
 
-    //pwm = SERVO_TIMEBASE_PERIOD * percent / 100;
-    pwm = SERVO_TIMEBASE_PERIOD/2 - SERVO_TIMEBASE_PERIOD/2 * percent / 100;
+    if (0 ==percent) {
+        pwm = SERVO_TIMEBASE_PERIOD - 1;
+    } else {
+        pwm = SERVO_TIMEBASE_PERIOD/2 - SERVO_TIMEBASE_PERIOD/2 * percent / 100;
+    }
 
     _channelSetGpio(0, 1, 0);
     _channelSetGpio(1, 0, 0);

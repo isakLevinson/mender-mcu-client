@@ -31,6 +31,20 @@
 #include "main.h"
 #include "cmd.h"
 #include "cli.h"
+#include "s_crc.h"
+
+
+bool CMD_tx(uint8_t* i_pBuf, size_t size)
+{
+    uint16_t crc;
+
+    crc = API_CRC_ccitt16(0, i_pBuf, size);
+
+    uart_write_bytes(ECHO_UART_PORT_NUM, i_pBuf, size);
+    uart_write_bytes(ECHO_UART_PORT_NUM, &crc, 2);
+
+    return true;
+}
 
 
 static void _task(void *arg)
@@ -47,7 +61,8 @@ static void _task(void *arg)
         length = uart_read_bytes(ECHO_UART_PORT_NUM, &c, 1, 1);
         if (length) {
             TRACE("%02x\n", c);
-            uart_write_bytes(ECHO_UART_PORT_NUM, &c, 1);
+            //TRACE("%c\n", c);
+            //uart_write_bytes(ECHO_UART_PORT_NUM, &c, 1);
         }
     }
 
@@ -101,13 +116,22 @@ static bool dbgTx(uint8_t argc, char** argv)
 {
 	uint8_t	buf[256];
 	uint16_t	size = sizeof(buf);
+    //uint16_t    crc;
 
 	if (argc < 2) {
 		return false;
 	}
 
 	DBG_PRINT_hex2buf(argv[1], buf, &size);
-    uart_write_bytes(ECHO_UART_PORT_NUM, buf, size);
+/*
+    crc = API_CRC_ccitt16(0, buf, size);
+    INFO("crc=%04x\n", crc);
+    buf[size] = crc & 0xff;
+    buf[size+1] = crc >> 8;
+
+    uart_write_bytes(ECHO_UART_PORT_NUM, buf, size+2);
+*/
+    CMD_tx(buf, size);
 
 	return true;
 }

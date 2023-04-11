@@ -97,14 +97,9 @@ void app_main(void)
     }
 #endif
 
-    printf("\n ==================================================\n");
-    printf(" |       Steps to test WiFi throughput            |\n");
-    printf(" |                                                |\n");
-    printf(" |  1. Print 'help' to gain overview of commands  |\n");
-    printf(" |  2. Configure device to station or soft-AP     |\n");
-    printf(" |  3. Setup WiFi connection                      |\n");
-    printf(" |  4. Run iperf to test UDP/TCP RX/TX throughput |\n");
-    printf(" |                                                |\n");
+    printf("\n");
+    printf(" ==================================================\n");
+    printf("  Ready.\n");
     printf(" =================================================\n\n");
 
     CLI_init();
