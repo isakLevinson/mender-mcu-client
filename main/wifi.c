@@ -311,6 +311,7 @@ void initialise_wifi(void)
     ESP_ERROR_CHECK( esp_enable_extern_coex_gpio_pin(EXTERN_COEX_WIRE_3, gpio_pin) );
 #endif
 
+#if 0
     {
         bool    ret = true;
         char    ssid[32];
@@ -325,6 +326,7 @@ void initialise_wifi(void)
     }
 
     initialized = true;
+#endif
 }
 
 bool wifi_cmd_sta_join(const char *ssid, const char *pass)

@@ -146,7 +146,6 @@ bool	CLI_init(void)
     uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
     uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, str, strlen(str));
 
-
     ret = xTaskCreate(_task, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL);
     if (ret != pdPASS) {
         //ERROR
