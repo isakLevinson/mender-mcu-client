@@ -148,7 +148,7 @@ static bool _channelSetPwm(int ch, int pwm)
     if (pwm >= SERVO_TIMEBASE_PERIOD) {
         pwm = SERVO_TIMEBASE_PERIOD - 1;
     }
-    INFO("setting pwm to %d\n", pwm);
+    TRACE("setting pwm to %d\n", pwm);
     ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator_bridge, pwm));
 
     return true;
@@ -163,7 +163,7 @@ static bool _setLoadPwm(int pwm)
     if (pwm >= SERVO_TIMEBASE_PERIOD) {
         pwm = SERVO_TIMEBASE_PERIOD - 1;
     }
-    INFO("setting load pwm to %d\n", pwm);
+    TRACE("setting load pwm to %d\n", pwm);
     ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator_load, pwm));
     return true;
 }
@@ -351,7 +351,6 @@ static bool dbgLoad(uint8_t argc, char** argv)
 
     return true;
 }
-
 
 static bool dbgSpeed(uint8_t argc, char** argv)
 {

@@ -44,16 +44,19 @@
 
 static pcnt_unit_handle_t pcnt_unit = NULL;
 
-static int g_countAtZero = 0;
-
+static struct {
+    bool    initialized;
+    int     countAtZero;
+ } g_enc = {0};
 
 static void IRAM_ATTR gpio_isr_handler(void* arg)
 {
     uint32_t gpio_num = (uint32_t)arg;
 
     if (pcnt_unit) {
-        pcnt_unit_get_count(pcnt_unit, &g_countAtZero);
+        pcnt_unit_get_count(pcnt_unit, &g_enc.countAtZero);
         pcnt_unit_clear_count(pcnt_unit);
+        g_enc.initialized = true;
     }
 }
 
@@ -135,19 +138,35 @@ bool ENC_get(int* o_pDegree)
 
     *o_pDegree = value * 360 / ENCODER_COUNTS;
 
+    if (!g_enc.initialized) {
+        return false;
+    }
+
     return true;
 }
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-    int value;
-    int deg;
+    bool    ret;
+    int     value;
+    int     deg;
+    int     delay = 0;
+    char    c;
 
-    ENC_get(&deg);
+    if (argc >= 2) {
+        delay = strtol(argv[1], NULL, 10);
+    }
 
-    pcnt_unit_get_count(pcnt_unit, &value);
-    PRINT("%d zero=%d, deg=%d\n", value, g_countAtZero, deg);
-    g_countAtZero = 0;
+    do {
+        ENC_get(&deg);
+
+        pcnt_unit_get_count(pcnt_unit, &value);
+        PRINT("%4d zero=%4d, deg=%3d\n", value, g_enc.countAtZero, deg);
+        g_enc.countAtZero = 0;
+
+        vTaskDelay(delay);
+        ret = CLI_getc(&c);
+    } while (!ret && delay);
 
     return true;
 }
@@ -160,7 +179,7 @@ static bool dbgClr(uint8_t argc, char** argv)
 
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("enc", NULL)
-	    DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
+	    DEBUG_MENU_CMD("status",	"[delay]",	NULL, dbgStatus)
 	    DEBUG_MENU_CMD("clr",		NULL,		NULL, dbgClr)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END

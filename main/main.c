@@ -29,6 +29,7 @@
 #include "adc.h"
 #include "cmd.h"
 #include "enc.h"
+#include "app.h"
 
 #define BUF_SIZE    1024
 
@@ -107,4 +108,5 @@ void app_main(void)
     ENC_init();
     ADC_init();
     CMD_init();
+    APP_init();
 }
