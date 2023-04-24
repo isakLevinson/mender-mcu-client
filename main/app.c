@@ -33,38 +33,67 @@
 #include "motor.h"
 #include "enc.h"
 
-
+typedef enum {
+    STATE_UNINIT,
+    STATE_IDLE,
+    STATE_ZERO,
+    STATE_GOTO,
+} STATE;
 
 static struct {
-    int target;
-    int speed;
-} g_app;
+    STATE   state;
+    int     target;
+    int     speed;
+} g_app = {
+    .state = STATE_UNINIT,
+    .speed = 10,
+};
 
 static void _task(void *arg)
 {
-    bool    ret;
+    bool    encValid;
     int     degree;
     int     delta;
 
     INFO("APP Ready.\n");
 
     while(true) {
-#if 0        
-        ret = ENC_get(&degree);
+        encValid = ENC_get(&degree);
 
-        if (ret) {
-            delta = ABS(degree - g_app.target);
-            if (delta < 5) {
-                MOT_setSpeed(0);
-                if (g_app.speed) {
-                    INFO("stopping at %d, d=%d\n", degree, delta);
-                    g_app.speed = 0;
-                }
-            }
-        } else {
-            MOT_setSpeed(g_app.speed);
+        delta = g_app.target - degree;
+        if (delta > 180) {
+            delta -= 360;
         }
-#endif
+        if (delta < -180) {
+            delta += 360;
+        }
+
+        switch (g_app.state) {
+            case STATE_ZERO:
+                if (encValid) {
+                    MOT_setSpeed(0);
+                    INFO("reached zero\n");
+                    g_app.state = STATE_IDLE;
+                }
+                break;
+
+            case STATE_GOTO:
+                if (delta > 5) {
+                    MOT_setSpeed(g_app.speed);
+                } else if (delta < -5) {
+                    MOT_setSpeed(-g_app.speed);
+                } else {
+                    MOT_setSpeed(0);
+                    g_app.state = STATE_IDLE;
+                }
+                break;
+
+            default:
+
+        }
+
+        TRACE("tar=%3d, deg=%3d, d=%d\n", g_app.target, degree, delta);
+
         vTaskDelay(10);
     }
 
@@ -84,17 +113,36 @@ static bool _init(void)
     return true;
 }
 
-static bool dbgTarget(uint8_t argc, char** argv)
+static bool dbgGoto(uint8_t argc, char** argv)
 {
     if (argc < 2) {
         return false;
     }
 
-    g_app.target    = strtol(argv[1], NULL, 10);
+    if (STATE_IDLE != g_app.state) {
+        PRINT("invalid state %d\n", g_app.state);
+        return true;
+    }
+
+    g_app.target = strtol(argv[1], NULL, 10);
 
     if (argc >= 3) {
-        g_app.speed     = strtol(argv[2], NULL, 10);
+        g_app.speed = strtol(argv[2], NULL, 10);
     }
+
+    g_app.state = STATE_GOTO;
+
+    return true;
+}
+
+
+static bool dbgZero(uint8_t argc, char** argv)
+{
+    if (argc >= 2) {
+        g_app.speed = strtol(argv[1], NULL, 10);
+    }
+
+    g_app.state = STATE_ZERO;
 
     MOT_setSpeed(g_app.speed);
 
@@ -108,6 +156,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
     ret = ENC_get(&deg);
 
+    PRINT("state  : %d\n", g_app.state);
     PRINT("target : %d\n", g_app.target);
     PRINT("speed  : %d\n", g_app.speed);
 
@@ -121,8 +170,9 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("app", NULL)
-	    DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
-	    DEBUG_MENU_CMD("target",	"<target> [speed]",		NULL, dbgTarget)
+	    DEBUG_MENU_CMD("status",	NULL,       		NULL, dbgStatus)
+	    DEBUG_MENU_CMD("zero",  	"[speed]",		    NULL, dbgZero)
+	    DEBUG_MENU_CMD("goto",	    "<target> [speed]",	NULL, dbgGoto)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
