@@ -51,7 +51,8 @@ static struct {
         int loadCurrent; 
         int minSpeed;
     } config;
-    int    speed;
+    int     speed;
+    int     deg16;
 } g_app = {
     .state = STATE_UNINIT,
     .speed = 10,
@@ -66,6 +67,8 @@ static void _task(void *arg)
     int     averageCurrentMa = 0;
     int     currentDelta;
     int     count = 0;
+    int     deg16;
+    int     deltaDeg;
 
     INFO("APP Ready.\n");
 
@@ -103,6 +106,10 @@ static void _task(void *arg)
 
             case STATE_SPEED_LOAD:
                 currentMa = ADC_getCurrent();
+                ENC_get16(&deg16);
+                deltaDeg = deg16 - g_app.deg16;
+                g_app.deg16 = deg16;
+
                 averageCurrentMa += (currentMa - averageCurrentMa) / 4;
 
                 currentDelta = averageCurrentMa - g_app.config.loadCurrent;
@@ -120,13 +127,11 @@ static void _task(void *arg)
                     g_app.speed = 90;
                 }
 
-
-
                 MOT_setSpeed(g_app.speed);
 
                 count++;
-                if (0 == count % 16) {
-                    TRACE("i=%5d, d=%5d, speed=%3d\n", currentMa, currentDelta, g_app.speed);
+                if (0 == count % 64) {
+                    TRACE("deg=%5d, i=%5d, d=%5d, speed=%3d\n", deltaDeg, currentMa, currentDelta, g_app.speed);
                 }
 
                 break;

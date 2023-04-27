@@ -127,7 +127,7 @@ static bool _initGpio(void)
     return true;
 }
 
-bool ENC_get(int* o_pDegree)
+bool ENC_get16(int* o_pDegree16)
 {
     int value;
 
@@ -136,7 +136,7 @@ bool ENC_get(int* o_pDegree)
         value += ENCODER_COUNTS;
     }
 
-    *o_pDegree = value * 360 / ENCODER_COUNTS;
+    *o_pDegree16 = value * 360 *16 / ENCODER_COUNTS;
 
     if (!g_enc.initialized) {
         return false;
@@ -144,6 +144,19 @@ bool ENC_get(int* o_pDegree)
 
     return true;
 }
+
+bool ENC_get(int* o_pDegree)
+{
+    bool    ret;
+    int     value;
+
+    ret = ENC_get16(&value);
+
+    *o_pDegree = value / 16;
+
+    return ret;
+}
+
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
