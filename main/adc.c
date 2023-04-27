@@ -182,7 +182,6 @@ static bool dbgStatus(uint8_t argc, char** argv)
 {
     bool    ret;
     char    c;
-    //int val1[3];
     int val2[4];
 
     int current_ma = 0;
@@ -222,8 +221,8 @@ static bool dbgStatus(uint8_t argc, char** argv)
         }
 
         if (xTaskGetTickCount() - tick > delay) {
-            PRINT("1: %6d %6d %6d %6d ", val2[0], val2[1], val2[2], val2[3]);
-            PRINT("v1: (%6d) (%6d) (%6d) (%6d) ", voltage[0], voltage[1], voltage[2], voltage[3]);
+            PRINT("adc2: %6d %6d %6d %6d ", val2[0], val2[1], val2[2], val2[3]);
+            PRINT("v2: (%6d) (%6d) (%6d) (%6d) ", voltage[0], voltage[1], voltage[2], voltage[3]);
             PRINT("I=" PRINT_FRAC_STR(1) "A ", PRINT_FRAC_ARGS(current_ma, 1000, 10));
             PRINT("(%d ~ %d) ", min_ma, max_ma);
             PRINT("\n");

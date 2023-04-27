@@ -46,9 +46,12 @@ typedef enum {
 
 static struct {
     STATE  state;
-    int    target;
+    struct {
+        int target;
+        int loadCurrent; 
+        int minSpeed;
+    } config;
     int    speed;
-    int    loadCurrent; 
 } g_app = {
     .state = STATE_UNINIT,
     .speed = 10,
@@ -69,7 +72,7 @@ static void _task(void *arg)
     while(true) {
         encValid = ENC_get(&degree);
 
-        delta = g_app.target - degree;
+        delta = g_app.config.target - degree;
         if (delta > 180) {
             delta -= 360;
         }
@@ -95,16 +98,20 @@ static void _task(void *arg)
                     MOT_setSpeed(0);
                     g_app.state = STATE_IDLE;
                 }
-                TRACE("tar=%3d, deg=%3d, d=%d\n", g_app.target, degree, delta);
+                TRACE("tar=%3d, deg=%3d, d=%d\n", g_app.config.target, degree, delta);
                 break;
 
             case STATE_SPEED_LOAD:
                 currentMa = ADC_getCurrent();
                 averageCurrentMa += (currentMa - averageCurrentMa) / 4;
 
-                currentDelta = averageCurrentMa - g_app.loadCurrent;
+                currentDelta = averageCurrentMa - g_app.config.loadCurrent;
                 g_app.speed += currentDelta / 1000;
-  
+
+                if (g_app.speed < g_app.config.minSpeed)  {
+                    g_app.speed = g_app.config.minSpeed;
+                }
+
                 if (g_app.speed < 1)  {
                     g_app.speed = 1;
                 }
@@ -112,6 +119,9 @@ static void _task(void *arg)
                 if (g_app.speed > 90)  {
                     g_app.speed = 90;
                 }
+
+
+
                 MOT_setSpeed(g_app.speed);
 
                 count++;
@@ -143,9 +153,10 @@ static bool _init(void)
     return true;
 }
 
-bool APP_load(int percent)
+bool APP_load(int percent, int minSpeed)
 {
-    g_app.loadCurrent = percent * LOAD_MAX_CURRENT_MA / 100;
+    g_app.config.loadCurrent = percent * LOAD_MAX_CURRENT_MA / 100;
+    g_app.config.minSpeed = minSpeed;
 
     g_app.state = STATE_SPEED_LOAD;
     g_app.speed = 1;
@@ -165,7 +176,7 @@ static bool dbgGoto(uint8_t argc, char** argv)
         return true;
     }
 
-    g_app.target = strtol(argv[1], NULL, 10);
+    g_app.config.target = strtol(argv[1], NULL, 10);
 
     if (argc >= 3) {
         g_app.speed = strtol(argv[2], NULL, 10);
@@ -193,13 +204,19 @@ static bool dbgZero(uint8_t argc, char** argv)
 static bool dbgLoad(uint8_t argc, char** argv)
 {
     int percent;
+    int minSpeed = g_app.config.minSpeed;
 
     if (argc < 2) {
         return false;
     }
+
     percent = strtol(argv[1], NULL, 10);
 
-    APP_load(percent);
+    if (argc >= 3) {
+        minSpeed = strtol(argv[2], NULL, 10);
+    }
+
+    APP_load(percent, minSpeed);
 
     return true;
 }
@@ -220,12 +237,12 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
     ret = ENC_get(&deg);
 
+    PRINT("target : %d\n", g_app.config.target);
     PRINT("state  : %d\n", g_app.state);
-    PRINT("target : %d\n", g_app.target);
     PRINT("speed  : %d\n", g_app.speed);
 
     if (ret) {
-        PRINT("current: %d (d=%d)\n", deg, ABS(deg - g_app.target));
+        PRINT("current: %d (d=%d)\n", deg, ABS(deg - g_app.config.target));
     } else {
         PRINT("current: Uninit\n");
     }
@@ -234,11 +251,11 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("app", NULL)
-	    DEBUG_MENU_CMD("status",	NULL,       		NULL, dbgStatus)
-	    DEBUG_MENU_CMD("zero",  	"[speed]",		    NULL, dbgZero)
-	    DEBUG_MENU_CMD("goto",	    "<target> [speed]",	NULL, dbgGoto)
-        DEBUG_MENU_CMD("load",	    "[targetCurrent]",	NULL, dbgLoad)
-        DEBUG_MENU_CMD("stop",	    NULL,	            NULL, dbgStop)
+	    DEBUG_MENU_CMD("status",	NULL,       		            NULL, dbgStatus)
+	    DEBUG_MENU_CMD("zero",  	"[speed]",		                NULL, dbgZero)
+	    DEBUG_MENU_CMD("goto",	    "<target> [speed]",	            NULL, dbgGoto)
+        DEBUG_MENU_CMD("load",	    "[targetCurrent] [minSpeed]",	NULL, dbgLoad)
+        DEBUG_MENU_CMD("stop",	    NULL,	                        NULL, dbgStop)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
