@@ -34,6 +34,8 @@
 #include "enc.h"
 #include "adc.h"
 
+#define LOAD_MAX_CURRENT_MA    20000
+
 typedef enum {
     STATE_UNINIT,
     STATE_IDLE,
@@ -141,6 +143,17 @@ static bool _init(void)
     return true;
 }
 
+bool APP_load(int percent)
+{
+    g_app.loadCurrent = percent * LOAD_MAX_CURRENT_MA / 100;
+
+    g_app.state = STATE_SPEED_LOAD;
+    g_app.speed = 1;
+    MOT_setSpeed(g_app.speed);
+
+    return true;
+}
+
 static bool dbgGoto(uint8_t argc, char** argv)
 {
     if (argc < 2) {
@@ -179,13 +192,14 @@ static bool dbgZero(uint8_t argc, char** argv)
 
 static bool dbgLoad(uint8_t argc, char** argv)
 {
-    if (argc >= 2) {
-        g_app.loadCurrent = strtol(argv[1], NULL, 10);
-    }
+    int percent;
 
-    g_app.state = STATE_SPEED_LOAD;
-    g_app.speed = 1;
-    MOT_setSpeed(g_app.speed);
+    if (argc < 2) {
+        return false;
+    }
+    percent = strtol(argv[1], NULL, 10);
+
+    APP_load(percent);
 
     return true;
 }
