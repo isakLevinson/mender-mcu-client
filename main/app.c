@@ -58,6 +58,7 @@ static void _task(void *arg)
     int     degree;
     int     delta;
     int     currentMa;
+    int     averageCurrentMa = 0;
     int     currentDelta;
     int     count = 0;
 
@@ -97,8 +98,11 @@ static void _task(void *arg)
 
             case STATE_SPEED_LOAD:
                 currentMa = ADC_getCurrent();
-                currentDelta = currentMa - g_app.loadCurrent;
-                g_app.speed += currentDelta / 2000;
+                averageCurrentMa += (currentMa - averageCurrentMa) / 4;
+
+                currentDelta = averageCurrentMa - g_app.loadCurrent;
+                g_app.speed += currentDelta / 1000;
+  
                 if (g_app.speed < 1)  {
                     g_app.speed = 1;
                 }
