@@ -49,10 +49,10 @@
 
 #define EXAMPLE_ADC1_CHAN0          ADC_CHANNEL_7 /* gpio8 IMOT */
 
-
-#define EXAMPLE_ADC2_CHAN0          ADC_CHANNEL_7 /* gpio18 VMOT */
-#define EXAMPLE_ADC2_CHAN1          ADC_CHANNEL_4 /* gpio15 MOT+ */
-#define EXAMPLE_ADC2_CHAN2          ADC_CHANNEL_5 /* gpio16 MOT- */
+#define EXAMPLE_ADC2_CHAN0          ADC_CHANNEL_4 /* gpio15 MOT+ */
+#define EXAMPLE_ADC2_CHAN1          ADC_CHANNEL_5 /* gpio16 MOT- */
+#define EXAMPLE_ADC2_CHAN2          ADC_CHANNEL_6 /* gpio17 MOT_ON */
+#define EXAMPLE_ADC2_CHAN3          ADC_CHANNEL_7 /* gpio18 VMOT */
 
 adc_oneshot_unit_handle_t adc1_handle;
 adc_oneshot_unit_handle_t adc2_handle;
@@ -123,6 +123,23 @@ static void example_adc_calibration_deinit(adc_cali_handle_t handle)
 }
 #endif
 
+
+int ADC_getCurrent(void)
+{
+    int adcVal;
+    int adcVoltage;
+    int shuntVoltage_uv;
+    int current_ma;
+
+    adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN0, &adcVal);
+    adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &adcVoltage);
+
+    shuntVoltage_uv = (1625 - adcVoltage) * 1000 / CURRENT_AMP_GAIN;
+    current_ma = shuntVoltage_uv * 1000 / SHUNT_RESISTOR_UOHM;
+
+    return current_ma;
+}
+
 static void _init(void)
 {
    //-------------ADC1 Init---------------//
@@ -132,7 +149,7 @@ static void _init(void)
 
     adc_oneshot_unit_init_cfg_t init_config2 = {
         .unit_id = ADC_UNIT_2,
-        .ulp_mode = ADC_ULP_MODE_DISABLE,
+        //.ulp_mode = ADC_ULP_MODE_DISABLE,
     };
 
     ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config1, &adc1_handle));
@@ -155,6 +172,7 @@ static void _init(void)
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc2_handle, EXAMPLE_ADC2_CHAN0, &config));
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc2_handle, EXAMPLE_ADC2_CHAN1, &config));
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc2_handle, EXAMPLE_ADC2_CHAN2, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc2_handle, EXAMPLE_ADC2_CHAN3, &config));
 
     //-------------ADC2 Calibration Init---------------//
     do_calibration2 = example_adc_calibration_init(ADC_UNIT_2, ADC_ATTEN_DB_11, &adc2_cali_handle);
@@ -164,8 +182,8 @@ static bool dbgStatus(uint8_t argc, char** argv)
 {
     bool    ret;
     char    c;
-    int val1[3];
-    int val2[3];
+    //int val1[3];
+    int val2[4];
 
     int current_ma = 0;
     int max_ma = 0;
@@ -180,18 +198,14 @@ static bool dbgStatus(uint8_t argc, char** argv)
     }
 
     do {
-        adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN0, &val1[0]);
         adc_oneshot_read(adc2_handle, EXAMPLE_ADC2_CHAN0, &val2[0]);
         adc_oneshot_read(adc2_handle, EXAMPLE_ADC2_CHAN1, &val2[1]);
         adc_oneshot_read(adc2_handle, EXAMPLE_ADC2_CHAN2, &val2[2]);
+        adc_oneshot_read(adc2_handle, EXAMPLE_ADC2_CHAN3, &val2[3]);
 
         if (do_calibration1) {
-            int shuntVoltage_uv;
+            current_ma = ADC_getCurrent();
 
-            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_handle, val1[0], &voltage[0]));
-
-            shuntVoltage_uv = (1625 - voltage[0]) * 1000 / CURRENT_AMP_GAIN;
-            current_ma = shuntVoltage_uv * 1000 / SHUNT_RESISTOR_UOHM;
             if (current_ma > max_ma) {
                 max_ma = current_ma;
             }
@@ -204,28 +218,14 @@ static bool dbgStatus(uint8_t argc, char** argv)
             ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc2_cali_handle, val2[0], &voltage[0]));
             ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc2_cali_handle, val2[1], &voltage[1]));
             ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc2_cali_handle, val2[2], &voltage[2]));
+            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc2_cali_handle, val2[3], &voltage[3]));
         }
 
         if (xTaskGetTickCount() - tick > delay) {
-            int current_sign = 1;
-            int current_a  = 0;
-
-            PRINT("%6d %6d %6d %6d", val1[0], val2[0], val2[1], val2[2]);
-
-            if (current_ma >= 0) {
-                current_sign = 1;
-            } else {
-                current_sign = -1;
-                current_ma = -current_ma;
-            }
-
-            current_a = current_ma / 1000;
-
-            PRINT("0:(%6d) %c%2d.%03dA", voltage[0], (current_sign<0)?'-':' ', current_a, current_ma - current_a*1000);
-
+            PRINT("1: %6d %6d %6d %6d ", val2[0], val2[1], val2[2], val2[3]);
+            PRINT("v1: (%6d) (%6d) (%6d) (%6d) ", voltage[0], voltage[1], voltage[2], voltage[3]);
+            PRINT("I=" PRINT_FRAC_STR(1) "A ", PRINT_FRAC_ARGS(current_ma, 1000, 10));
             PRINT("(%d ~ %d) ", min_ma, max_ma);
- 
-            PRINT("1: (%6d) (%6d) (%6d)", voltage[0], voltage[1], voltage[2]);
             PRINT("\n");
 
             tick = xTaskGetTickCount();
@@ -235,7 +235,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
         ret = CLI_getc(&c);
     } while (!ret);
 
-    PRINT("adc1 0: %d\n", val1[0]);
+    //PRINT("adc1 0: %d\n", val1[0]);
 
     PRINT("adc2 0: %d\n", val2[0]);
     PRINT("adc2 1: %d\n", val2[1]);

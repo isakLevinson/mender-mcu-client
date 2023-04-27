@@ -32,18 +32,21 @@
 #include "cli.h"
 #include "motor.h"
 #include "enc.h"
+#include "adc.h"
 
 typedef enum {
     STATE_UNINIT,
     STATE_IDLE,
     STATE_ZERO,
     STATE_GOTO,
+    STATE_SPEED_LOAD,
 } STATE;
 
 static struct {
-    STATE   state;
-    int     target;
-    int     speed;
+    STATE  state;
+    int    target;
+    int    speed;
+    int    loadCurrent; 
 } g_app = {
     .state = STATE_UNINIT,
     .speed = 10,
@@ -54,6 +57,9 @@ static void _task(void *arg)
     bool    encValid;
     int     degree;
     int     delta;
+    int     currentMa;
+    int     currentDelta;
+    int     count = 0;
 
     INFO("APP Ready.\n");
 
@@ -86,15 +92,33 @@ static void _task(void *arg)
                     MOT_setSpeed(0);
                     g_app.state = STATE_IDLE;
                 }
+                TRACE("tar=%3d, deg=%3d, d=%d\n", g_app.target, degree, delta);
+                break;
+
+            case STATE_SPEED_LOAD:
+                currentMa = ADC_getCurrent();
+                currentDelta = currentMa - g_app.loadCurrent;
+                g_app.speed += currentDelta / 2000;
+                if (g_app.speed < 1)  {
+                    g_app.speed = 1;
+                }
+
+                if (g_app.speed > 90)  {
+                    g_app.speed = 90;
+                }
+                MOT_setSpeed(g_app.speed);
+
+                count++;
+                if (0 == count % 16) {
+                    TRACE("i=%5d, d=%5d, speed=%3d\n", currentMa, currentDelta, g_app.speed);
+                }
+
                 break;
 
             default:
-
         }
 
-        TRACE("tar=%3d, deg=%3d, d=%d\n", g_app.target, degree, delta);
-
-        vTaskDelay(10);
+        vTaskDelay(1);
     }
 
     vTaskDelete(NULL);
@@ -149,6 +173,28 @@ static bool dbgZero(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgLoad(uint8_t argc, char** argv)
+{
+    if (argc >= 2) {
+        g_app.loadCurrent = strtol(argv[1], NULL, 10);
+    }
+
+    g_app.state = STATE_SPEED_LOAD;
+    g_app.speed = 1;
+    MOT_setSpeed(g_app.speed);
+
+    return true;
+}
+
+static bool dbgStop(uint8_t argc, char** argv)
+{
+    g_app.state = STATE_IDLE;
+    g_app.speed = 0;
+    MOT_setSpeed(g_app.speed);
+
+    return true;
+}
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
     bool    ret;
@@ -173,6 +219,8 @@ DEBUG_MENU_START(g_menu)
 	    DEBUG_MENU_CMD("status",	NULL,       		NULL, dbgStatus)
 	    DEBUG_MENU_CMD("zero",  	"[speed]",		    NULL, dbgZero)
 	    DEBUG_MENU_CMD("goto",	    "<target> [speed]",	NULL, dbgGoto)
+        DEBUG_MENU_CMD("load",	    "[targetCurrent]",	NULL, dbgLoad)
+        DEBUG_MENU_CMD("stop",	    NULL,	            NULL, dbgStop)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
