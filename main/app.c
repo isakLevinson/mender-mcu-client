@@ -50,6 +50,7 @@ static struct {
         int target;
         int loadCurrent; 
         int minSpeed;
+        int minRpm;
     } config;
     int     speed;
     int     deg16;
@@ -69,6 +70,7 @@ static void _task(void *arg)
     int     count = 0;
     int     deg16;
     int     deltaDeg;
+    int     rpmSpeed = 0;
 
     INFO("APP Ready.\n");
 
@@ -108,15 +110,32 @@ static void _task(void *arg)
                 currentMa = ADC_getCurrent();
                 ENC_get16(&deg16);
                 deltaDeg = deg16 - g_app.deg16;
+                if (deltaDeg < 0) {
+                    deltaDeg += 360*16;
+                }
+
+                if (deltaDeg > 360*16) {
+                    deltaDeg -= 360*16;
+                }
+
                 g_app.deg16 = deg16;
 
                 averageCurrentMa += (currentMa - averageCurrentMa) / 4;
+
+                rpmSpeed += (g_app.config.minRpm - deltaDeg) / 2;
+                if (rpmSpeed < 1) {
+                    rpmSpeed = 1;
+                }
 
                 currentDelta = averageCurrentMa - g_app.config.loadCurrent;
                 g_app.speed += currentDelta / 1000;
 
                 if (g_app.speed < g_app.config.minSpeed)  {
                     g_app.speed = g_app.config.minSpeed;
+                }
+
+                if (g_app.speed < rpmSpeed)  {
+                    g_app.speed = rpmSpeed;
                 }
 
                 if (g_app.speed < 1)  {
@@ -131,7 +150,7 @@ static void _task(void *arg)
 
                 count++;
                 if (0 == count % 64) {
-                    TRACE("deg=%5d, i=%5d, d=%5d, speed=%3d\n", deltaDeg, currentMa, currentDelta, g_app.speed);
+                    TRACE("deg=%5d, i=%5d, d=%5d, speed=%3d rpmSpeed=%d\n", deltaDeg, currentMa, currentDelta, g_app.speed, rpmSpeed);
                 }
 
                 break;
@@ -221,6 +240,10 @@ static bool dbgLoad(uint8_t argc, char** argv)
         minSpeed = strtol(argv[2], NULL, 10);
     }
 
+    if (argc >= 4) {
+        g_app.config.minRpm = strtol(argv[3], NULL, 10);
+    }
+
     APP_load(percent, minSpeed);
 
     return true;
@@ -242,9 +265,11 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
     ret = ENC_get(&deg);
 
-    PRINT("target : %d\n", g_app.config.target);
-    PRINT("state  : %d\n", g_app.state);
-    PRINT("speed  : %d\n", g_app.speed);
+    PRINT("target   : %d\n", g_app.config.target);
+    PRINT("minSpeed : %d\n", g_app.config.minSpeed);
+    PRINT("minRpm   : %d\n", g_app.config.minRpm);
+    PRINT("state    : %d\n", g_app.state);
+    PRINT("speed    : %d\n", g_app.speed);
 
     if (ret) {
         PRINT("current: %d (d=%d)\n", deg, ABS(deg - g_app.config.target));
