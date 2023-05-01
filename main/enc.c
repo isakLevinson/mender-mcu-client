@@ -18,7 +18,6 @@
 #include "argtable3/argtable3.h"
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
 #include "freertos/task.h"
 
 #include "soc/soc_caps.h"

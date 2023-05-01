@@ -14,12 +14,7 @@
 #include "unity.h"
 #include "iperf.h"
 
-#include "esp_log.h"
-#include "esp_console.h"
-#include "esp_wifi.h"
-#include "esp_netif.h"
 #include "esp_event.h"
-#include "esp_coexist.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "esp_rom_sys.h"
@@ -34,7 +29,6 @@
 
 #include "freertos/FreeRTOS.h"
 #include "argtable3/argtable3.h"
-#include "freertos/event_groups.h"
 #include "freertos/task.h"
 
 #include "driver/uart.h"

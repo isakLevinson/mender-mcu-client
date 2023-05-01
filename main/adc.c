@@ -21,7 +21,6 @@
 
 #include "freertos/FreeRTOS.h"
 #include "argtable3/argtable3.h"
-#include "freertos/event_groups.h"
 #include "freertos/task.h"
 
 #include "iperf.h"

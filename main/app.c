@@ -32,6 +32,8 @@
 #include "enc.h"
 #include "adc.h"
 
+#define TIMER_INTERVAL_US   10000
+
 #define LOAD_MAX_CURRENT_MA    20000
 
 typedef enum {
@@ -43,6 +45,8 @@ typedef enum {
     STATE_STOP,
     STATE_SPEED_LOAD,
 } STATE;
+
+static EventGroupHandle_t _event_group;
 
 static struct {
     STATE  state;
@@ -70,6 +74,17 @@ static struct {
     .rpmDelta = 0,
 };
 
+static void _periodic_timer_cb(void* arg)
+{
+    static int64_t prev;
+    int64_t time_since_boot = esp_timer_get_time();
+
+    xEventGroupSetBits(_event_group, 0x01);
+
+    //TRACE("timer: %lld us (%lld)\n", time_since_boot, time_since_boot-prev);
+    prev = time_since_boot;
+}
+
 static void _task(void *arg)
 {
     bool    encValid;
@@ -86,6 +101,11 @@ static void _task(void *arg)
     INFO("APP Ready.\n");
 
     while(true) {
+        int bits = xEventGroupWaitBits(_event_group, 0x01, 1, 1, portMAX_DELAY);
+        if (!(bits & 0x01)) {
+            continue;
+        }
+
         encValid = ENC_get(&degree);
 
         degreeToTarget = g_app.config.target - degree;
@@ -99,6 +119,8 @@ static void _task(void *arg)
         currentMa = ADC_getCurrent();
         ENC_get16(&deg16);
         deltaDeg = deg16 - g_app.deg16;
+        g_app.deg16 = deg16;
+
         if (deltaDeg < -180*16) {
             deltaDeg += 360*16;
         }
@@ -107,16 +129,23 @@ static void _task(void *arg)
             deltaDeg -= 360*16;
         }
 
-        TRACE("tar=%3d, deg=%3d, d=%d, rpm-delta:%d, deg16:%d,%d delta-deg:%d\n", g_app.config.target, degree, degreeToTarget, g_app.rpmDelta, deg16, g_app.deg16, deltaDeg);
-
-        g_app.deg16 = deg16;
+        g_app.rpmDelta += (g_app.config.rpm - deltaDeg - g_app.rpmDelta) / 2;
 
         averageCurrentMa += (currentMa - averageCurrentMa) / 4;
 
-        g_app.rpmDelta += (g_app.config.rpm - deltaDeg) / 2;
-
         //currentDelta = averageCurrentMa - g_app.config.loadCurrent;
         //g_app.speed += currentDelta / 1000;
+
+        if (0 == (count % (100000 / TIMER_INTERVAL_US))) {
+            static int64_t prev;
+            int64_t time_since_boot = esp_timer_get_time();
+
+            TRACE("(%lld) tar=%3d, deg=%3d, d=%d, rpm-delta:%d, deg16:%d,%d delta-deg:%d\n",
+                time_since_boot-prev,
+                g_app.config.target, degree, degreeToTarget, g_app.rpmDelta, deg16, g_app.deg16, deltaDeg);
+            //TRACE("loop: %lld us \n", time_since_boot, time_since_boot-prev);
+            prev = time_since_boot;
+        }
 
         switch (g_app.state) {
             case STATE_ZERO:
@@ -181,20 +210,38 @@ static void _task(void *arg)
         }
 
         count++;
-        vTaskDelay(1);
     }
 
     vTaskDelete(NULL);
 }
 
+esp_timer_handle_t periodic_timer;
+
 static bool _init(void)
 {
     int ret;
+
+    const esp_timer_create_args_t periodic_timer_args = {
+        .callback = &_periodic_timer_cb,
+        .name = "periodic"
+    };
+
+    _event_group = xEventGroupCreate();
 
     ret = xTaskCreate(_task, "app", 4096, NULL, 7, NULL);
     if (ret != pdPASS) {
         //ERROR
         return false;
+    }
+
+    ret = esp_timer_create(&periodic_timer_args, &periodic_timer);
+    if (ESP_OK != ret) {
+        ERROR("esp_timer_create %d\n", ret);
+    }
+
+    ret = esp_timer_start_periodic(periodic_timer, TIMER_INTERVAL_US);
+    if (ESP_OK != ret) {
+        ERROR("esp_timer_start_periodic %d\n", ret);
     }
 
     return true;
