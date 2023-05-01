@@ -6,7 +6,6 @@
 #include "dbgPrint.h"
 #include "parseArgs.h"
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,49 +40,83 @@ typedef enum {
     STATE_IDLE,
     STATE_ZERO,
     STATE_GOTO,
+    STATE_STOP,
     STATE_SPEED_LOAD,
 } STATE;
 
 static struct {
     STATE  state;
     struct {
-        int target;
-        int loadCurrent; 
-        int minSpeed;
-        int minRpm;
+        int32_t target;
+        int32_t loadCurrent; 
+        int32_t minSpeed;
+        int32_t rpm;
+        int32_t maxSpeed;
+        int32_t stopSnapRegion;
+        int32_t stopGainPercent;
     } config;
     int     speed;
     int     deg16;
+    int32_t rpmDelta;
 } g_app = {
+    .config = {
+        .rpm = 10,
+        .maxSpeed = 50,
+        .stopSnapRegion = 5,
+        .stopGainPercent = 500,
+    },
     .state = STATE_UNINIT,
     .speed = 10,
+    .rpmDelta = 0,
 };
 
 static void _task(void *arg)
 {
     bool    encValid;
     int     degree;
-    int     delta;
+    int     degreeToTarget;
     int     currentMa;
     int     averageCurrentMa = 0;
-    int     currentDelta;
     int     count = 0;
     int     deg16;
     int     deltaDeg;
     int     rpmSpeed = 0;
+//    int     currentDelta;
 
     INFO("APP Ready.\n");
 
     while(true) {
         encValid = ENC_get(&degree);
 
-        delta = g_app.config.target - degree;
-        if (delta > 180) {
-            delta -= 360;
+        degreeToTarget = g_app.config.target - degree;
+        if (degreeToTarget > 180) {
+            degreeToTarget -= 360;
         }
-        if (delta < -180) {
-            delta += 360;
+        if (degreeToTarget < -180) {
+            degreeToTarget += 360;
         }
+
+        currentMa = ADC_getCurrent();
+        ENC_get16(&deg16);
+        deltaDeg = deg16 - g_app.deg16;
+        if (deltaDeg < -180*16) {
+            deltaDeg += 360*16;
+        }
+
+        if (deltaDeg > 180*16) {
+            deltaDeg -= 360*16;
+        }
+
+        TRACE("tar=%3d, deg=%3d, d=%d, rpm-delta:%d, deg16:%d,%d delta-deg:%d\n", g_app.config.target, degree, degreeToTarget, g_app.rpmDelta, deg16, g_app.deg16, deltaDeg);
+
+        g_app.deg16 = deg16;
+
+        averageCurrentMa += (currentMa - averageCurrentMa) / 4;
+
+        g_app.rpmDelta += (g_app.config.rpm - deltaDeg) / 2;
+
+        //currentDelta = averageCurrentMa - g_app.config.loadCurrent;
+        //g_app.speed += currentDelta / 1000;
 
         switch (g_app.state) {
             case STATE_ZERO:
@@ -95,41 +128,37 @@ static void _task(void *arg)
                 break;
 
             case STATE_GOTO:
-                if (delta > 5) {
+                g_app.speed = CLIP(g_app.rpmDelta, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+
+                if ((degreeToTarget > -g_app.config.stopSnapRegion) && (degreeToTarget < g_app.config.stopSnapRegion)) {
+                    g_app.state = STATE_STOP;
+                }
+
+                //g_app.speed = CLIP(g_app.speed, -ABS(degreeToTarget), ABS(degreeToTarget));
+
+                MOT_setSpeed(g_app.speed);
+#if 0
+                if (degreeToTarget > 5) {
                     MOT_setSpeed(g_app.speed);
-                } else if (delta < -5) {
+                } else if (degreeToTarget < -5) {
                     MOT_setSpeed(-g_app.speed);
                 } else {
                     MOT_setSpeed(0);
                     g_app.state = STATE_IDLE;
                 }
-                TRACE("tar=%3d, deg=%3d, d=%d\n", g_app.config.target, degree, delta);
+#endif
+                //if (0 == count % 64) {
+//                    TRACE("tar=%3d, deg=%3d, d=%d, rpm-delta:%d, delta-deg:%d\n", g_app.config.target, degree, degreeToTarget, g_app.rpmDelta, deltaDeg);
+                    
+                //}
+                break;
+
+            case STATE_STOP:
+                g_app.speed = CLIP(degreeToTarget * g_app.config.stopGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+                MOT_setSpeed(g_app.speed);
                 break;
 
             case STATE_SPEED_LOAD:
-                currentMa = ADC_getCurrent();
-                ENC_get16(&deg16);
-                deltaDeg = deg16 - g_app.deg16;
-                if (deltaDeg < 0) {
-                    deltaDeg += 360*16;
-                }
-
-                if (deltaDeg > 360*16) {
-                    deltaDeg -= 360*16;
-                }
-
-                g_app.deg16 = deg16;
-
-                averageCurrentMa += (currentMa - averageCurrentMa) / 4;
-
-                rpmSpeed += (g_app.config.minRpm - deltaDeg) / 2;
-                if (rpmSpeed < 1) {
-                    rpmSpeed = 1;
-                }
-
-                currentDelta = averageCurrentMa - g_app.config.loadCurrent;
-                g_app.speed += currentDelta / 1000;
-
                 if (g_app.speed < g_app.config.minSpeed)  {
                     g_app.speed = g_app.config.minSpeed;
                 }
@@ -148,9 +177,8 @@ static void _task(void *arg)
 
                 MOT_setSpeed(g_app.speed);
 
-                count++;
                 if (0 == count % 64) {
-                    TRACE("deg=%5d, i=%5d, d=%5d, speed=%3d rpmSpeed=%d\n", deltaDeg, currentMa, currentDelta, g_app.speed, rpmSpeed);
+                    //TRACE("deg=%5d, i=%5d, d=%5d, speed=%3d rpmSpeed=%d\n", deltaDeg, currentMa, currentDelta, g_app.speed, rpmSpeed);
                 }
 
                 break;
@@ -158,6 +186,7 @@ static void _task(void *arg)
             default:
         }
 
+        count++;
         vTaskDelay(1);
     }
 
@@ -195,10 +224,10 @@ static bool dbgGoto(uint8_t argc, char** argv)
         return false;
     }
 
-    if (STATE_IDLE != g_app.state) {
-        PRINT("invalid state %d\n", g_app.state);
-        return true;
-    }
+    //if ((STATE_IDLE != g_app.state) && (STATE_STOP != g_app.state)) {
+    //    PRINT("invalid state %d\n", g_app.state);
+    //    return true;
+    //}
 
     g_app.config.target = strtol(argv[1], NULL, 10);
 
@@ -206,6 +235,7 @@ static bool dbgGoto(uint8_t argc, char** argv)
         g_app.speed = strtol(argv[2], NULL, 10);
     }
 
+    g_app.rpmDelta = 0;
     g_app.state = STATE_GOTO;
 
     return true;
@@ -241,7 +271,8 @@ static bool dbgLoad(uint8_t argc, char** argv)
     }
 
     if (argc >= 4) {
-        g_app.config.minRpm = strtol(argv[3], NULL, 10);
+        g_app.config.rpm
+ = strtol(argv[3], NULL, 10);
     }
 
     APP_load(percent, minSpeed);
@@ -265,9 +296,16 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
     ret = ENC_get(&deg);
 
+    PRINT("config ----\n");
+    PRINT("rpm      : %d\n", g_app.config.rpm);
     PRINT("target   : %d\n", g_app.config.target);
     PRINT("minSpeed : %d\n", g_app.config.minSpeed);
-    PRINT("minRpm   : %d\n", g_app.config.minRpm);
+    PRINT("maxSpeed : %d\n", g_app.config.maxSpeed);
+    PRINT("stop snap: %d\n", g_app.config.stopSnapRegion);
+    PRINT("stop gain: %d\n", g_app.config.stopGainPercent);
+    
+    PRINT("current ----\n");
+    PRINT("rpm : %d\n", g_app.config.rpm);
     PRINT("state    : %d\n", g_app.state);
     PRINT("speed    : %d\n", g_app.speed);
 
@@ -279,9 +317,33 @@ static bool dbgStatus(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgConfig(uint8_t argc, char** argv)
+{
+    bool    retVal;
+
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("r",		ARGS_TYPE_INT32,	0,	"rpm",	                &g_app.config.rpm)
+		ARGS_ENTRY("ms",	ARGS_TYPE_INT32,	0,	"maximum motor speed",	&g_app.config.maxSpeed)
+		ARGS_ENTRY("t",     ARGS_TYPE_INT32,	0,	"target",           	&g_app.config.target)
+        ARGS_ENTRY("ss",    ARGS_TYPE_INT32,	0,	"stop snap region", 	&g_app.config.stopSnapRegion)
+        ARGS_ENTRY("sg",    ARGS_TYPE_INT32,	0,	"stop snap region", 	&g_app.config.stopGainPercent)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	retVal = ARGS_readValues(argc, argv, args, "", NULL);
+	if (false == retVal) {
+		return false;
+	}
+
+    return true;
+}
+
+
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("app", NULL)
 	    DEBUG_MENU_CMD("status",	NULL,       		            NULL, dbgStatus)
+	    DEBUG_MENU_CMD("config",	NULL,       		            NULL, dbgConfig)
 	    DEBUG_MENU_CMD("zero",  	"[speed]",		                NULL, dbgZero)
 	    DEBUG_MENU_CMD("goto",	    "<target> [speed]",	            NULL, dbgGoto)
         DEBUG_MENU_CMD("load",	    "[targetCurrent] [minSpeed]",	NULL, dbgLoad)
