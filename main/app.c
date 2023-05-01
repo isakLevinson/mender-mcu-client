@@ -39,6 +39,7 @@ typedef enum {
     STATE_UNINIT,
     STATE_IDLE,
     STATE_ZERO,
+    STATE_RUN,
     STATE_GOTO,
     STATE_STOP,
     STATE_SPEED_LOAD,
@@ -127,6 +128,11 @@ static void _task(void *arg)
                 }
                 break;
 
+            case STATE_RUN:
+                g_app.speed = CLIP(g_app.rpmDelta, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+                MOT_setSpeed(g_app.speed);
+                break;
+
             case STATE_GOTO:
                 g_app.speed = CLIP(g_app.rpmDelta, -g_app.config.maxSpeed, g_app.config.maxSpeed);
 
@@ -137,19 +143,8 @@ static void _task(void *arg)
                 //g_app.speed = CLIP(g_app.speed, -ABS(degreeToTarget), ABS(degreeToTarget));
 
                 MOT_setSpeed(g_app.speed);
-#if 0
-                if (degreeToTarget > 5) {
-                    MOT_setSpeed(g_app.speed);
-                } else if (degreeToTarget < -5) {
-                    MOT_setSpeed(-g_app.speed);
-                } else {
-                    MOT_setSpeed(0);
-                    g_app.state = STATE_IDLE;
-                }
-#endif
                 //if (0 == count % 64) {
 //                    TRACE("tar=%3d, deg=%3d, d=%d, rpm-delta:%d, delta-deg:%d\n", g_app.config.target, degree, degreeToTarget, g_app.rpmDelta, deltaDeg);
-                    
                 //}
                 break;
 
@@ -241,6 +236,16 @@ static bool dbgGoto(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgRun(uint8_t argc, char** argv)
+{
+    if (argc >= 2) {
+        g_app.config.rpm = strtol(argv[1], NULL, 10);
+    }
+
+    g_app.state = STATE_RUN;
+
+    return true;
+}
 
 static bool dbgZero(uint8_t argc, char** argv)
 {
@@ -346,6 +351,7 @@ DEBUG_MENU_START(g_menu)
 	    DEBUG_MENU_CMD("config",	NULL,       		            NULL, dbgConfig)
 	    DEBUG_MENU_CMD("zero",  	"[speed]",		                NULL, dbgZero)
 	    DEBUG_MENU_CMD("goto",	    "<target> [speed]",	            NULL, dbgGoto)
+ 	    DEBUG_MENU_CMD("run",	    NULL,	                        NULL, dbgRun)
         DEBUG_MENU_CMD("load",	    "[targetCurrent] [minSpeed]",	NULL, dbgLoad)
         DEBUG_MENU_CMD("stop",	    NULL,	                        NULL, dbgStop)
     DEBUG_MENU_DIR_END
