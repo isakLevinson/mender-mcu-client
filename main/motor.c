@@ -6,38 +6,25 @@
 #include "dbgPrint.h"
 #include "parseArgs.h"
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+
+#include "unity.h"
+#include "iperf.h"
+
 #include "esp_log.h"
 #include "esp_console.h"
-
-#include "argtable3/argtable3.h"
-#include "cmd_decl.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_event.h"
-#include "iperf.h"
 #include "esp_coexist.h"
-
-#include <sys/socket.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
 
-#include "driver/uart.h"
-#include "main.h"
-#include "cmd_wifi.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "unity.h"
 #include "soc/soc_caps.h"
 #include "driver/mcpwm_timer.h"
 #include "driver/mcpwm_oper.h"
@@ -45,6 +32,14 @@
 #include "driver/mcpwm_gen.h"
 #include "driver/gpio.h"
 
+#include "freertos/FreeRTOS.h"
+#include "argtable3/argtable3.h"
+#include "freertos/event_groups.h"
+#include "freertos/task.h"
+
+#include "driver/uart.h"
+#include "main.h"
+#include "cmd_wifi.h"
 
 #undef ESP_LOGI
 #define ESP_LOGI(...)

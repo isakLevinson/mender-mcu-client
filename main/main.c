@@ -14,9 +14,8 @@
 #include "esp_wifi.h"
 #include "esp_log.h"
 #include "esp_err.h"
-#include "nvs_flash.h"
 #include "esp_console.h"
-#include "cmd_decl.h"
+#include "nvs_flash.h"
 
 #include "driver/uart.h"
 #include "driver/gpio.h"
@@ -75,10 +74,6 @@ void app_main(void)
     initialise_wifi();
     initialise_ble();
 
-    /* Register commands */
-    register_system();
-    register_wifi();
-    register_ble();
 #if 0
     {
         bool    ret = true;

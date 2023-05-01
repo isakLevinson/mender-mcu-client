@@ -11,32 +11,30 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "argtable3/argtable3.h"
-#include "cmd_decl.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_event.h"
-#include "iperf.h"
-#include "esp_coexist.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "unity.h"
-#include "soc/soc_caps.h"
-#include "driver/gpio.h"
+#include "esp_coexist.h"
 
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
+
+#include "freertos/FreeRTOS.h"
+#include "argtable3/argtable3.h"
+#include "freertos/event_groups.h"
+#include "freertos/task.h"
+
+#include "iperf.h"
+
+#include "unity.h"
+#include "soc/soc_caps.h"
+#include "driver/gpio.h"
+
 
 
 #include "main.h"

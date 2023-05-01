@@ -11,22 +11,24 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "argtable3/argtable3.h"
-#include "cmd_decl.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
-#include "esp_event.h"
+#include "unity.h"
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include "argtable3/argtable3.h"
+
+#include "esp_event.h"
 #include "esp_check.h"
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "unity.h"
 #include "soc/soc_caps.h"
 #include "driver/gpio.h"
 #include "driver/uart.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "main.h"
 #include "cmd.h"

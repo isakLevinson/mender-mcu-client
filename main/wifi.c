@@ -9,25 +9,26 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/socket.h>
+
+#include "iperf.h"
 #include "esp_log.h"
 #include "esp_console.h"
-#include "argtable3/argtable3.h"
-#include "cmd_decl.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_event.h"
-#include "iperf.h"
 #include "esp_coexist.h"
-
-#include <sys/socket.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
+
+#include "argtable3/argtable3.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+#include "freertos/task.h"
+
 #include "iperf.h"
 
 #include "driver/uart.h"
