@@ -61,7 +61,7 @@ static struct {
         int32_t rpmGainPercent;
     } config;
     int     speed;
-    int     deg16;
+    int     deg256;
     int32_t rpmDelta;
 } g_app = {
     .config = {
@@ -69,7 +69,7 @@ static struct {
         .maxSpeed = 50,
         .stopSnapRegion = 5,
         .stopGainPercent = 500,
-        .rpmGainPercent = 100,
+        .rpmGainPercent = 50,
     },
     .state = STATE_UNINIT,
     .speed = 10,
@@ -87,6 +87,12 @@ static void _periodic_timer_cb(void* arg)
     prev = time_since_boot;
 }
 
+
+static void _printStatus(void)
+{
+    
+}
+
 static void _task(void *arg)
 {
     bool    encValid;
@@ -95,8 +101,9 @@ static void _task(void *arg)
     int     currentMa;
     int     averageCurrentMa = 0;
     int     count = 0;
-    int     deg16;
-    int     deltaDeg;
+    int     deg256;
+    int     deltaDeg = 0;
+    int     dd = 0;
     int     rpmSpeed = 0;
 //    int     currentDelta;
 
@@ -119,36 +126,40 @@ static void _task(void *arg)
         }
 
         currentMa = ADC_getCurrent();
-        ENC_get16(&deg16);
-        deltaDeg = deg16 - g_app.deg16;
-        g_app.deg16 = deg16;
+        ENC_get256(&deg256);
 
-        if (deltaDeg < -180*16) {
-            deltaDeg += 360*16;
+        dd = deg256 - g_app.deg256;
+        g_app.deg256 = deg256;
+
+        if (dd < -180*256) {
+            dd += 360*256;
         }
 
-        if (deltaDeg > 180*16) {
-            deltaDeg -= 360*16;
+        if (dd > 180*256) {
+            dd -= 360*256;
         }
 
-        g_app.rpmDelta += (g_app.config.rpm - deltaDeg - g_app.rpmDelta) / 2;
+        deltaDeg += (dd - deltaDeg) / 16;
+
+        g_app.rpmDelta = g_app.config.rpm - deltaDeg;
 
         averageCurrentMa += (currentMa - averageCurrentMa) / 4;
 
         //currentDelta = averageCurrentMa - g_app.config.loadCurrent;
         //g_app.speed += currentDelta / 1000;
 
+#if 0
         if (0 == (count % (100000 / TIMER_INTERVAL_US))) {
             static int64_t prev;
             int64_t time_since_boot = esp_timer_get_time();
 
             TRACE("(%6lld) tar=%3d, deg=%3d, d=%4d, rpm-delta:%3d, deg16:%d,%d delta-deg:%d\n",
                 time_since_boot-prev,
-                g_app.config.target, degree, degreeToTarget, g_app.rpmDelta, deg16, g_app.deg16, deltaDeg);
+                g_app.config.target, degree, degreeToTarget, g_app.rpmDelta, deg256, g_app.deg256, deltaDeg);
             //TRACE("loop: %lld us \n", time_since_boot, time_since_boot-prev);
             prev = time_since_boot;
         }
-
+#endif
         switch (g_app.state) {
             case STATE_ZERO:
                 if (encValid) {
@@ -159,12 +170,30 @@ static void _task(void *arg)
                 break;
 
             case STATE_RUN:
-                g_app.speed = CLIP(g_app.speed + g_app.rpmDelta * g_app.config.rpmGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+                //g_app.speed = CLIP(g_app.speed + g_app.rpmDelta * g_app.config.rpmGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+
+
+                g_app.speed += (g_app.rpmDelta * g_app.config.rpmGainPercent / 100 - g_app.speed) / 16;
+                g_app.speed = CLIP(g_app.speed, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+
+                //g_app.speed = CLIP(g_app.rpmDelta * g_app.config.rpmGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
                 MOT_setSpeed(g_app.speed);
+
+                //if (0 == (count % (100000 / TIMER_INTERVAL_US))) {
+                    static int64_t prev;
+                    int64_t time_since_boot = esp_timer_get_time();
+
+                    TRACE("(%6lld) tar=%3d, deg=%3d, d=%4d, rpm-delta:%3d, deg16:%6d,%6d delta-deg:%d, speed=%4d\n",
+                        time_since_boot-prev,
+                        g_app.config.target, degree, degreeToTarget, g_app.rpmDelta, deg256, g_app.deg256, deltaDeg, g_app.speed);
+                    //TRACE("loop: %lld us \n", time_since_boot, time_since_boot-prev);
+                    prev = time_since_boot;
+                //}
+
                 break;
 
             case STATE_GOTO:
-                g_app.speed = CLIP(g_app.rpmDelta * g_app.config.rpmGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+                g_app.speed = CLIP(g_app.speed + g_app.rpmDelta * g_app.config.rpmGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
 
                 if ((degreeToTarget > -g_app.config.stopSnapRegion) && (degreeToTarget < g_app.config.stopSnapRegion)) {
                     g_app.state = STATE_STOP;

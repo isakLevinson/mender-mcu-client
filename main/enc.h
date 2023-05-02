@@ -8,7 +8,7 @@ extern "C" {
 
 void ENC_init(void);
 bool ENC_get(int* o_pDegree);
-bool ENC_get16(int* o_pDegree16);
+bool ENC_get256(int* o_pDegree256);
 
 #ifdef __cplusplus
 }
