@@ -65,18 +65,16 @@ static struct {
     } config;
     int     deg64;
     int     speed;
-    int32_t rpmDelta;
 } g_app = {
     .config = {
         .rpm = 10,
         .maxSpeed = 50,
-        .stopSnapRegion = 5,
-        .stopGainPercent = 500,
+        .stopSnapRegion = 5 * DEG_FRAC,
+        .stopGainPercent = 20,
         .pid_p = 20,
     },
     .state = STATE_UNINIT,
     .speed = 10,
-    .rpmDelta = 0,
 };
 
 static void _periodic_timer_cb(void* arg)
@@ -134,9 +132,9 @@ static void _task(void *arg)
         encValid = ENC_get256(&degEncoder);
         currentMa = ADC_getCurrent();
 
-        degreeToTarget = _degAdd(g_app.config.target, -g_app.deg64 / DEG_FRAC, 1);
-
         averageCurrentMa += (currentMa - averageCurrentMa) / 4;
+
+        degreeToTarget = _degAdd(g_app.config.target, -degEncoder, DEG_FRAC);
 
 #if 0
         if (0 == (count % (100000 / TIMER_INTERVAL_US))) {
@@ -167,16 +165,30 @@ static void _task(void *arg)
 
                 MOT_setSpeed(g_app.speed);
 
-                TRACE("deg=%4d, dd=%4d, speed=%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, dd / DEG_FRAC, g_app.speed, averageCurrentMa);
-
+                TRACE("RUN: deg=%4d, dd=%4d, speed=%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, dd / DEG_FRAC, g_app.speed, averageCurrentMa);
                 break;
 
             case STATE_GOTO:
+
+                if ((degreeToTarget < g_app.config.stopSnapRegion) && (degreeToTarget > -g_app.config.stopSnapRegion)) {
+                     g_app.state = STATE_STOP;
+                     break;
+                }
+
+                g_app.deg64 = _degAdd(g_app.deg64, g_app.config.rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
+                dd = _degAdd(g_app.deg64, -degEncoder, DEG_FRAC);
+
+                g_app.speed = CLIP(dd * g_app.config.pid_p / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+
+                MOT_setSpeed(g_app.speed);
+
+                TRACE("GOTO: deg=%4d, dd=%4d, speed=%4d, to-target:%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, dd / DEG_FRAC, g_app.speed, degreeToTarget, averageCurrentMa);
                 break;
 
             case STATE_STOP:
-                g_app.speed = CLIP(degreeToTarget * g_app.config.stopGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+                g_app.speed = CLIP(degreeToTarget * g_app.config.stopGainPercent / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
                 MOT_setSpeed(g_app.speed);
+                TRACE("STOP: deg=%4d, dd=%4d, speed=%4d, to-target:%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, dd / DEG_FRAC, g_app.speed, degreeToTarget, averageCurrentMa);
                 break;
 
             case STATE_SPEED_LOAD:
@@ -268,13 +280,12 @@ static bool dbgGoto(uint8_t argc, char** argv)
     //    return true;
     //}
 
-    g_app.config.target = strtol(argv[1], NULL, 10);
+    g_app.config.target = strtol(argv[1], NULL, 10) * DEG_FRAC;
 
     if (argc >= 3) {
-        g_app.speed = strtol(argv[2], NULL, 10);
+        g_app.config.rpm = strtol(argv[2], NULL, 10);
     }
 
-    g_app.rpmDelta = 0;
     g_app.state = STATE_GOTO;
 
     return true;
