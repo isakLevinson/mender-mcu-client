@@ -58,6 +58,7 @@ static struct {
         int32_t maxSpeed;
         int32_t stopSnapRegion;
         int32_t stopGainPercent;
+        int32_t rpmGainPercent;
     } config;
     int     speed;
     int     deg16;
@@ -68,6 +69,7 @@ static struct {
         .maxSpeed = 50,
         .stopSnapRegion = 5,
         .stopGainPercent = 500,
+        .rpmGainPercent = 100,
     },
     .state = STATE_UNINIT,
     .speed = 10,
@@ -140,7 +142,7 @@ static void _task(void *arg)
             static int64_t prev;
             int64_t time_since_boot = esp_timer_get_time();
 
-            TRACE("(%lld) tar=%3d, deg=%3d, d=%d, rpm-delta:%d, deg16:%d,%d delta-deg:%d\n",
+            TRACE("(%6lld) tar=%3d, deg=%3d, d=%4d, rpm-delta:%3d, deg16:%d,%d delta-deg:%d\n",
                 time_since_boot-prev,
                 g_app.config.target, degree, degreeToTarget, g_app.rpmDelta, deg16, g_app.deg16, deltaDeg);
             //TRACE("loop: %lld us \n", time_since_boot, time_since_boot-prev);
@@ -157,12 +159,12 @@ static void _task(void *arg)
                 break;
 
             case STATE_RUN:
-                g_app.speed = CLIP(g_app.rpmDelta, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+                g_app.speed = CLIP(g_app.speed + g_app.rpmDelta * g_app.config.rpmGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
                 MOT_setSpeed(g_app.speed);
                 break;
 
             case STATE_GOTO:
-                g_app.speed = CLIP(g_app.rpmDelta, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+                g_app.speed = CLIP(g_app.rpmDelta * g_app.config.rpmGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
 
                 if ((degreeToTarget > -g_app.config.stopSnapRegion) && (degreeToTarget < g_app.config.stopSnapRegion)) {
                     g_app.state = STATE_STOP;
@@ -354,6 +356,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
     PRINT("maxSpeed : %d\n", g_app.config.maxSpeed);
     PRINT("stop snap: %d\n", g_app.config.stopSnapRegion);
     PRINT("stop gain: %d\n", g_app.config.stopGainPercent);
+    PRINT("rpm  gain: %d\n", g_app.config.rpmGainPercent);
     
     PRINT("current ----\n");
     PRINT("rpm : %d\n", g_app.config.rpm);
@@ -378,7 +381,8 @@ static bool dbgConfig(uint8_t argc, char** argv)
 		ARGS_ENTRY("ms",	ARGS_TYPE_INT32,	0,	"maximum motor speed",	&g_app.config.maxSpeed)
 		ARGS_ENTRY("t",     ARGS_TYPE_INT32,	0,	"target",           	&g_app.config.target)
         ARGS_ENTRY("ss",    ARGS_TYPE_INT32,	0,	"stop snap region", 	&g_app.config.stopSnapRegion)
-        ARGS_ENTRY("sg",    ARGS_TYPE_INT32,	0,	"stop snap region", 	&g_app.config.stopGainPercent)
+        ARGS_ENTRY("sg",    ARGS_TYPE_INT32,	0,	"stop angle gfain", 	&g_app.config.stopGainPercent)
+        ARGS_ENTRY("rg",    ARGS_TYPE_INT32,	0,	"rpm gain", 	        &g_app.config.rpmGainPercent)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
