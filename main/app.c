@@ -33,6 +33,9 @@
 #include "adc.h"
 
 #define TIMER_INTERVAL_US   10000
+#define TIMER_INTERVAL_MS   (TIMER_INTERVAL_US / 1000)
+
+#define DEG_FRAC    0x100
 
 #define LOAD_MAX_CURRENT_MA    20000
 
@@ -58,10 +61,10 @@ static struct {
         int32_t maxSpeed;
         int32_t stopSnapRegion;
         int32_t stopGainPercent;
-        int32_t rpmGainPercent;
+        int32_t pid_p;
     } config;
+    int     deg64;
     int     speed;
-    int     deg256;
     int32_t rpmDelta;
 } g_app = {
     .config = {
@@ -69,7 +72,7 @@ static struct {
         .maxSpeed = 50,
         .stopSnapRegion = 5,
         .stopGainPercent = 500,
-        .rpmGainPercent = 50,
+        .pid_p = 20,
     },
     .state = STATE_UNINIT,
     .speed = 10,
@@ -93,16 +96,29 @@ static void _printStatus(void)
     
 }
 
+static int _degAdd(int x, int y, int fraction)
+{
+    int d;
+
+    d = x + y;
+    if (d > 180 * fraction) {
+        d -= 360 * fraction;
+    }
+
+    if (d < -180 * fraction) {
+        d += 360 * fraction;
+    }
+    return d;
+}
+
 static void _task(void *arg)
 {
     bool    encValid;
-    int     degree;
+    int     degEncoder;
     int     degreeToTarget;
     int     currentMa;
     int     averageCurrentMa = 0;
     int     count = 0;
-    int     deg256;
-    int     deltaDeg = 0;
     int     dd = 0;
     int     rpmSpeed = 0;
 //    int     currentDelta;
@@ -115,38 +131,12 @@ static void _task(void *arg)
             continue;
         }
 
-        encValid = ENC_get(&degree);
-
-        degreeToTarget = g_app.config.target - degree;
-        if (degreeToTarget > 180) {
-            degreeToTarget -= 360;
-        }
-        if (degreeToTarget < -180) {
-            degreeToTarget += 360;
-        }
-
+        encValid = ENC_get256(&degEncoder);
         currentMa = ADC_getCurrent();
-        ENC_get256(&deg256);
 
-        dd = deg256 - g_app.deg256;
-        g_app.deg256 = deg256;
-
-        if (dd < -180*256) {
-            dd += 360*256;
-        }
-
-        if (dd > 180*256) {
-            dd -= 360*256;
-        }
-
-        deltaDeg += (dd - deltaDeg) / 16;
-
-        g_app.rpmDelta = g_app.config.rpm - deltaDeg;
+        degreeToTarget = _degAdd(g_app.config.target, -g_app.deg64 / DEG_FRAC, 1);
 
         averageCurrentMa += (currentMa - averageCurrentMa) / 4;
-
-        //currentDelta = averageCurrentMa - g_app.config.loadCurrent;
-        //g_app.speed += currentDelta / 1000;
 
 #if 0
         if (0 == (count % (100000 / TIMER_INTERVAL_US))) {
@@ -170,41 +160,18 @@ static void _task(void *arg)
                 break;
 
             case STATE_RUN:
-                //g_app.speed = CLIP(g_app.speed + g_app.rpmDelta * g_app.config.rpmGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+               g_app.deg64 = _degAdd(g_app.deg64, g_app.config.rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
+               dd = _degAdd(g_app.deg64, -degEncoder, DEG_FRAC);
 
+                g_app.speed = CLIP(dd * g_app.config.pid_p / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
 
-                g_app.speed += (g_app.rpmDelta * g_app.config.rpmGainPercent / 100 - g_app.speed) / 16;
-                g_app.speed = CLIP(g_app.speed, -g_app.config.maxSpeed, g_app.config.maxSpeed);
-
-                //g_app.speed = CLIP(g_app.rpmDelta * g_app.config.rpmGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
                 MOT_setSpeed(g_app.speed);
 
-                //if (0 == (count % (100000 / TIMER_INTERVAL_US))) {
-                    static int64_t prev;
-                    int64_t time_since_boot = esp_timer_get_time();
-
-                    TRACE("(%6lld) tar=%3d, deg=%3d, d=%4d, rpm-delta:%3d, deg16:%6d,%6d delta-deg:%d, speed=%4d\n",
-                        time_since_boot-prev,
-                        g_app.config.target, degree, degreeToTarget, g_app.rpmDelta, deg256, g_app.deg256, deltaDeg, g_app.speed);
-                    //TRACE("loop: %lld us \n", time_since_boot, time_since_boot-prev);
-                    prev = time_since_boot;
-                //}
+                TRACE("deg=%4d, dd=%4d, speed=%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, dd / DEG_FRAC, g_app.speed, averageCurrentMa);
 
                 break;
 
             case STATE_GOTO:
-                g_app.speed = CLIP(g_app.speed + g_app.rpmDelta * g_app.config.rpmGainPercent / 100, -g_app.config.maxSpeed, g_app.config.maxSpeed);
-
-                if ((degreeToTarget > -g_app.config.stopSnapRegion) && (degreeToTarget < g_app.config.stopSnapRegion)) {
-                    g_app.state = STATE_STOP;
-                }
-
-                //g_app.speed = CLIP(g_app.speed, -ABS(degreeToTarget), ABS(degreeToTarget));
-
-                MOT_setSpeed(g_app.speed);
-                //if (0 == count % 64) {
-//                    TRACE("tar=%3d, deg=%3d, d=%d, rpm-delta:%d, delta-deg:%d\n", g_app.config.target, degree, degreeToTarget, g_app.rpmDelta, deltaDeg);
-                //}
                 break;
 
             case STATE_STOP:
@@ -315,10 +282,19 @@ static bool dbgGoto(uint8_t argc, char** argv)
 
 static bool dbgRun(uint8_t argc, char** argv)
 {
+    bool ret;
+    int degEncoder;
     if (argc >= 2) {
         g_app.config.rpm = strtol(argv[1], NULL, 10);
     }
 
+    ret = ENC_get(&degEncoder);
+    if (!ret) {
+        ERROR("encoder not ready\n");
+        return true;
+    }
+
+    g_app.deg64 = degEncoder * DEG_FRAC;
     g_app.state = STATE_RUN;
 
     return true;
@@ -385,10 +361,10 @@ static bool dbgStatus(uint8_t argc, char** argv)
     PRINT("maxSpeed : %d\n", g_app.config.maxSpeed);
     PRINT("stop snap: %d\n", g_app.config.stopSnapRegion);
     PRINT("stop gain: %d\n", g_app.config.stopGainPercent);
-    PRINT("rpm  gain: %d\n", g_app.config.rpmGainPercent);
+    PRINT("PID P    : %d\n", g_app.config.pid_p);
     
     PRINT("current ----\n");
-    PRINT("rpm : %d\n", g_app.config.rpm);
+    PRINT("deg      : %d\n", g_app.deg64 / DEG_FRAC);
     PRINT("state    : %d\n", g_app.state);
     PRINT("speed    : %d\n", g_app.speed);
 
@@ -411,7 +387,7 @@ static bool dbgConfig(uint8_t argc, char** argv)
 		ARGS_ENTRY("t",     ARGS_TYPE_INT32,	0,	"target",           	&g_app.config.target)
         ARGS_ENTRY("ss",    ARGS_TYPE_INT32,	0,	"stop snap region", 	&g_app.config.stopSnapRegion)
         ARGS_ENTRY("sg",    ARGS_TYPE_INT32,	0,	"stop angle gfain", 	&g_app.config.stopGainPercent)
-        ARGS_ENTRY("rg",    ARGS_TYPE_INT32,	0,	"rpm gain", 	        &g_app.config.rpmGainPercent)
+        ARGS_ENTRY("pp",    ARGS_TYPE_INT32,	0,	"PID P",                &g_app.config.pid_p)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
