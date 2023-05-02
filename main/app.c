@@ -61,6 +61,7 @@ static struct {
         int32_t maxSpeed;
         int32_t stopSnapRegion;
         int32_t stopGainPercent;
+        int32_t loadSensitivity;
         int32_t pid_p;
     } config;
     int     deg64;
@@ -72,6 +73,7 @@ static struct {
         .stopSnapRegion = 5 * DEG_FRAC,
         .stopGainPercent = 20,
         .pid_p = 20,
+        .loadSensitivity = 100,
     },
     .state = STATE_UNINIT,
     .speed = 10,
@@ -118,6 +120,7 @@ static void _task(void *arg)
     int     averageCurrentMa = 0;
     int     count = 0;
     int     dd = 0;
+    int     di = 0;
     int     rpmSpeed = 0;
 //    int     currentDelta;
 
@@ -192,26 +195,16 @@ static void _task(void *arg)
                 break;
 
             case STATE_SPEED_LOAD:
-                if (g_app.speed < g_app.config.minSpeed)  {
-                    g_app.speed = g_app.config.minSpeed;
-                }
+                di = averageCurrentMa - g_app.config.loadCurrent;
 
-                if (g_app.speed < rpmSpeed)  {
-                    g_app.speed = rpmSpeed;
-                }
-
-                if (g_app.speed < 1)  {
-                    g_app.speed = 1;
-                }
-
-                if (g_app.speed > 90)  {
-                    g_app.speed = 90;
-                }
+                g_app.speed += di * g_app.config.loadSensitivity / 100000;
+                g_app.speed = CLIP(g_app.speed, g_app.config.minSpeed, g_app.config.maxSpeed);
 
                 MOT_setSpeed(g_app.speed);
+                
 
-                if (0 == count % 64) {
-                    //TRACE("deg=%5d, i=%5d, d=%5d, speed=%3d rpmSpeed=%d\n", deltaDeg, currentMa, currentDelta, g_app.speed, rpmSpeed);
+                if (0 == (count % 64)) {
+                    TRACE("LOAD: I=%5d, di=%5d, speed=%3d\n", averageCurrentMa, di, g_app.speed);
                 }
 
                 break;
@@ -340,8 +333,7 @@ static bool dbgLoad(uint8_t argc, char** argv)
     }
 
     if (argc >= 4) {
-        g_app.config.rpm
- = strtol(argv[3], NULL, 10);
+        g_app.config.rpm = strtol(argv[3], NULL, 10);
     }
 
     APP_load(percent, minSpeed);
@@ -373,7 +365,9 @@ static bool dbgStatus(uint8_t argc, char** argv)
     PRINT("stop snap: %d\n", g_app.config.stopSnapRegion);
     PRINT("stop gain: %d\n", g_app.config.stopGainPercent);
     PRINT("PID P    : %d\n", g_app.config.pid_p);
-    
+    PRINT("load I   : %d\n", g_app.config.loadCurrent);
+    PRINT("load sns : %d\n", g_app.config.loadSensitivity);
+
     PRINT("current ----\n");
     PRINT("deg      : %d\n", g_app.deg64 / DEG_FRAC);
     PRINT("state    : %d\n", g_app.state);
@@ -394,11 +388,13 @@ static bool dbgConfig(uint8_t argc, char** argv)
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
 		ARGS_ENTRY("r",		ARGS_TYPE_INT32,	0,	"rpm",	                &g_app.config.rpm)
-		ARGS_ENTRY("ms",	ARGS_TYPE_INT32,	0,	"maximum motor speed",	&g_app.config.maxSpeed)
+		ARGS_ENTRY("mins",	ARGS_TYPE_INT32,	0,	"maximum motor speed",	&g_app.config.minSpeed)
+		ARGS_ENTRY("maxs",	ARGS_TYPE_INT32,	0,	"maximum motor speed",	&g_app.config.maxSpeed)
 		ARGS_ENTRY("t",     ARGS_TYPE_INT32,	0,	"target",           	&g_app.config.target)
         ARGS_ENTRY("ss",    ARGS_TYPE_INT32,	0,	"stop snap region", 	&g_app.config.stopSnapRegion)
         ARGS_ENTRY("sg",    ARGS_TYPE_INT32,	0,	"stop angle gfain", 	&g_app.config.stopGainPercent)
         ARGS_ENTRY("pp",    ARGS_TYPE_INT32,	0,	"PID P",                &g_app.config.pid_p)
+        ARGS_ENTRY("ls",    ARGS_TYPE_INT32,	0,	"load sensitivity",     &g_app.config.loadSensitivity)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
