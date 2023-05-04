@@ -35,9 +35,9 @@
 #define TIMER_INTERVAL_US   10000
 #define TIMER_INTERVAL_MS   (TIMER_INTERVAL_US / 1000)
 
-#define DEG_FRAC    0x100
-
-#define LOAD_MAX_CURRENT_MA    20000
+#define DEG_FRAC            0x100
+#define LOAD_MAX_CURRENT_MA 20000
+#define ARC_DIVISIONS       12
 
 typedef enum {
     STATE_UNINIT,
@@ -45,17 +45,20 @@ typedef enum {
     STATE_ZERO,
     STATE_RUN,
     STATE_GOTO,
+    STATE_ARC_ACTION,
     STATE_STOP,
     STATE_SPEED_LOAD,
 } STATE;
 
+
 static EventGroupHandle_t _event_group;
+
 
 static struct {
     STATE  state;
     struct {
         int32_t target;
-        int32_t loadCurrent; 
+        int32_t loadPercent; 
         int32_t minSpeed;
         int32_t rpm;
         int32_t maxSpeed;
@@ -64,6 +67,7 @@ static struct {
         int32_t stopGainPercent;
         int32_t loadSensitivity;
         int32_t pid_p;
+        int arcAction[ARC_DIVISIONS];
     } config;
     int     deg64;
     int     speed;
@@ -78,6 +82,7 @@ static struct {
         .stopGainPercent = 20,
         .pid_p = 20,
         .loadSensitivity = 100,
+        .arcAction = {15, 20, 20, 20, 20, 15, 10, -20, -40, -40, -20, 10},
     },
     .state = STATE_UNINIT,
     .speed = 10,
@@ -110,6 +115,19 @@ static int _degAdd(int x, int y, int fraction)
     return d;
 }
 
+static int _getArcAction(int deg)
+{
+    if (deg < 0) {
+        deg += 360;
+    }
+
+    int idx = MIN(deg / (360/ARC_DIVISIONS), ARC_DIVISIONS);
+    int action;
+
+    action = g_app.config.arcAction[idx];
+    return action;
+}
+
 static void _funcRun(int rpm)
 {
     int     dd = 0;
@@ -126,9 +144,12 @@ static void _funcRun(int rpm)
     MOT_setSpeed(g_app.speed);
 }
 
-void _funcLoad(int current)
+void _funcLoad(int percent)
 {
-    int     di = 0;
+    int di = 0;
+    int encoderDeg;
+
+    int current = percent * LOAD_MAX_CURRENT_MA / 100;
 
     di = g_app.averageCurrentMa - current;
 
@@ -136,6 +157,9 @@ void _funcLoad(int current)
     g_app.speed = CLIP(g_app.speed, g_app.config.minSpeed, g_app.config.maxSpeed);
 
     MOT_setSpeed(g_app.speed);
+    ENC_get256(&encoderDeg);
+
+    g_app.deg64 = encoderDeg;
 }
 
 static void _task(void *arg)
@@ -144,6 +168,7 @@ static void _task(void *arg)
     int     degreeToTarget;
     int     currentMa;
     int     count = 0;
+    int     action;
 
     INFO("APP Ready.\n");
 
@@ -203,11 +228,23 @@ static void _task(void *arg)
                 break;
 
             case STATE_SPEED_LOAD:
-                _funcLoad(g_app.config.loadCurrent);
+                _funcLoad(g_app.config.loadPercent);
                 if (0 == (count % 64)) {
                     TRACE("LOAD: I=%5d, speed=%3d\n", g_app.averageCurrentMa, g_app.speed);
                 }
+                break;
 
+                case STATE_ARC_ACTION:
+                action = _getArcAction(g_app.deg64 / DEG_FRAC);
+                if (action > 0) {
+                    _funcRun(action);
+                    TRACE("ARC RUN: deg=%4d, speed=%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, g_app.speed, g_app.averageCurrentMa);
+                } else if (action < 0) {
+                    _funcLoad(-action);
+                    TRACE("ARC LOAD: I=%5d, speed=%3d\n", g_app.averageCurrentMa, g_app.speed);
+                } else {
+                    MOT_setSpeed(0);
+                }
                 break;
 
             default:
@@ -253,7 +290,7 @@ static bool _init(void)
 
 bool APP_load(int percent, int minSpeed)
 {
-    g_app.config.loadCurrent = percent * LOAD_MAX_CURRENT_MA / 100;
+    g_app.config.loadPercent = percent;
     g_app.config.minSpeed = minSpeed;
 
     g_app.state = STATE_SPEED_LOAD;
@@ -293,14 +330,31 @@ static bool dbgRun(uint8_t argc, char** argv)
         g_app.config.rpm = strtol(argv[1], NULL, 10);
     }
 
-    ret = ENC_get(&degEncoder);
+    ret = ENC_get256(&degEncoder);
     if (!ret) {
         ERROR("encoder not ready\n");
         return true;
     }
 
-    g_app.deg64 = degEncoder * DEG_FRAC;
+    g_app.deg64 = degEncoder;
     g_app.state = STATE_RUN;
+
+    return true;
+}
+
+static bool dbgArc(uint8_t argc, char** argv)
+{
+    int i;
+
+    if (argc < 2) {
+        ENC_get256(&g_app.deg64);
+        g_app.state = STATE_ARC_ACTION;
+        return true;
+    }
+
+    for (i=1; i<argc; i++) {
+        g_app.config.arcAction[i-1] = strtol(argv[i], NULL, 10);
+    }
 
     return true;
 }
@@ -355,9 +409,11 @@ static bool dbgStatus(uint8_t argc, char** argv)
 {
     bool    ret;
     int     deg;
+    int     i;
 
     ret = ENC_get(&deg);
 
+    PRINT("\n");
     PRINT("config ----\n");
     PRINT("rpm       : %d\n", g_app.config.rpm);
     PRINT("target    : %d\n", g_app.config.target);
@@ -367,9 +423,15 @@ static bool dbgStatus(uint8_t argc, char** argv)
     PRINT("stop snap : %d\n", g_app.config.stopSnapRegion);
     PRINT("stop gain : %d\n", g_app.config.stopGainPercent);
     PRINT("PID P     : %d\n", g_app.config.pid_p);
-    PRINT("load I    : %d\n", g_app.config.loadCurrent);
+    PRINT("load I    : %d\n", g_app.config.loadPercent);
     PRINT("load sns  : %d\n", g_app.config.loadSensitivity);
+    PRINT("arc action: ");
+    for (i=0; i<ARC_DIVISIONS; i++) {
+        PRINT("%3d ", g_app.config.arcAction[i]);
+    }
+    PRINT("\n");
 
+    PRINT("\n");
     PRINT("current ----\n");
     PRINT("deg      : %d\n", g_app.deg64 / DEG_FRAC);
     PRINT("state    : %d\n", g_app.state);
@@ -417,6 +479,7 @@ DEBUG_MENU_START(g_menu)
 	    DEBUG_MENU_CMD("zero",  	"[speed]",		                NULL, dbgZero)
 	    DEBUG_MENU_CMD("goto",	    "<target> [speed]",	            NULL, dbgGoto)
  	    DEBUG_MENU_CMD("run",	    NULL,	                        NULL, dbgRun)
+ 	    DEBUG_MENU_CMD("arc",	    NULL,	                        NULL, dbgArc)
         DEBUG_MENU_CMD("load",	    "[targetCurrent] [minSpeed]",	NULL, dbgLoad)
         DEBUG_MENU_CMD("stop",	    NULL,	                        NULL, dbgStop)
     DEBUG_MENU_DIR_END
