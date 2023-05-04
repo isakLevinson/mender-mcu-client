@@ -67,6 +67,8 @@ static struct {
     } config;
     int     deg64;
     int     speed;
+    int     degEncoder;
+    int     averageCurrentMa;
 } g_app = {
     .config = {
         .rpm = 10,
@@ -79,23 +81,18 @@ static struct {
     },
     .state = STATE_UNINIT,
     .speed = 10,
+    .averageCurrentMa = 0,
 };
 
 static void _periodic_timer_cb(void* arg)
 {
-    static int64_t prev;
-    int64_t time_since_boot = esp_timer_get_time();
+//    static int64_t prev;
+//    int64_t time_since_boot = esp_timer_get_time();
 
     xEventGroupSetBits(_event_group, 0x01);
 
     //TRACE("timer: %lld us (%lld)\n", time_since_boot, time_since_boot-prev);
-    prev = time_since_boot;
-}
-
-
-static void _printStatus(void)
-{
-    
+//    prev = time_since_boot;
 }
 
 static int _degAdd(int x, int y, int fraction)
@@ -113,17 +110,31 @@ static int _degAdd(int x, int y, int fraction)
     return d;
 }
 
+static void _funcRun(void)
+{
+    int     dd = 0;
+
+    dd = _degAdd(g_app.deg64, -g_app.degEncoder, DEG_FRAC);
+
+    g_app.speed = CLIP(dd * g_app.config.pid_p / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+
+    if ((g_app.speed < g_app.config.maxSpeed) &&
+        (g_app.averageCurrentMa > -g_app.config.maxCurrent) ) {
+        g_app.deg64 = _degAdd(g_app.deg64, g_app.config.rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
+    }
+
+    MOT_setSpeed(g_app.speed);
+}
+
 static void _task(void *arg)
 {
     bool    encValid;
-    int     degEncoder;
     int     degreeToTarget;
     int     currentMa;
-    int     averageCurrentMa = 0;
     int     count = 0;
     int     dd = 0;
     int     di = 0;
-    int     rpmSpeed = 0;
+//    int     rpmSpeed = 0;
 //    int     currentDelta;
 
     INFO("APP Ready.\n");
@@ -134,12 +145,12 @@ static void _task(void *arg)
             continue;
         }
 
-        encValid = ENC_get256(&degEncoder);
+        encValid = ENC_get256(&g_app.degEncoder);
         currentMa = ADC_getCurrent();
 
-        averageCurrentMa += (currentMa - averageCurrentMa) / 4;
+        g_app.averageCurrentMa += (currentMa - g_app.averageCurrentMa) / 4;
 
-        degreeToTarget = _degAdd(g_app.config.target, -degEncoder, DEG_FRAC);
+        degreeToTarget = _degAdd(g_app.config.target, -g_app.degEncoder, DEG_FRAC);
 
 #if 0
         if (0 == (count % (100000 / TIMER_INTERVAL_US))) {
@@ -163,18 +174,8 @@ static void _task(void *arg)
                 break;
 
             case STATE_RUN:
-                dd = _degAdd(g_app.deg64, -degEncoder, DEG_FRAC);
-
-                g_app.speed = CLIP(dd * g_app.config.pid_p / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
-
-                if ((g_app.speed < g_app.config.maxSpeed) &&
-                    (averageCurrentMa > -g_app.config.maxCurrent) ) {
-                    g_app.deg64 = _degAdd(g_app.deg64, g_app.config.rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
-                }
-
-                MOT_setSpeed(g_app.speed);
-
-                TRACE("RUN: deg=%4d, dd=%4d, speed=%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, dd / DEG_FRAC, g_app.speed, averageCurrentMa);
+                _funcRun();
+                TRACE("RUN: deg=%4d, dd=%4d, speed=%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, dd / DEG_FRAC, g_app.speed, g_app.averageCurrentMa);
                 break;
 
             case STATE_GOTO:
@@ -183,28 +184,18 @@ static void _task(void *arg)
                      break;
                 }
 
-                dd = _degAdd(g_app.deg64, -degEncoder, DEG_FRAC);
-
-                g_app.speed = CLIP(dd * g_app.config.pid_p / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
-
-                if ((g_app.speed < g_app.config.maxSpeed) &&
-                    (averageCurrentMa > -g_app.config.maxCurrent) ) {
-                    g_app.deg64 = _degAdd(g_app.deg64, g_app.config.rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
-                }
-
-                MOT_setSpeed(g_app.speed);
-
-                TRACE("GOTO: deg=%4d, dd=%4d, speed=%4d, to-target:%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, dd / DEG_FRAC, g_app.speed, degreeToTarget, averageCurrentMa);
+                _funcRun();
+                TRACE("GOTO: deg=%4d, dd=%4d, speed=%4d, to-target:%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, dd / DEG_FRAC, g_app.speed, degreeToTarget, g_app.averageCurrentMa);
                 break;
 
             case STATE_STOP:
                 g_app.speed = CLIP(degreeToTarget * g_app.config.stopGainPercent / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
                 MOT_setSpeed(g_app.speed);
-                TRACE("STOP: deg=%4d, dd=%4d, speed=%4d, to-target:%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, dd / DEG_FRAC, g_app.speed, degreeToTarget, averageCurrentMa);
+                TRACE("STOP: deg=%4d, dd=%4d, speed=%4d, to-target:%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, dd / DEG_FRAC, g_app.speed, degreeToTarget, g_app.averageCurrentMa);
                 break;
 
             case STATE_SPEED_LOAD:
-                di = averageCurrentMa - g_app.config.loadCurrent;
+                di = g_app.averageCurrentMa - g_app.config.loadCurrent;
 
                 g_app.speed += di * g_app.config.loadSensitivity / 100000;
                 g_app.speed = CLIP(g_app.speed, g_app.config.minSpeed, g_app.config.maxSpeed);
@@ -213,7 +204,7 @@ static void _task(void *arg)
                 
 
                 if (0 == (count % 64)) {
-                    TRACE("LOAD: I=%5d, di=%5d, speed=%3d\n", averageCurrentMa, di, g_app.speed);
+                    TRACE("LOAD: I=%5d, di=%5d, speed=%3d\n", g_app.averageCurrentMa, di, g_app.speed);
                 }
 
                 break;
