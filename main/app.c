@@ -59,6 +59,7 @@ static struct {
         int32_t minSpeed;
         int32_t rpm;
         int32_t maxSpeed;
+        int32_t maxCurrent;
         int32_t stopSnapRegion;
         int32_t stopGainPercent;
         int32_t loadSensitivity;
@@ -70,6 +71,7 @@ static struct {
     .config = {
         .rpm = 10,
         .maxSpeed = 50,
+        .maxCurrent = 20000,
         .stopSnapRegion = 5 * DEG_FRAC,
         .stopGainPercent = 20,
         .pid_p = 20,
@@ -161,10 +163,14 @@ static void _task(void *arg)
                 break;
 
             case STATE_RUN:
-               g_app.deg64 = _degAdd(g_app.deg64, g_app.config.rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
-               dd = _degAdd(g_app.deg64, -degEncoder, DEG_FRAC);
+                dd = _degAdd(g_app.deg64, -degEncoder, DEG_FRAC);
 
                 g_app.speed = CLIP(dd * g_app.config.pid_p / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+
+                if ((g_app.speed < g_app.config.maxSpeed) &&
+                    (averageCurrentMa > -g_app.config.maxCurrent) ) {
+                    g_app.deg64 = _degAdd(g_app.deg64, g_app.config.rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
+                }
 
                 MOT_setSpeed(g_app.speed);
 
@@ -172,16 +178,19 @@ static void _task(void *arg)
                 break;
 
             case STATE_GOTO:
-
                 if ((degreeToTarget < g_app.config.stopSnapRegion) && (degreeToTarget > -g_app.config.stopSnapRegion)) {
                      g_app.state = STATE_STOP;
                      break;
                 }
 
-                g_app.deg64 = _degAdd(g_app.deg64, g_app.config.rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
                 dd = _degAdd(g_app.deg64, -degEncoder, DEG_FRAC);
 
                 g_app.speed = CLIP(dd * g_app.config.pid_p / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+
+                if ((g_app.speed < g_app.config.maxSpeed) &&
+                    (averageCurrentMa > -g_app.config.maxCurrent) ) {
+                    g_app.deg64 = _degAdd(g_app.deg64, g_app.config.rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
+                }
 
                 MOT_setSpeed(g_app.speed);
 
@@ -358,15 +367,16 @@ static bool dbgStatus(uint8_t argc, char** argv)
     ret = ENC_get(&deg);
 
     PRINT("config ----\n");
-    PRINT("rpm      : %d\n", g_app.config.rpm);
-    PRINT("target   : %d\n", g_app.config.target);
-    PRINT("minSpeed : %d\n", g_app.config.minSpeed);
-    PRINT("maxSpeed : %d\n", g_app.config.maxSpeed);
-    PRINT("stop snap: %d\n", g_app.config.stopSnapRegion);
-    PRINT("stop gain: %d\n", g_app.config.stopGainPercent);
-    PRINT("PID P    : %d\n", g_app.config.pid_p);
-    PRINT("load I   : %d\n", g_app.config.loadCurrent);
-    PRINT("load sns : %d\n", g_app.config.loadSensitivity);
+    PRINT("rpm       : %d\n", g_app.config.rpm);
+    PRINT("target    : %d\n", g_app.config.target);
+    PRINT("minSpeed  : %d\n", g_app.config.minSpeed);
+    PRINT("maxSpeed  : %d\n", g_app.config.maxSpeed);
+    PRINT("maxCurrent: %d\n", g_app.config.maxCurrent);
+    PRINT("stop snap : %d\n", g_app.config.stopSnapRegion);
+    PRINT("stop gain : %d\n", g_app.config.stopGainPercent);
+    PRINT("PID P     : %d\n", g_app.config.pid_p);
+    PRINT("load I    : %d\n", g_app.config.loadCurrent);
+    PRINT("load sns  : %d\n", g_app.config.loadSensitivity);
 
     PRINT("current ----\n");
     PRINT("deg      : %d\n", g_app.deg64 / DEG_FRAC);
@@ -390,6 +400,7 @@ static bool dbgConfig(uint8_t argc, char** argv)
 		ARGS_ENTRY("r",		ARGS_TYPE_INT32,	0,	"rpm",	                &g_app.config.rpm)
 		ARGS_ENTRY("mins",	ARGS_TYPE_INT32,	0,	"maximum motor speed",	&g_app.config.minSpeed)
 		ARGS_ENTRY("maxs",	ARGS_TYPE_INT32,	0,	"maximum motor speed",	&g_app.config.maxSpeed)
+		ARGS_ENTRY("maxi",	ARGS_TYPE_INT32,	0,	"maximum motor current",&g_app.config.maxCurrent)
 		ARGS_ENTRY("t",     ARGS_TYPE_INT32,	0,	"target",           	&g_app.config.target)
         ARGS_ENTRY("ss",    ARGS_TYPE_INT32,	0,	"stop snap region", 	&g_app.config.stopSnapRegion)
         ARGS_ENTRY("sg",    ARGS_TYPE_INT32,	0,	"stop angle gfain", 	&g_app.config.stopGainPercent)
