@@ -29,6 +29,7 @@
 #include "cmd.h"
 #include "enc.h"
 #include "app.h"
+#include "wifi.h"
 
 #define BUF_SIZE    1024
 
@@ -104,4 +105,6 @@ void app_main(void)
     ADC_init();
     CMD_init();
     APP_init();
+    
+    register_wifi();
 }

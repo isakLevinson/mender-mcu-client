@@ -7,41 +7,51 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
+#define DEF_DBG_MODULE	DBG_MODULE_WIFI
+#include <sys_def.h>
+#include "dbgMenus.h"
+#include "dbgPrint.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 
 #include "iperf.h"
+
 #include "esp_log.h"
 #include "esp_console.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_event.h"
-#include "esp_coexist.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
+#include "esp_coexist.h"
 
 #include "argtable3/argtable3.h"
-
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
 
-#include "iperf.h"
-
 #include "driver/uart.h"
 #include "main.h"
-#include "wifi.h"
+#include "cmd_wifi.h"
 #include "nvs.h"
+#include "wifi.h"
 
-#undef ESP_LOGI
-#define ESP_LOGI(...)
+typedef bool (*CMD_RESPONSE_CB)(void* pArg, void* i_pBuf);
 
 #define   WIFI_MAX_SSID_LENGTH    32
 #define   WIFI_MAX_PASSWD_LENGTH  32
 
+typedef struct {
+    int    Socket;
+    int    ListenSocket;
+    int     uart;
+} CHANNEL;
+
+CHANNEL g_channel;
 
 typedef struct {
     struct arg_str *ip;
@@ -76,7 +86,12 @@ typedef struct {
     struct arg_end *end;
 } wifi_scan_arg_t;
 
-static wifi_args_t sta_args;
+int socket_cmd = -1;
+int socket_listen_cmd = -1;
+int socket_stream = -1;
+int socket_listen_stream = -1;
+
+
 static wifi_scan_arg_t scan_args;
 static wifi_args_t ap_args;
 static bool reconnect = true;
@@ -244,10 +259,16 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
     xEventGroupClearBits(wifi_event_group, FLAG_DISCONNECT);
     xEventGroupSetBits(wifi_event_group, FLAG_CONNECTED);
     xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP);
+
+    wifi_nvs_set_ssid(g_wifi.currentSsid, g_wifi.currentPasswd);
 }
 
-int client_socket = -1;
-int listen_socket = -1;
+static void _socket_close(int* pSocket)
+{
+    shutdown(*pSocket, 0);
+    close(*pSocket);
+    *pSocket = -1;
+}
 
 static void disconnect_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
@@ -261,9 +282,166 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     xEventGroupClearBits(wifi_event_group, FLAG_CONNECTED);
     xEventGroupSetBits(wifi_event_group, FLAG_DISCONNECT);
 
-    shutdown(listen_socket, 0);
-    close(listen_socket);
-    listen_socket = -1;
+    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP);
+
+    _socket_close(&socket_listen_cmd);
+    _socket_close(&socket_listen_stream);
+}
+
+static void task_listener(void)
+{
+    esp_err_t ret = ESP_OK;
+    int err = 0;
+    CHANNEL* pChannel = &g_channel;
+
+    esp_netif_ip_info_t ip;
+    struct sockaddr_in listen_addr4 = { 0 };
+    struct sockaddr_storage listen_addr = { 0 };
+    struct sockaddr_in remote_addr;
+    //struct timeval timeout = { 0 };
+    socklen_t addr_len = sizeof(struct sockaddr);
+    int opt = 1;
+    char    str[256];
+
+    ESP_LOGI(TAG, "listener loop started");
+
+    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
+        ESP_LOGI(TAG, "IP:"IPSTR, IP2STR(&ip.ip));
+        ESP_LOGI(TAG, "MASK:"IPSTR, IP2STR(&ip.netmask));
+        ESP_LOGI(TAG, "GW:"IPSTR, IP2STR(&ip.gw));
+
+        listen_addr4.sin_addr.s_addr = ip.ip.addr;
+
+    } else {
+        ESP_LOGE(TAG, "esp_netif_get_ip_info failed");
+        return;
+    }
+
+    ESP_LOGI(TAG, "#0");
+
+    listen_addr4.sin_family = AF_INET;
+    listen_addr4.sin_port = htons(5000);
+
+    ESP_LOGI(TAG, "#1");
+
+    pChannel->ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ESP_GOTO_ON_FALSE((pChannel->ListenSocket >= 0), ESP_FAIL, exit, TAG, "Unable to create socket: errno %d", errno);
+
+    ESP_LOGI(TAG, "#2");
+
+    setsockopt(pChannel->ListenSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    ESP_LOGI(TAG, "listen socket created");
+
+    ESP_LOGI(TAG, "#3");
+
+    err = bind(pChannel->ListenSocket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
+    ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Socket unable to bind: errno %d, IPPROTO: %d", errno, AF_INET);
+
+    ESP_LOGI(TAG, "#4");
+
+    err = listen(pChannel->ListenSocket, 5);
+    ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Error occurred during listen: errno %d", errno);
+    memcpy(&listen_addr, &listen_addr4, sizeof(listen_addr4));
+
+ //   ESP_LOGI(TAG, "listen on:"IPSTR, IP2STR(&listen_addr4));
+
+    ESP_LOGI(TAG, "listen on addr %d.%d.%d.%d",
+             listen_addr4.sin_addr.s_addr & 0xFF,
+             (listen_addr4.sin_addr.s_addr >> 8) & 0xFF,
+             (listen_addr4.sin_addr.s_addr >> 16) & 0xFF,
+             (listen_addr4.sin_addr.s_addr >> 24) & 0xFF);
+
+    pChannel->Socket = accept(pChannel->ListenSocket, (struct sockaddr *)&remote_addr, &addr_len);
+    ESP_GOTO_ON_FALSE((pChannel->Socket >= 0), ESP_FAIL, exit, TAG, "Unable to accept connection: errno %d", errno);
+    ESP_LOGI(TAG, "accept %s,%d\n", inet_ntoa(remote_addr.sin_addr), htons(remote_addr.sin_port));
+
+    //timeout.tv_sec = IPERF_SOCKET_RX_TIMEOUT;
+    //setsockopt(*pSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+/////////////////////////////////////////////////
+    uint8_t *buffer;
+    int want_recv = 0;
+    int actual_recv = 0;
+    socklen_t socklen = sizeof(struct sockaddr_in);
+
+    buffer = g_wifi.recvBuf;
+    want_recv = sizeof(g_wifi.recvBuf);
+    while (true) {
+        actual_recv = recvfrom(pChannel->Socket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
+        if (actual_recv < 0) {
+            //iperf_show_socket_error_reason(error_log, recv_socket);
+            //ESP_LOGW(TAG, "error, error code: %d, reason: %s", error_log, strerror(error_log));
+            ESP_LOGW(TAG, "recv error, error code: %d", actual_recv);
+
+            //s_iperf_ctrl.finish = true;
+            break;
+        } else {
+            memcpy(str, buffer, actual_recv);
+            str[actual_recv] = '\0';
+
+            ESP_LOGI(TAG, "received %d <%s>", actual_recv, str);
+        }
+    }
+
+exit:
+    if (pChannel->Socket != -1) {
+        ESP_LOGI(TAG, "client socket closed.");
+        //close(pChannel->pSocket);
+        //pChannel->pSocket = -1;
+        _socket_close(&pChannel->Socket);
+    }
+
+    if (pChannel->ListenSocket != -1) {
+        _socket_close(&pChannel->ListenSocket);
+        ESP_LOGI(TAG, "listener socket closed.");
+    }
+
+    if (ESP_OK != ret) {
+        ESP_LOGW(TAG, "listener exit with ret=0x%x", ret);
+    }
+}
+
+static void task_server(void *arg)
+{
+    esp_ip4_addr_t  ip  = {0};
+
+    while(true) {
+        if (!ip.addr) {
+            ESP_LOGI(TAG, "waiting for FLAG_GOT_IP");
+            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP, 1, 1, 1000);
+
+            if (bits & FLAG_GOT_IP) {
+                ESP_LOGI(TAG, "got FLAG_GOT_IP");
+                ip = wifi_getSelfIp();
+                ESP_LOGI(TAG, "got ip=%08x", ip.addr);
+            }
+        }
+    
+        if (!ip.addr) {
+            continue;
+        }
+
+        task_listener();
+        ip = wifi_getSelfIp();
+    }
+
+    vTaskDelete(NULL);
+}
+
+static int _startServer(void)
+{
+    BaseType_t ret;
+
+    ESP_LOGI(TAG, "starting listener task");
+
+    ret = xTaskCreate(task_server, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL);
+    if (ret != pdPASS) {
+        ESP_LOGE(TAG, "create task %s failed", IPERF_TRAFFIC_TASK_NAME);
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
 }
 
 void initialise_wifi(void)
@@ -312,7 +490,8 @@ void initialise_wifi(void)
     ESP_ERROR_CHECK( esp_enable_extern_coex_gpio_pin(EXTERN_COEX_WIRE_3, gpio_pin) );
 #endif
 
-#if 0
+    _startServer();
+
     {
         bool    ret = true;
         char    ssid[32];
@@ -327,7 +506,6 @@ void initialise_wifi(void)
     }
 
     initialized = true;
-#endif
 }
 
 bool wifi_cmd_sta_join(const char *ssid, const char *pass)
@@ -358,23 +536,7 @@ bool wifi_cmd_sta_join(const char *ssid, const char *pass)
 
     xEventGroupWaitBits(wifi_event_group, FLAG_DISCONNECT, 0, 1, 5000 / portTICK_PERIOD_MS);
 
-//    ESP_LOGI(TAG, "sta connecting to '%s'", sta_args.ssid->sval[0]);
-
     return true;
-}
-
-static int wifi_cmd_sta(int argc, char **argv)
-{
-    int nerrors = arg_parse(argc, argv, (void **) &sta_args);
-
-    if (nerrors != 0) {
-        arg_print_errors(stderr, sta_args.end, argv[0]);
-        return 1;
-    }
-
-    ESP_LOGI(TAG, "sta connecting to '%s'", sta_args.ssid->sval[0]);
-    wifi_cmd_sta_join(sta_args.ssid->sval[0], sta_args.password->sval[0]);
-    return 0;
 }
 
 static bool wifi_cmd_sta_scan(const char *ssid)
@@ -452,6 +614,7 @@ esp_ip4_addr_t  wifi_getSelfIp(void)
 
 static int wifi_cmd_listen(int argc, char **argv)
 {
+    _startServer();
     return 0;
 }
 
@@ -687,21 +850,31 @@ static int wifi_cmd_iperf(int argc, char **argv)
     return 0;
 }
 
+static bool dbgConnect(uint8_t argc, char** argv)
+{
+    if (argc < 3) {
+        return false;
+    }
+
+    wifi_cmd_sta_join(argv[1], argv[2]);
+
+    return true;
+}
+
+
+// *INDENT-OFF*
+DEBUG_MENU_START(g_menu)
+	DEBUG_MENU_DIR("wifi", NULL)
+		DEBUG_MENU_CMD("ap",	NULL,		NULL, dbgConnect)
+	DEBUG_MENU_DIR_END
+DEBUG_MENU_END
+// *INDENT-ON*
+
+
 void register_wifi(void)
 {
-    sta_args.ssid = arg_str1(NULL, NULL, "<ssid>", "SSID of AP");
-    sta_args.password = arg_str0(NULL, NULL, "<pass>", "password of AP");
-    sta_args.end = arg_end(2);
 
-    const esp_console_cmd_t sta_cmd = {
-        .command = "sta",
-        .help = "WiFi is station mode, join specified soft-AP",
-        .hint = NULL,
-        .func = &wifi_cmd_sta,
-        .argtable = &sta_args
-    };
-
-    ESP_ERROR_CHECK( esp_console_cmd_register(&sta_cmd) );
+	DBG_TREE_add("/", g_menu);
 
     scan_args.ssid = arg_str0(NULL, NULL, "<ssid>", "SSID of AP want to be scanned");
     scan_args.end = arg_end(1);
