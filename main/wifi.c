@@ -66,7 +66,6 @@ typedef struct {
     struct arg_lit *abort;
     struct arg_end *end;
 } wifi_iperf_t;
-static wifi_iperf_t iperf_args;
 
 static struct {
     nvs_handle_t nvsHandle;
@@ -91,9 +90,6 @@ int socket_listen_cmd = -1;
 int socket_stream = -1;
 int socket_listen_stream = -1;
 
-
-static wifi_scan_arg_t scan_args;
-static wifi_args_t ap_args;
 static bool reconnect = true;
 static const char *TAG = "cmd_wifi";
 static esp_netif_t *netif_ap = NULL;
@@ -305,9 +301,9 @@ static void task_listener(void)
     INFO("listener loop started\n");
 
     if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
-        INFO("IP:"IPSTR, IP2STR(&ip.ip));
-        INFO("MASK:"IPSTR, IP2STR(&ip.netmask));
-        INFO("GW:"IPSTR, IP2STR(&ip.gw));
+        INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
+        INFO("MASK:" IPSTR "\n", IP2STR(&ip.netmask));
+        INFO("GW:" IPSTR "\n", IP2STR(&ip.gw));
 
         listen_addr4.sin_addr.s_addr = ip.ip.addr;
 
@@ -376,7 +372,7 @@ static void task_listener(void)
             //s_iperf_ctrl.finish = true;
             break;
         } else {
-            INFO_BUF("recv\n",	PRINT_BUF_STYLE_HEX_SIZE_NL, buffer, actual_recv);
+            INFO_BUF("recv",	PRINT_BUF_STYLE_HEX_SIZE_NL, buffer, actual_recv);
         }
     }
 
@@ -546,57 +542,6 @@ static bool wifi_cmd_sta_scan(const char *ssid)
     return true;
 }
 
-static int wifi_cmd_scan(int argc, char **argv)
-{
-    int nerrors = arg_parse(argc, argv, (void **) &scan_args);
-
-    if (nerrors != 0) {
-        arg_print_errors(stderr, scan_args.end, argv[0]);
-        return 1;
-    }
-
-    INFO("sta start to scan\n");
-    if ( scan_args.ssid->count == 1 ) {
-        wifi_cmd_sta_scan(scan_args.ssid->sval[0]);
-    } else {
-        wifi_cmd_sta_scan(NULL);
-    }
-    return 0;
-}
-
-static int wifi_cmd_query(int argc, char **argv)
-{
-    wifi_config_t cfg;
-    wifi_mode_t mode;
-    esp_netif_ip_info_t ip;
-
-    esp_wifi_get_mode(&mode);
-    if (WIFI_MODE_AP == mode) {
-        esp_wifi_get_config(WIFI_IF_AP, &cfg);
-        INFO("AP mode, %s %s\n", cfg.ap.ssid, cfg.ap.password);
-    } else if (WIFI_MODE_STA == mode) {
-        int bits = xEventGroupWaitBits(wifi_event_group, FLAG_CONNECTED, 0, 1, 0);
-        if (bits & FLAG_CONNECTED) {
-            esp_wifi_get_config(WIFI_IF_STA, &cfg);
-            INFO("sta mode, connected %s\n", cfg.ap.ssid);
-        } else {
-            INFO("sta mode, disconnected\n");
-        }
-    } else {
-        INFO("NULL mode\n");
-        return 0;
-    }
-
-    memset(&ip, 0, sizeof(esp_netif_ip_info_t));
-
-    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
-        INFO("IP:"IPSTR, IP2STR(&ip.ip));
-        INFO("MASK:"IPSTR, IP2STR(&ip.netmask));
-        INFO("GW:"IPSTR, IP2STR(&ip.gw));
-    }
-    return 0;
-}
-
 esp_ip4_addr_t  wifi_getSelfIp(void)
 {
     esp_netif_ip_info_t ip;
@@ -606,115 +551,6 @@ esp_ip4_addr_t  wifi_getSelfIp(void)
     esp_netif_get_ip_info(netif_sta, &ip);
 
     return ip.ip;
-}
-
-static int wifi_cmd_listen(int argc, char **argv)
-{
-    _startServer();
-    return 0;
-}
-
-static int wifi_cmd_nvs(int argc, char **argv)
-{
-    esp_err_t err = ESP_OK;
-
-    if (argc == 2) {
-        if (!strcmp(argv[1], "close\n")) {
-            printf("close\n\n");
-            nvs_close(g_wifi.nvsHandle);
-            g_wifi.nvsHandle = (nvs_handle_t)NULL;
-        } else if (!strcmp(argv[1], "commit\n")) {
-            printf("commit\n\n");
-            err = nvs_commit(g_wifi.nvsHandle);
-        } else if (!strcmp(argv[1], "stats\n")) {
-            nvs_stats_t nvs_stats;
-
-            printf("stats\n\n");
-            err =  nvs_get_stats(NULL, &nvs_stats);
-            if (err == ESP_OK) {
-                printf("used_entries   : %d\n\n", nvs_stats.used_entries);
-                printf("free_entries   : %d\n\n", nvs_stats.free_entries);
-                printf("total_entries  : %d\n\n", nvs_stats.total_entries);
-                printf("namespace_count: %d\n\n", nvs_stats.namespace_count);
-            }
-        } else if (!strcmp(argv[1], "list\n")) {
-            nvs_iterator_t it;
-            printf("list\n\n");
-            
-            err =  nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it);
-            while (err == ESP_OK) {
-                nvs_entry_info_t info;
-                nvs_entry_info(it, &info); // Can omit error check if parameters are guaranteed to be non-NULL
-                printf("ns: '%s', key: '%s', type: '%x' \n\n", info.namespace_name, info.key, info.type);
-
-                switch (info.type) {
-                    case NVS_TYPE_U8:   printf("U8\n");  break;
-                    case NVS_TYPE_I8:   printf("I8\n");  break;
-                    case NVS_TYPE_U16:  printf("U16\n");  break;
-                    case NVS_TYPE_I16:  printf("I16\n");  break;
-                    case NVS_TYPE_U32:  printf("U32\n");  break;
-                    case NVS_TYPE_I32:  printf("I32\n");  break;
-                    case NVS_TYPE_U64:  printf("U64\n");  break;
-                    case NVS_TYPE_I64:  printf("I64\n");  break;
-                    case NVS_TYPE_STR:  printf("STR\n");  break;
-                    case NVS_TYPE_BLOB: printf("BLOB\n");  break;
-                    default:
-                }
-                printf("\n\n");
-
-                err = nvs_entry_next(&it);
-            }
-        } else if (!strcmp(argv[1], "ssid\n")) {
-            bool ret;
-            char ssid[WIFI_MAX_SSID_LENGTH] = "";
-            char passwd[WIFI_MAX_PASSWD_LENGTH] = "";
-            ret = wifi_nvs_get_ssid(ssid, passwd);
-            if (ret) {
-                printf("%s:%s\n\n", ssid, passwd);
-            }
-        }
-    } else if (argc == 3) {
-        if (!strcmp(argv[1], "open\n")) {
-            printf("open %s\n\n", argv[2]);
-            err = nvs_open(argv[2], NVS_READWRITE, &g_wifi.nvsHandle);
-        } else if (!strcmp(argv[1], "get\n")) {
-            char    str[256];
-             size_t length;
-
-            printf("get %s\n\n", argv[2]);
-            err =  nvs_get_str(g_wifi.nvsHandle, argv[2], str, &length);
-            if (err == ESP_OK) {
-                str[length] = '\0';
-                printf("str=<%s>\n\n", str);
-            }
-        }
-    } else if (argc == 4) {
-        if (!strcmp(argv[1], "set\n")) {
-            printf("set %s <- %s\n\n", argv[2], argv[3]);
-            err = nvs_set_str(g_wifi.nvsHandle, argv[2], argv[3]);
-        } else if (!strcmp(argv[1], "ssid\n")) {
-            wifi_nvs_set_ssid(argv[2], argv[3]);
-        }
-    }
-
-    if (err != ESP_OK) {
-        char* pStr = NULL;
-
-        switch(err) {
-        case ESP_ERR_NVS_NOT_FOUND:         pStr = "ESP_ERR_NVS_NOT_FOUND"; break;
-        case ESP_ERR_NVS_NOT_INITIALIZED:   pStr = "ESP_ERR_NVS_NOT_INITIALIZED";  break;
-        case ESP_ERR_NO_MEM:                pStr = "ESP_ERR_NO_MEM";  break;
-        case ESP_ERR_INVALID_ARG:           pStr = "ESP_ERR_INVALID_ARG";  break;
-        }
-
-        if (pStr) {
-            printf("failed %s\n\n", pStr);
-        } else {
-            printf("failed 0x%x\n\n", err);
-        }
-    }
-
-    return 0;
 }
 
 static uint32_t wifi_get_local_ip(void)
@@ -741,111 +577,6 @@ static uint32_t wifi_get_local_ip(void)
     return ip_info.ip.addr;
 }
 
-static int wifi_cmd_iperf(int argc, char **argv)
-{
-    int nerrors = arg_parse(argc, argv, (void **) &iperf_args);
-    iperf_cfg_t cfg;
-
-    if (nerrors != 0) {
-        arg_print_errors(stderr, iperf_args.end, argv[0]);
-        return 0;
-    }
-
-    memset(&cfg, 0, sizeof(cfg));
-
-    // now wifi iperf only support IPV4 address
-    cfg.type = IPERF_IP_TYPE_IPV4;
-
-    if ( iperf_args.abort->count != 0) {
-        iperf_stop();
-        return 0;
-    }
-
-    if ( ((iperf_args.ip->count == 0) && (iperf_args.server->count == 0)) ||
-            ((iperf_args.ip->count != 0) && (iperf_args.server->count != 0)) ) {
-        ERROR("should specific client/server mode\n");
-        return 0;
-    }
-
-    if (iperf_args.ip->count == 0) {
-        cfg.flag |= IPERF_FLAG_SERVER;
-    } else {
-        cfg.destination_ip4 = esp_ip4addr_aton(iperf_args.ip->sval[0]);
-        cfg.flag |= IPERF_FLAG_CLIENT;
-    }
-
-    cfg.source_ip4 = wifi_get_local_ip();
-    if (cfg.source_ip4 == 0) {
-        return 0;
-    }
-
-    if (iperf_args.udp->count == 0) {
-        cfg.flag |= IPERF_FLAG_TCP;
-    } else {
-        cfg.flag |= IPERF_FLAG_UDP;
-    }
-
-    if (iperf_args.length->count == 0) {
-        cfg.len_send_buf = 0;
-    } else {
-        cfg.len_send_buf = iperf_args.length->ival[0];
-    }
-
-    if (iperf_args.port->count == 0) {
-        cfg.sport = IPERF_DEFAULT_PORT;
-        cfg.dport = IPERF_DEFAULT_PORT;
-    } else {
-        if (cfg.flag & IPERF_FLAG_SERVER) {
-            cfg.sport = iperf_args.port->ival[0];
-            cfg.dport = IPERF_DEFAULT_PORT;
-        } else {
-            cfg.sport = IPERF_DEFAULT_PORT;
-            cfg.dport = iperf_args.port->ival[0];
-        }
-    }
-
-    if (iperf_args.interval->count == 0) {
-        cfg.interval = IPERF_DEFAULT_INTERVAL;
-    } else {
-        cfg.interval = iperf_args.interval->ival[0];
-        if (cfg.interval <= 0) {
-            cfg.interval = IPERF_DEFAULT_INTERVAL;
-        }
-    }
-
-    if (iperf_args.time->count == 0) {
-        cfg.time = IPERF_DEFAULT_TIME;
-    } else {
-        cfg.time = iperf_args.time->ival[0];
-        if (cfg.time <= cfg.interval) {
-            cfg.time = cfg.interval;
-        }
-    }
-
-    /* iperf -b */
-    if (iperf_args.bw_limit->count == 0) {
-        cfg.bw_lim = IPERF_DEFAULT_NO_BW_LIMIT;
-    } else {
-        cfg.bw_lim = iperf_args.bw_limit->ival[0];
-        if (cfg.bw_lim <= 0) {
-            cfg.bw_lim = IPERF_DEFAULT_NO_BW_LIMIT;
-        }
-    }
-
-    INFO("mode=%s-%s sip=%d.%d.%d.%d:%d, dip=%d.%d.%d.%d:%d, interval=%d, time=%d\n",
-             cfg.flag & IPERF_FLAG_TCP ? "tcp" : "udp\n",
-             cfg.flag & IPERF_FLAG_SERVER ? "server" : "client\n",
-             cfg.source_ip4 & 0xFF, (cfg.source_ip4 >> 8) & 0xFF, (cfg.source_ip4 >> 16) & 0xFF,
-             (cfg.source_ip4 >> 24) & 0xFF, cfg.sport,
-             cfg.destination_ip4 & 0xFF, (cfg.destination_ip4 >> 8) & 0xFF,
-             (cfg.destination_ip4 >> 16) & 0xFF, (cfg.destination_ip4 >> 24) & 0xFF, cfg.dport,
-             cfg.interval, cfg.time);
-
-    iperf_start(&cfg);
-
-    return 0;
-}
-
 static bool dbgConnect(uint8_t argc, char** argv)
 {
     if (argc < 3) {
@@ -857,11 +588,156 @@ static bool dbgConnect(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgScan(uint8_t argc, char **argv)
+{
+    //wifi_cmd_sta_scan(scan_args.ssid->sval[0]);
+    wifi_cmd_sta_scan(NULL);
+    return true;
+}
+
+static bool dbgQuery(uint8_t argc, char **argv)
+{
+    wifi_config_t cfg;
+    wifi_mode_t mode;
+    esp_netif_ip_info_t ip;
+
+    esp_wifi_get_mode(&mode);
+    if (WIFI_MODE_AP == mode) {
+        esp_wifi_get_config(WIFI_IF_AP, &cfg);
+        INFO("AP mode, %s %s\n", cfg.ap.ssid, cfg.ap.password);
+    } else if (WIFI_MODE_STA == mode) {
+        int bits = xEventGroupWaitBits(wifi_event_group, FLAG_CONNECTED, 0, 1, 0);
+        if (bits & FLAG_CONNECTED) {
+            esp_wifi_get_config(WIFI_IF_STA, &cfg);
+            INFO("sta mode, connected %s\n", cfg.ap.ssid);
+        } else {
+            INFO("sta mode, disconnected\n");
+        }
+    } else {
+        INFO("NULL mode\n");
+        return 0;
+    }
+
+    memset(&ip, 0, sizeof(esp_netif_ip_info_t));
+
+    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
+        INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
+        INFO("MASK:" IPSTR "\n", IP2STR(&ip.netmask));
+        INFO("GW:" IPSTR "\n", IP2STR(&ip.gw));
+    }
+    return true;
+}
+
+static bool dbgNvs(uint8_t argc, char **argv)
+{
+    esp_err_t err = ESP_OK;
+
+    if (argc == 2) {
+        if (!strcmp(argv[1], "close")) {
+            printf("close\n");
+            nvs_close(g_wifi.nvsHandle);
+            g_wifi.nvsHandle = (nvs_handle_t)NULL;
+        } else if (!strcmp(argv[1], "commit")) {
+            printf("commit\n");
+            err = nvs_commit(g_wifi.nvsHandle);
+        } else if (!strcmp(argv[1], "stats")) {
+            nvs_stats_t nvs_stats;
+
+            printf("stats\n\n");
+            err =  nvs_get_stats(NULL, &nvs_stats);
+            if (err == ESP_OK) {
+                printf("used_entries   : %d\n", nvs_stats.used_entries);
+                printf("free_entries   : %d\n", nvs_stats.free_entries);
+                printf("total_entries  : %d\n", nvs_stats.total_entries);
+                printf("namespace_count: %d\n", nvs_stats.namespace_count);
+            }
+        } else if (!strcmp(argv[1], "list\n")) {
+            nvs_iterator_t it;
+            printf("list\n\n");
+            
+            err =  nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it);
+            while (err == ESP_OK) {
+                nvs_entry_info_t info;
+                nvs_entry_info(it, &info); // Can omit error check if parameters are guaranteed to be non-NULL
+                printf("ns: '%s', key: '%s', type: '%x'\n", info.namespace_name, info.key, info.type);
+
+                switch (info.type) {
+                    case NVS_TYPE_U8:   printf("U8\n");  break;
+                    case NVS_TYPE_I8:   printf("I8\n");  break;
+                    case NVS_TYPE_U16:  printf("U16\n");  break;
+                    case NVS_TYPE_I16:  printf("I16\n");  break;
+                    case NVS_TYPE_U32:  printf("U32\n");  break;
+                    case NVS_TYPE_I32:  printf("I32\n");  break;
+                    case NVS_TYPE_U64:  printf("U64\n");  break;
+                    case NVS_TYPE_I64:  printf("I64\n");  break;
+                    case NVS_TYPE_STR:  printf("STR\n");  break;
+                    case NVS_TYPE_BLOB: printf("BLOB\n");  break;
+                    default:
+                }
+                printf("\n");
+
+                err = nvs_entry_next(&it);
+            }
+        } else if (!strcmp(argv[1], "ssid")) {
+            bool ret;
+            char ssid[WIFI_MAX_SSID_LENGTH] = "";
+            char passwd[WIFI_MAX_PASSWD_LENGTH] = "";
+            ret = wifi_nvs_get_ssid(ssid, passwd);
+            if (ret) {
+                printf("%s:%s\n\n", ssid, passwd);
+            }
+        }
+    } else if (argc == 3) {
+        if (!strcmp(argv[1], "open\n")) {
+            printf("open %s\n", argv[2]);
+            err = nvs_open(argv[2], NVS_READWRITE, &g_wifi.nvsHandle);
+        } else if (!strcmp(argv[1], "get\n")) {
+            char    str[256];
+             size_t length;
+
+            printf("get %s\n", argv[2]);
+            err =  nvs_get_str(g_wifi.nvsHandle, argv[2], str, &length);
+            if (err == ESP_OK) {
+                str[length] = '\0';
+                printf("str=<%s>\n", str);
+            }
+        }
+    } else if (argc == 4) {
+        if (!strcmp(argv[1], "set")) {
+            printf("set %s <- %s\n", argv[2], argv[3]);
+            err = nvs_set_str(g_wifi.nvsHandle, argv[2], argv[3]);
+        } else if (!strcmp(argv[1], "ssid")) {
+            wifi_nvs_set_ssid(argv[2], argv[3]);
+        }
+    }
+
+    if (err != ESP_OK) {
+        char* pStr = NULL;
+
+        switch(err) {
+        case ESP_ERR_NVS_NOT_FOUND:         pStr = "ESP_ERR_NVS_NOT_FOUND"; break;
+        case ESP_ERR_NVS_NOT_INITIALIZED:   pStr = "ESP_ERR_NVS_NOT_INITIALIZED";  break;
+        case ESP_ERR_NO_MEM:                pStr = "ESP_ERR_NO_MEM";  break;
+        case ESP_ERR_INVALID_ARG:           pStr = "ESP_ERR_INVALID_ARG";  break;
+        }
+
+        if (pStr) {
+            printf("failed %s\n\n", pStr);
+        } else {
+            printf("failed 0x%x\n\n", err);
+        }
+    }
+
+    return true;
+}
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-	DEBUG_MENU_DIR("wifi\n", NULL)
-		DEBUG_MENU_CMD("ap\n",	NULL,		NULL, dbgConnect)
+	DEBUG_MENU_DIR("wifi", NULL)
+		DEBUG_MENU_CMD("apn",	NULL,		NULL, dbgConnect)
+		DEBUG_MENU_CMD("scan",	NULL,		NULL, dbgScan)
+		DEBUG_MENU_CMD("query",	NULL,		NULL, dbgQuery)
+		DEBUG_MENU_CMD("nvs",	NULL,		NULL, dbgNvs)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
@@ -869,70 +745,5 @@ DEBUG_MENU_END
 
 void register_wifi(void)
 {
-
 	DBG_TREE_add("/\n", g_menu);
-
-    scan_args.ssid = arg_str0(NULL, NULL, "<ssid>\n", "SSID of AP want to be scanned\n");
-    scan_args.end = arg_end(1);
-
-    const esp_console_cmd_t scan_cmd = {
-        .command = "scan\n",
-        .help = "WiFi is station mode, start scan ap\n",
-        .hint = NULL,
-        .func = &wifi_cmd_scan,
-        .argtable = &scan_args
-    };
-
-    ap_args.ssid = arg_str1(NULL, NULL, "<ssid>\n", "SSID of AP\n");
-    ap_args.password = arg_str0(NULL, NULL, "<pass>\n", "password of AP\n");
-    ap_args.end = arg_end(2);
-
-
-    ESP_ERROR_CHECK( esp_console_cmd_register(&scan_cmd) );
-
-    const esp_console_cmd_t query_cmd = {
-        .command = "query\n",
-        .help = "query WiFi info\n",
-        .hint = NULL,
-        .func = &wifi_cmd_query,
-    };
-    ESP_ERROR_CHECK( esp_console_cmd_register(&query_cmd) );
-
-    const esp_console_cmd_t listener_cmd = {
-        .command = "listen\n",
-        .help = "start listener task\n",
-        .hint = NULL,
-        .func = &wifi_cmd_listen,
-    };
-    ESP_ERROR_CHECK( esp_console_cmd_register(&listener_cmd) );
-
-    const esp_console_cmd_t nvs_cmd = {
-        .command = "nvs\n",
-        .help = "<key> [value]\n",
-        .hint = NULL,
-        .func = &wifi_cmd_nvs,
-    };
-    ESP_ERROR_CHECK( esp_console_cmd_register(&nvs_cmd) );
-
-
-    iperf_args.ip = arg_str0("c\n", "client\n", "<ip>\n", "run in client mode, connecting to <host>\n");
-    iperf_args.server = arg_lit0("s\n", "server\n", "run in server mode\n");
-    iperf_args.udp = arg_lit0("u\n", "udp\n", "use UDP rather than TCP\n");
-    iperf_args.version = arg_lit0("V\n", "ipv6_domain\n", "use IPV6 address rather than IPV4\n");
-    iperf_args.port = arg_int0("p\n", "port\n", "<port>\n", "server port to listen on/connect to\n");
-    iperf_args.length = arg_int0("l\n", "len\n", "<length>\n", "Set read/write buffer size\n");
-    iperf_args.interval = arg_int0("i\n", "interval\n", "<interval>\n", "seconds between periodic bandwidth reports\n");
-    iperf_args.time = arg_int0("t\n", "time\n", "<time>\n", "time in seconds to transmit for (default 10 secs)\n");
-    iperf_args.bw_limit = arg_int0("b\n", "bandwidth\n", "<bandwidth>\n", "bandwidth to send at in Mbits/sec\n");
-    iperf_args.abort = arg_lit0("a\n", "abort\n", "abort running iperf\n");
-    iperf_args.end = arg_end(1);
-    const esp_console_cmd_t iperf_cmd = {
-        .command = "iperf\n",
-        .help = "iperf command\n",
-        .hint = NULL,
-        .func = &wifi_cmd_iperf,
-        .argtable = &iperf_args
-    };
-
-    ESP_ERROR_CHECK( esp_console_cmd_register(&iperf_cmd) );
 }
