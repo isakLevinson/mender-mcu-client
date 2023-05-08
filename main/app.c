@@ -71,6 +71,7 @@ static struct {
     } config;
     int     deg64;
     int     speed;
+    int     speedAdditionForLoad;
     int     degEncoder;
     int     averageCurrentMa;
 } g_app = {
@@ -87,6 +88,7 @@ static struct {
     .state = STATE_UNINIT,
     .speed = 20,
     .averageCurrentMa = 0,
+    .speedAdditionForLoad = 0,
 };
 
 static void _periodic_timer_cb(void* arg)
@@ -128,23 +130,7 @@ static int _getArcAction(int deg)
     return action;
 }
 
-static void _funcRun(int rpm)
-{
-    int     dd = 0;
-
-    dd = _degAdd(g_app.deg64, -g_app.degEncoder, DEG_FRAC);
-
-    g_app.speed = CLIP(dd * g_app.config.pid_p / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
-
-    if ((g_app.speed < g_app.config.maxSpeed) &&
-        (g_app.averageCurrentMa > -g_app.config.maxCurrent) ) {
-        g_app.deg64 = _degAdd(g_app.deg64, rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
-    }
-
-    MOT_setSpeed(g_app.speed);
-}
-
-void _funcLoad(int percent)
+void _funcLoad(int percent, int minSpeed)
 {
     int di = 0;
     int encoderDeg;
@@ -153,13 +139,32 @@ void _funcLoad(int percent)
 
     di = g_app.averageCurrentMa - current;
 
-    g_app.speed += di * g_app.config.loadSensitivity / 100000;
-    g_app.speed = CLIP(g_app.speed, g_app.config.minSpeed, g_app.config.maxSpeed);
+    g_app.speedAdditionForLoad += di * g_app.config.loadSensitivity / 100000;
+    g_app.speedAdditionForLoad = CLIP(g_app.speedAdditionForLoad, minSpeed, g_app.config.maxSpeed);
 
-    MOT_setSpeed(g_app.speed);
+    MOT_setSpeed(g_app.speedAdditionForLoad);
     ENC_get256(&encoderDeg);
 
     g_app.deg64 = encoderDeg;
+}
+
+static void _funcRun(int rpm)
+{
+    int     dd = 0;
+    int     speed;
+
+    dd = _degAdd(g_app.deg64, -g_app.degEncoder, DEG_FRAC);
+
+    speed = CLIP(dd * g_app.config.pid_p / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+
+    if ((speed < g_app.config.maxSpeed) &&
+        (g_app.averageCurrentMa > -g_app.config.maxCurrent) ) {
+        g_app.deg64 = _degAdd(g_app.deg64, rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
+    }
+
+    //_funcLoad(g_app.config.loadPercent, speed);
+
+    MOT_setSpeed(speed);
 }
 
 static void _task(void *arg)
@@ -228,19 +233,19 @@ static void _task(void *arg)
                 break;
 
             case STATE_SPEED_LOAD:
-                _funcLoad(g_app.config.loadPercent);
+                _funcLoad(g_app.config.loadPercent, g_app.config.rpm);
                 if (0 == (count % 64)) {
                     TRACE("LOAD: I=%5d, speed=%3d\n", g_app.averageCurrentMa, g_app.speed);
                 }
                 break;
 
-                case STATE_ARC_ACTION:
+            case STATE_ARC_ACTION:
                 action = _getArcAction(g_app.deg64 / DEG_FRAC);
                 if (action > 0) {
                     _funcRun(action);
                     TRACE("ARC RUN: deg=%4d, speed=%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, g_app.speed, g_app.averageCurrentMa);
                 } else if (action < 0) {
-                    _funcLoad(-action);
+                    _funcLoad(-action, 0);
                     TRACE("ARC LOAD: I=%5d, speed=%3d\n", g_app.averageCurrentMa, g_app.speed);
                 } else {
                     MOT_setSpeed(0);
@@ -448,7 +453,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
     PRINT("stop snap : %d\n", g_app.config.stopSnapRegion);
     PRINT("stop gain : %d\n", g_app.config.stopGainPercent);
     PRINT("PID P     : %d\n", g_app.config.pid_p);
-    PRINT("load I    : %d\n", g_app.config.loadPercent);
+    PRINT("load %%    : %d\n", g_app.config.loadPercent);
     PRINT("load sns  : %d\n", g_app.config.loadSensitivity);
     PRINT("arc action: ");
     for (i=0; i<ARC_DIVISIONS; i++) {
@@ -458,9 +463,10 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
     PRINT("\n");
     PRINT("current ----\n");
-    PRINT("deg      : %d\n", g_app.deg64 / DEG_FRAC);
     PRINT("state    : %d\n", g_app.state);
+    PRINT("deg      : %d\n", g_app.deg64 / DEG_FRAC);
     PRINT("speed    : %d\n", g_app.speed);
+    PRINT("speed+   : %d\n", g_app.speedAdditionForLoad);
 
     if (ret) {
         PRINT("current: %d (d=%d)\n", deg, ABS(deg - g_app.config.target));
