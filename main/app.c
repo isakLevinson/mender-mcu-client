@@ -66,7 +66,8 @@ static struct {
         int32_t stopSnapRegion;
         int32_t stopGainPercent;
         int32_t loadSensitivity;
-        int32_t pid_p;
+        int32_t posGainP;
+        int32_t posGainN;
         int arcAction[ARC_DIVISIONS];
     } config;
     int     deg64;
@@ -81,7 +82,8 @@ static struct {
         .maxCurrent = 20000,
         .stopSnapRegion = 5 * DEG_FRAC,
         .stopGainPercent = 20,
-        .pid_p = 20,
+        .posGainP = 20,
+        .posGainN = 5,
         .loadSensitivity = 100,
         .arcAction = {15, 20, 20, 20, 20, 15, 10, -20, -40, -40, -20, 10},
     },
@@ -130,41 +132,62 @@ static int _getArcAction(int deg)
     return action;
 }
 
-void _funcLoad(int percent, int minSpeed)
+static int _funcLoad(int percent, int minSpeed)
 {
     int di = 0;
     int encoderDeg;
+    int encoderAheadDegree;
 
     int current = percent * LOAD_MAX_CURRENT_MA / 100;
 
     di = g_app.averageCurrentMa - current;
 
     g_app.speedAdditionForLoad += di * g_app.config.loadSensitivity / 100000;
-    g_app.speedAdditionForLoad = CLIP(g_app.speedAdditionForLoad, minSpeed, g_app.config.maxSpeed);
+    g_app.speedAdditionForLoad = CLIP(g_app.speedAdditionForLoad, 0, g_app.config.maxSpeed);
 
-    MOT_setSpeed(g_app.speedAdditionForLoad);
+    //MOT_setSpeed(minSpeed + g_app.speedAdditionForLoad);
+    
     ENC_get256(&encoderDeg);
 
-    g_app.deg64 = encoderDeg;
+    encoderAheadDegree = _degAdd(encoderDeg, -g_app.deg64, DEG_FRAC);
+
+    if (encoderAheadDegree > 0) {
+        g_app.deg64 = encoderDeg;
+    }
+
+    TRACE("RUN: di:%d\n",  di);
+
+    return g_app.speedAdditionForLoad;
 }
 
 static void _funcRun(int rpm)
 {
     int     dd = 0;
     int     speed;
+    static int     prevSpeed = 0;
+    int     speedAddition;
 
     dd = _degAdd(g_app.deg64, -g_app.degEncoder, DEG_FRAC);
 
-    speed = CLIP(dd * g_app.config.pid_p / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+    if (dd > 0) {
+        speed = CLIP(dd * g_app.config.posGainP / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+    } else {
+        speed = CLIP(dd * g_app.config.posGainN / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
+    }
 
     if ((speed < g_app.config.maxSpeed) &&
         (g_app.averageCurrentMa > -g_app.config.maxCurrent) ) {
         g_app.deg64 = _degAdd(g_app.deg64, rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
     }
 
-    //_funcLoad(g_app.config.loadPercent, speed);
+    speedAddition = _funcLoad(g_app.config.loadPercent, speed);
 
-    MOT_setSpeed(speed);
+    if (speedAddition < 1) {
+        prevSpeed = speed;
+    }
+
+    MOT_setSpeed(prevSpeed + speedAddition);
+    TRACE("RUN: s:%3d, ps:%3d, sa:%3d\n",  speed, prevSpeed, speedAddition);
 }
 
 static void _task(void *arg)
@@ -213,7 +236,7 @@ static void _task(void *arg)
 
             case STATE_RUN:
                 _funcRun(g_app.config.rpm);
-                TRACE("RUN: deg=%4d, speed=%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, g_app.speed, g_app.averageCurrentMa);
+                //TRACE("RUN: deg=%4d, speed=%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, g_app.speed, g_app.averageCurrentMa);
                 break;
 
             case STATE_GOTO:
@@ -232,8 +255,12 @@ static void _task(void *arg)
                 TRACE("STOP: deg=%4d, speed=%4d, to-target:%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, g_app.speed, degreeToTarget, g_app.averageCurrentMa);
                 break;
 
-            case STATE_SPEED_LOAD:
-                _funcLoad(g_app.config.loadPercent, g_app.config.rpm);
+            case STATE_SPEED_LOAD: {
+                    int speedAddition;
+                    speedAddition = _funcLoad(g_app.config.loadPercent, g_app.config.rpm);
+                    MOT_setSpeed(g_app.config.rpm + speedAddition);
+                }
+
                 if (0 == (count % 64)) {
                     TRACE("LOAD: I=%5d, speed=%3d\n", g_app.averageCurrentMa, g_app.speed);
                 }
@@ -452,7 +479,8 @@ static bool dbgStatus(uint8_t argc, char** argv)
     PRINT("maxCurrent: %d\n", g_app.config.maxCurrent);
     PRINT("stop snap : %d\n", g_app.config.stopSnapRegion);
     PRINT("stop gain : %d\n", g_app.config.stopGainPercent);
-    PRINT("PID P     : %d\n", g_app.config.pid_p);
+    PRINT("PID P     : %d\n", g_app.config.posGainP);
+    PRINT("PID N     : %d\n", g_app.config.posGainN);
     PRINT("load %%    : %d\n", g_app.config.loadPercent);
     PRINT("load sns  : %d\n", g_app.config.loadSensitivity);
     PRINT("arc action: ");
@@ -489,8 +517,10 @@ static bool dbgConfig(uint8_t argc, char** argv)
 		ARGS_ENTRY("t",     ARGS_TYPE_INT32,	0,	"target",           	&g_app.config.target)
         ARGS_ENTRY("ss",    ARGS_TYPE_INT32,	0,	"stop snap region", 	&g_app.config.stopSnapRegion)
         ARGS_ENTRY("sg",    ARGS_TYPE_INT32,	0,	"stop angle gfain", 	&g_app.config.stopGainPercent)
-        ARGS_ENTRY("pp",    ARGS_TYPE_INT32,	0,	"PID P",                &g_app.config.pid_p)
+        ARGS_ENTRY("pp",    ARGS_TYPE_INT32,	0,	"PID P",                &g_app.config.posGainP)
+        ARGS_ENTRY("pn",    ARGS_TYPE_INT32,	0,	"PID N",                &g_app.config.posGainN)
         ARGS_ENTRY("ls",    ARGS_TYPE_INT32,	0,	"load sensitivity",     &g_app.config.loadSensitivity)
+        ARGS_ENTRY("lp",    ARGS_TYPE_INT32,	0,	"load percent",         &g_app.config.loadPercent)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
