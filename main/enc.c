@@ -132,7 +132,9 @@ bool ENC_get256(int* o_pDegree256)
         value += ENCODER_COUNTS;
     }
 
-    *o_pDegree256 = value * 360 *256 / ENCODER_COUNTS;
+    if (o_pDegree256) {
+        *o_pDegree256 = value * 360 *256 / ENCODER_COUNTS;
+    }
 
     if (!g_enc.initialized) {
         return false;
@@ -148,7 +150,9 @@ bool ENC_get(int* o_pDegree)
 
     ret = ENC_get256(&value);
 
-    *o_pDegree = value / 256;
+    if (o_pDegree) {
+        *o_pDegree = value / 256;
+    }
 
     return ret;
 }

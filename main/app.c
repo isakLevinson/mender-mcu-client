@@ -52,7 +52,7 @@ typedef enum {
 
 
 static EventGroupHandle_t _event_group;
-
+esp_timer_handle_t periodic_timer;
 
 static struct {
     STATE  state;
@@ -85,7 +85,7 @@ static struct {
         .arcAction = {15, 20, 20, 20, 20, 15, 10, -20, -40, -40, -20, 10},
     },
     .state = STATE_UNINIT,
-    .speed = 10,
+    .speed = 20,
     .averageCurrentMa = 0,
 };
 
@@ -202,7 +202,7 @@ static void _task(void *arg)
                 if (encValid) {
                     MOT_setSpeed(0);
                     INFO("reached zero\n");
-                    g_app.state = STATE_IDLE;
+                    g_app.state = STATE_GOTO;
                 }
                 break;
 
@@ -256,7 +256,32 @@ static void _task(void *arg)
     vTaskDelete(NULL);
 }
 
-esp_timer_handle_t periodic_timer;
+static void _encoderZero(void)
+{
+    g_app.state = STATE_ZERO;
+    MOT_setSpeed(g_app.speed);
+}
+
+static void _goto(int target)
+{
+    bool    encValid;
+
+    g_app.config.target = target;
+    encValid = ENC_get(NULL);
+
+    if (encValid) {
+        g_app.state = STATE_GOTO;
+    } else {
+        _encoderZero();
+    }
+}
+
+bool APP_goto(int target)
+{
+    _goto(target);
+
+    return true;
+}
 
 static bool _init(void)
 {
@@ -302,6 +327,7 @@ bool APP_load(int percent, int minSpeed)
 
 static bool dbgGoto(uint8_t argc, char** argv)
 {
+    int target = 0;
     if (argc < 2) {
         return false;
     }
@@ -311,13 +337,13 @@ static bool dbgGoto(uint8_t argc, char** argv)
     //    return true;
     //}
 
-    g_app.config.target = strtol(argv[1], NULL, 10) * DEG_FRAC;
+    target = strtol(argv[1], NULL, 10) * DEG_FRAC;
 
     if (argc >= 3) {
         g_app.config.rpm = strtol(argv[2], NULL, 10);
     }
 
-    g_app.state = STATE_GOTO;
+    _goto(target);
 
     return true;
 }
@@ -365,9 +391,8 @@ static bool dbgZero(uint8_t argc, char** argv)
         g_app.speed = strtol(argv[1], NULL, 10);
     }
 
-    g_app.state = STATE_ZERO;
-
-    MOT_setSpeed(g_app.speed);
+    g_app.config.target = 0;
+    _encoderZero();
 
     return true;
 }
