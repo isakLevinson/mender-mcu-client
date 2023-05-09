@@ -72,12 +72,14 @@ static struct {
     } config;
     int     deg64;
     int     speed;
+    int     speedAverage100;
     int     speedAdditionForLoad;
     int     degEncoder;
     int     averageCurrentMa;
 } g_app = {
     .config = {
         .rpm = 10,
+        .loadPercent = 10,
         .maxSpeed = 50,
         .maxCurrent = 20000,
         .stopSnapRegion = 5 * DEG_FRAC,
@@ -88,7 +90,8 @@ static struct {
         .arcAction = {15, 20, 20, 20, 20, 15, 10, -20, -40, -40, -20, 10},
     },
     .state = STATE_UNINIT,
-    .speed = 20,
+    .speed = 15,
+    .speedAverage100 = 0,
     .averageCurrentMa = 0,
     .speedAdditionForLoad = 0,
 };
@@ -175,7 +178,9 @@ static void _funcRun(int rpm)
         speed = CLIP(dd * g_app.config.posGainN / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
     }
 
-    if ((speed < g_app.config.maxSpeed) &&
+    g_app.speedAverage100 += (speed*100 - g_app.speedAverage100);
+
+    if ((g_app.speedAverage100/100 < g_app.config.maxSpeed) &&
         (g_app.averageCurrentMa > -g_app.config.maxCurrent) ) {
         g_app.deg64 = _degAdd(g_app.deg64, rpm * DEG_FRAC * 360 / 60 / TIMER_INTERVAL_MS / 10, DEG_FRAC);
     }
@@ -183,11 +188,11 @@ static void _funcRun(int rpm)
     speedAddition = _funcLoad(g_app.config.loadPercent, speed);
 
     if (speedAddition < 1) {
-        prevSpeed = speed;
+        prevSpeed = g_app.speedAverage100/100;
     }
 
     MOT_setSpeed(prevSpeed + speedAddition);
-    TRACE("RUN: s:%3d, ps:%3d, sa:%3d\n",  speed, prevSpeed, speedAddition);
+    TRACE("RUN: s:%3d(%6d), ps:%3d, sa:%3d\n",  speed, g_app.speedAverage100, prevSpeed, speedAddition);
 }
 
 static void _task(void *arg)
@@ -228,7 +233,7 @@ static void _task(void *arg)
         switch (g_app.state) {
             case STATE_ZERO:
                 if (encValid) {
-                    MOT_setSpeed(0);
+                    //MOT_setSpeed(0);
                     INFO("reached zero\n");
                     g_app.state = STATE_GOTO;
                 }
