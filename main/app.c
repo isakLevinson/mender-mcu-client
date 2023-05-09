@@ -101,10 +101,10 @@ static void _periodic_timer_cb(void* arg)
 //    static int64_t prev;
 //    int64_t time_since_boot = esp_timer_get_time();
 
-    xEventGroupSetBits(_event_group, 0x01);
-
     //TRACE("timer: %lld us (%lld)\n", time_since_boot, time_since_boot-prev);
 //    prev = time_since_boot;
+
+    xEventGroupSetBits(_event_group, 0x01);
 }
 
 static int _degAdd(int x, int y, int fraction)
@@ -155,10 +155,10 @@ static int _funcLoad(int percent, int minSpeed)
     encoderAheadDegree = _degAdd(encoderDeg, -g_app.deg64, DEG_FRAC);
 
     if (encoderAheadDegree > 0) {
-        g_app.deg64 = encoderDeg;
+        g_app.deg64 = encoderDeg + 8*DEG_FRAC;
     }
 
-    TRACE("RUN: di:%d\n",  di);
+    //TRACE("RUN: di:%d\n",  di);
 
     return g_app.speedAdditionForLoad;
 }
@@ -169,6 +169,9 @@ static void _funcRun(int rpm)
     int     speed;
     static int     prevSpeed = 0;
     int     speedAddition;
+    int     encoderDeg;
+
+    int64_t time_since_boot = esp_timer_get_time();
 
     dd = _degAdd(g_app.deg64, -g_app.degEncoder, DEG_FRAC);
 
@@ -178,7 +181,7 @@ static void _funcRun(int rpm)
         speed = CLIP(dd * g_app.config.posGainN / 1000, -g_app.config.maxSpeed, g_app.config.maxSpeed);
     }
 
-    g_app.speedAverage100 += (speed*100 - g_app.speedAverage100);
+    g_app.speedAverage100 += (speed*100 - g_app.speedAverage100)/1;
 
     if ((g_app.speedAverage100/100 < g_app.config.maxSpeed) &&
         (g_app.averageCurrentMa > -g_app.config.maxCurrent) ) {
@@ -187,12 +190,19 @@ static void _funcRun(int rpm)
 
     speedAddition = _funcLoad(g_app.config.loadPercent, speed);
 
+    ENC_get256(&encoderDeg);
+
     if (speedAddition < 1) {
         prevSpeed = g_app.speedAverage100/100;
     }
 
+    g_app.speedAverage100 = (prevSpeed + speedAddition) * 100;
+
     MOT_setSpeed(prevSpeed + speedAddition);
-    TRACE("RUN: s:%3d(%6d), ps:%3d, sa:%3d\n",  speed, g_app.speedAverage100, prevSpeed, speedAddition);
+    TRACE("RUN: t:%lld, deg:%5d, edeg:%5d, s:%3d(%6d), ps:%3d, sa:%3d, ma:%d\n", time_since_boot, g_app.deg64, encoderDeg, speed, g_app.speedAverage100, prevSpeed, speedAddition, g_app.averageCurrentMa);
+
+        //TRACE("timer: %lld us (%lld)\n", time_since_boot, time_since_boot-prev);
+
 }
 
 static void _task(void *arg)
@@ -272,15 +282,18 @@ static void _task(void *arg)
                 break;
 
             case STATE_ARC_ACTION:
-                action = _getArcAction(g_app.deg64 / DEG_FRAC);
+                action = _getArcAction(g_app.degEncoder / DEG_FRAC);
                 if (action > 0) {
+                    g_app.config.loadPercent = -3;
                     _funcRun(action);
                     TRACE("ARC RUN: deg=%4d, speed=%4d, I=%6d\n", g_app.deg64 / DEG_FRAC, g_app.speed, g_app.averageCurrentMa);
                 } else if (action < 0) {
-                    _funcLoad(-action, 0);
+                    g_app.config.loadPercent = -action - 4;
+                    _funcRun(5);
                     TRACE("ARC LOAD: I=%5d, speed=%3d\n", g_app.averageCurrentMa, g_app.speed);
                 } else {
-                    MOT_setSpeed(0);
+                    g_app.config.loadPercent = -3;
+                    _funcRun(5);
                 }
                 break;
 
@@ -331,7 +344,7 @@ static bool _init(void)
 
     _event_group = xEventGroupCreate();
 
-    ret = xTaskCreate(_task, "app", 4096, NULL, 7, NULL);
+    ret = xTaskCreate(_task, "app", 4096, NULL, 4, NULL);
     if (ret != pdPASS) {
         //ERROR
         return false;
@@ -408,15 +421,19 @@ static bool dbgRun(uint8_t argc, char** argv)
 static bool dbgArc(uint8_t argc, char** argv)
 {
     int i;
+    int idx;
 
-    if (argc < 2) {
+    if (argc < 3) {
         ENC_get256(&g_app.deg64);
         g_app.state = STATE_ARC_ACTION;
         return true;
     }
 
-    for (i=1; i<argc; i++) {
-        g_app.config.arcAction[i-1] = strtol(argv[i], NULL, 10);
+    idx = strtol(argv[1], NULL, 10);
+
+    for (i=2; i<argc; i++) {
+        g_app.config.arcAction[idx] = strtol(argv[i], NULL, 10);
+        idx++;
     }
 
     return true;
