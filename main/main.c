@@ -24,10 +24,8 @@
 #include "wifi.h"
 #include "main.h"
 #include "cli.h"
-#include "motor.h"
 #include "adc.h"
 #include "cmd.h"
-#include "enc.h"
 #include "app.h"
 #include "wifi.h"
 
@@ -56,9 +54,6 @@ void uart_init(void)
     ESP_ERROR_CHECK(uart_driver_install(CONFIG_ESP_CONSOLE_UART_NUM, BUF_SIZE * 2, 0, 0, NULL, intr_alloc_flags));
     ESP_ERROR_CHECK(uart_param_config(CONFIG_ESP_CONSOLE_UART_NUM, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(CONFIG_ESP_CONSOLE_UART_NUM, -1, -1, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-
-//        int len = uart_read_bytes(ECHO_UART_PORT_NUM, data, (BUF_SIZE - 1), 20 / portTICK_PERIOD_MS);
-//        uart_write_bytes(ECHO_UART_PORT_NUM, (const char *) data, len);
 }
 
 void app_main(void)
@@ -75,33 +70,12 @@ void app_main(void)
     initialise_wifi();
     initialise_ble();
 
-#if 0
-    {
-        bool    ret = true;
-        char    ssid[32];
-        char    passwd[32];
-
-        printf("###################################\n");
-
-        ret = wifi_nvs_get_ssid(ssid, passwd);
-        if (ret) {
-            printf("ssid  : %s\n", ssid);
-            printf("passwd: %s\n", passwd);
-            wifi_cmd_sta_join(ssid, passwd);
-        }
-
-        //printf("###################################\n");
-    }
-#endif
-
     printf("\n");
     printf(" ==================================================\n");
     printf("  Ready.\n");
     printf(" =================================================\n\n");
 
     CLI_init();
-    MOT_init();
-    ENC_init();
     ADC_init();
     CMD_init();
     APP_init();
