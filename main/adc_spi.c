@@ -17,18 +17,12 @@
 #include "driver/pulse_cnt.h"
 #include "driver/gpio.h"
 
-//#include "unity.h"
-
 #include "esp_timer.h"
-#include "esp_event.h"
-#include "esp_check.h"
 
-#include "soc/soc_caps.h"
-#include "argtable3/argtable3.h"
 
 #include "main.h"
 #include "cli.h"
-#include "adc.h"
+#include "adc_spi.h"
 
 #define TIMER_INTERVAL_US   10000
 #define TIMER_INTERVAL_MS   (TIMER_INTERVAL_US / 1000)
@@ -47,13 +41,13 @@ static bool dbgStatus(uint8_t argc, char** argv)
 }
 
 DEBUG_MENU_START(g_menu)
-    DEBUG_MENU_DIR("app", NULL)
+    DEBUG_MENU_DIR("adc", NULL)
 	    DEBUG_MENU_CMD("status",	NULL,       		            NULL, dbgStatus)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
 
-void APP_init(void)
+void ADCSPI_init(void)
 {
     DBG_TREE_add("/", g_menu);
 

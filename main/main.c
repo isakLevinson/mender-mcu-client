@@ -24,9 +24,8 @@
 #include "wifi.h"
 #include "main.h"
 #include "cli.h"
-#include "adc.h"
+#include "adc_spi.h"
 #include "cmd.h"
-#include "app.h"
 #include "wifi.h"
 
 #define BUF_SIZE    1024
@@ -76,9 +75,8 @@ void app_main(void)
     printf(" =================================================\n\n");
 
     CLI_init();
-    ADC_init();
+    ADCSPI_init();
     CMD_init();
-    APP_init();
     
     register_wifi();
 }

@@ -6,8 +6,8 @@
 extern "C" {
 #endif
 
-void    ADC_init(void);
-int     ADC_getCurrent(void);
+void ADCSPI_init(void);
+
 
 #ifdef __cplusplus
 }

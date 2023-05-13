@@ -1,10 +1,9 @@
 idf_component_register(SRCS	"main.c" 
-				"adc.c"
 				"cmd.c"
 				"cmd_ble.c"
 				"gatt_svr.c"
 				"wifi.c"
-				"app.c"
+				"adc_spi.c"
 
 				INCLUDE_DIRS ".")
 
