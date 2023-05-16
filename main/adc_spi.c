@@ -49,6 +49,7 @@ static void _spi_pre_transfer_callback(spi_transaction_t *t)
 static void _spi_post_transfer_callback(spi_transaction_t *t)
 {
     //INFO("_spi_post_transfer_callback\n");
+    xEventGroupSetBits(_event_group, 0x01);
 }
 
 
@@ -85,6 +86,8 @@ static bool _init(void)
     if (ESP_OK != ret) {
         ERROR("spi_bus_add_device %x\n", ret);
     }
+
+   _event_group = xEventGroupCreate();
 
     return true;
 }
@@ -172,6 +175,10 @@ static bool dbgTx(uint8_t argc, char** argv)
     uint16_t    size;
     esp_err_t   ret;
     int i;
+    int bits;
+    int64_t time_start;
+    int64_t time_1;
+    int64_t time_end;
 
     if (argc < 2) {
         return false;
@@ -203,6 +210,8 @@ static bool dbgTx(uint8_t argc, char** argv)
     spi_device_release_bus(spi_dev0);
 */
 
+    time_start = esp_timer_get_time();
+
     //ret = spi_device_transmit(spi_dev0, &t);
     ret = spi_device_queue_trans(spi_dev0, &t, portMAX_DELAY);
 
@@ -211,6 +220,14 @@ static bool dbgTx(uint8_t argc, char** argv)
         ERROR("spi_device_transmit %x\n", ret);
         return true;
     }
+
+    time_1 = esp_timer_get_time();
+
+    bits = xEventGroupWaitBits(_event_group, 0x01, 1, 1, portMAX_DELAY);
+
+    time_end = esp_timer_get_time();
+
+    PRINT("timer: %lld %lld\n", time_1 - time_start, time_end - time_start);
 
     size = MIN(size, 16);
     PRINT_BUF(NULL, PRINT_BUF_STYLE_HEX_NL, rxBuf, size);
