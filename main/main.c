@@ -7,7 +7,13 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
+
+#define DEF_DBG_MODULE	DBG_MODULE_MAIN
+
 #include <sys_def.h>
+#include "dbgMenus.h"
+#include "dbgPrint.h"
+#include "parseArgs.h"
 
 #include <errno.h>
 #include <string.h>
@@ -69,14 +75,16 @@ void app_main(void)
     initialise_wifi();
     initialise_ble();
 
-    printf("\n");
-    printf(" ==================================================\n");
-    printf("  Ready.\n");
-    printf(" =================================================\n\n");
-
     CLI_init();
     ADCSPI_init();
     CMD_init();
     
     register_wifi();
+
+    PRINT("\n");
+    PRINT(" ==================================================\n");
+    PRINT("  Ready.\n");
+    PRINT(" =================================================\n\n");
+
+
 }
