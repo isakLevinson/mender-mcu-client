@@ -29,18 +29,23 @@
 #include "cli.h"
 #include "adc_spi.h"
 
-#define ADC_HOST0    SPI2_HOST
-#define ADC_HOST1    SPI3_HOST
+#define PIN_NUM_CLK_0  1
+#define PIN_NUM_MOSI_0 2
+#define PIN_NUM_MISO_0 3
 
-#define PIN_NUM_CLK_0  4
-#define PIN_NUM_MOSI_0 5
-#define PIN_NUM_MISO_0 6
-#define PIN_NUM_CS_0   7
+#define PIN_NUM_CLK_1  4
+#define PIN_NUM_MOSI_1 5
+#define PIN_NUM_MISO_1 6
 
-#define PIN_NUM_CLK_1  8
-#define PIN_NUM_MOSI_1 9
-#define PIN_NUM_MISO_1 10
-#define PIN_NUM_CS_1   11
+static const spi_host_device_t _spiHosts[2] = {
+    SPI2_HOST,
+    SPI3_HOST,
+};
+
+static const uint8_t _csPins[2][8] = {
+    {7,   8,  9, 10, 11, 12, 13, 14}, // channel 0
+    {15, 16, 17, 18, 35, 36, 37, 38}, // channel 1
+};
 
 static EventGroupHandle_t _event_group;
 esp_timer_handle_t periodic_timer;
@@ -49,8 +54,7 @@ DMA_ATTR uint8_t     txBuf0[1024];
 DMA_ATTR uint8_t     rxBuf0[1024];
 DMA_ATTR uint8_t     txBuf1[1024];
 DMA_ATTR uint8_t     rxBuf1[1024];
-static spi_transaction_t t0;
-static spi_transaction_t t1;
+static spi_transaction_t transaction[2];
 
 
 static void _spi_pre_transfer_callback(spi_transaction_t *t)
@@ -60,14 +64,13 @@ static void _spi_pre_transfer_callback(spi_transaction_t *t)
 
 static void _spi_post_transfer_callback(spi_transaction_t *t)
 {
-    uint8_t dev = (uint8_t)t->user;
+    int devMask = (int)t->user;
     //INFO("_spi_post_transfer_callback\n");
-    xEventGroupSetBits(_event_group, dev);
+
+    xEventGroupSetBits(_event_group, devMask);
 }
 
-
-spi_device_handle_t spi_dev0;
-spi_device_handle_t spi_dev1;
+static spi_device_handle_t spi_dev[2];
 
 static bool _init(void)
 {
@@ -91,47 +94,89 @@ static bool _init(void)
         .max_transfer_sz= 1024,
     };
 
-    spi_device_interface_config_t devcfg0 = {
-        .clock_speed_hz=10*1000*1000,          // Clock out at 10 MHz
-        .mode=0,                               // SPI mode 0
-        .spics_io_num=PIN_NUM_CS_0,              // CS pin
-        .queue_size = 7,                       // We want to be able to queue 7 transactions at a time
-        .pre_cb = _spi_pre_transfer_callback,  // Specify pre-transfer callback to handle D/C line
-        .post_cb = _spi_post_transfer_callback,
-    };
-
-    spi_device_interface_config_t devcfg1 = {
-        .clock_speed_hz=10*1000*1000,          // Clock out at 10 MHz
-        .mode=0,                               // SPI mode 0
-        .spics_io_num=PIN_NUM_CS_1,              // CS pin
-        .queue_size = 7,                       // We want to be able to queue 7 transactions at a time
-        .pre_cb = _spi_pre_transfer_callback,  // Specify pre-transfer callback to handle D/C line
-        .post_cb = _spi_post_transfer_callback,
-    };
-
-    ret = spi_bus_initialize(ADC_HOST0, &buscfg0, SPI_DMA_CH_AUTO); // SPI_DMA_DISABLED
+    ret = spi_bus_initialize(_spiHosts[0], &buscfg0, SPI_DMA_CH_AUTO); // SPI_DMA_DISABLED
     //ret = spi_bus_initialize(ADC_HOST0, &buscfg0, SPI_DMA_DISABLED); // 
     if (ESP_OK != ret) {
         ERROR("spi_bus_initialize0 %x\n", ret);
     }
 
-    ret = spi_bus_initialize(ADC_HOST1, &buscfg1, SPI_DMA_CH_AUTO);
+    ret = spi_bus_initialize(_spiHosts[1], &buscfg1, SPI_DMA_CH_AUTO);
     //ret = spi_bus_initialize(ADC_HOST1, &buscfg1, SPI_DMA_DISABLED);
     if (ESP_OK != ret) {
         ERROR("spi_bus_initialize1 %x\n", ret);
     }
 
-    ret = spi_bus_add_device(ADC_HOST0, &devcfg0, &spi_dev0);
-    if (ESP_OK != ret) {
-        ERROR("spi_bus_add_device %x\n", ret);
-    }
-
-    ret = spi_bus_add_device(ADC_HOST1, &devcfg1, &spi_dev1);
-    if (ESP_OK != ret) {
-        ERROR("spi_bus_add_device %x\n", ret);
-    }
-
    _event_group = xEventGroupCreate();
+
+    return true;
+}
+
+bool    SPI_txStart(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void* rxBuf, size_t rxSize)
+{
+    esp_err_t   ret;
+
+    spi_device_interface_config_t devcfg = {
+        .clock_speed_hz=10*1000*1000,          // Clock out at 10 MHz
+        .mode=0,                               // SPI mode 0
+        .queue_size = 7,                       // We want to be able to queue 7 transactions at a time
+        .pre_cb = _spi_pre_transfer_callback,  // Specify pre-transfer callback to handle D/C line
+        .post_cb = _spi_post_transfer_callback,
+    };
+
+    if (dev >= 2) {
+        return false;
+    }
+
+    if (ch >= 8) {
+        return false;
+    }
+
+    devcfg.spics_io_num = _csPins[dev][ch];
+
+    ret = spi_bus_add_device(_spiHosts[dev], &devcfg, &spi_dev[dev]);
+    if (ESP_OK != ret) {
+        ERROR("spi_bus_add_device %d:%d %x\n", dev, ch, ret);
+        return false;
+    }
+
+    transaction[dev].length = 8 * txSize;
+    transaction[dev].rxlength = 8 * rxSize;
+    transaction[dev].flags = 0;
+    transaction[dev].tx_buffer = txBuf;
+    transaction[dev].rx_buffer = rxBuf;
+    transaction[dev].user = (void*)(1<<dev);
+
+    ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev], portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_queue_trans %d:%d %x\n", dev, ch, ret);
+        return false;
+    }
+
+    return true;
+}
+
+bool    SPI_waitForCompletion(uint8_t dev)
+{
+    esp_err_t   ret;
+    spi_transaction_t* pTransaction;
+
+    int bits = xEventGroupWaitBits(_event_group, (1<<dev), 1, 1, portMAX_DELAY);
+
+    if (bits != (1<<dev)) {
+        ERROR("wait error %x %x\n", bits, 1<<dev);
+    }
+
+    ret = spi_device_get_trans_result(spi_dev[dev], &pTransaction, 1000);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_get_trans_result %d %x\n", dev, ret);
+        return false;
+    }
+
+    ret = spi_bus_remove_device(spi_dev[dev]);
+    if (ESP_OK != ret) {
+        ERROR("spi_bus_remove_device %d %x\n", dev, ret);
+        return false;
+    }
 
     return true;
 }
@@ -144,8 +189,8 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 static bool dbgTx(uint8_t argc, char** argv)
 {
-    uint16_t    size;
-    esp_err_t   ret;
+    uint16_t   size;
+    bool       ret;
     int i;
     //int bits;
     int64_t time_start;
@@ -158,7 +203,6 @@ static bool dbgTx(uint8_t argc, char** argv)
         return false;
     }
 
-    //DBG_PRINT_hex2buf(argv[1], txbuf, &size);
     dev = strtoul(argv[1], NULL, 10);
     size = strtoul(argv[2], NULL, 10);
 
@@ -167,40 +211,12 @@ static bool dbgTx(uint8_t argc, char** argv)
         txBuf1[i] = 5*i;
     }
 
-    t0.length = 8 * size;
-    t0.rxlength = 8 * size;
-    t0.flags = 0;//SPI_TRANS_USE_RXDATA | SPI_TRANS_USE_TXDATA;
-    t0.user = NULL;
-    t0.tx_buffer = txBuf0;
-    t0.rx_buffer = rxBuf0;
-    t0.user = (void*)1;
-
-    t1.length = 8 * size;
-    t1.rxlength = 8 * size;
-    t1.flags = 0;//SPI_TRANS_USE_RXDATA | SPI_TRANS_USE_TXDATA;
-    t1.user = NULL;
-    t1.tx_buffer = txBuf1;
-    t1.rx_buffer = rxBuf1;
-    t1.user = (void*)2;
-
-/*
-    spi_device_acquire_bus(spi_dev0, portMAX_DELAY);
-
-    ret = spi_device_polling_transmit(spi_dev0, &t);
-    if (ESP_OK != ret) {
-        ERROR("spi_device_polling_transmit %x\n", ret);
-        return true;
-    }
-
-    spi_device_release_bus(spi_dev0);
-*/
-
     time_start = esp_timer_get_time();
 
     if (dev & 1) {
-        ret = spi_device_queue_trans(spi_dev0, &t0, portMAX_DELAY);
-        if (ESP_OK != ret) {
-            ERROR("spi_device_transmit0 %x\n", ret);
+        ret = SPI_txStart(0, 0, txBuf0, size, rxBuf0, size);
+        if (!ret) {
+            PRINT("SPI_txStart 0 ailed\n");
             return true;
         }
     }
@@ -208,17 +224,22 @@ static bool dbgTx(uint8_t argc, char** argv)
     time_1 = esp_timer_get_time();
 
     if (dev & 2) {
-        ret = spi_device_queue_trans(spi_dev1, &t1, portMAX_DELAY);
-        if (ESP_OK != ret) {
-            ERROR("spi_device_transmit1 %x\n", ret);
+        ret = SPI_txStart(1, 0, txBuf1, size, rxBuf1, size);
+        if (!ret) {
+            PRINT("SPI_txStart 1 failed\n");
             return true;
         }
     }
 
     time_2 = esp_timer_get_time();
 
+    if (dev & 1) {
+        SPI_waitForCompletion(0);
+    }
 
-    xEventGroupWaitBits(_event_group, dev, 1, 1, portMAX_DELAY);
+    if (dev & 2) {
+        SPI_waitForCompletion(1);
+    }
 
     time_end = esp_timer_get_time();
 
@@ -230,10 +251,33 @@ static bool dbgTx(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgWait(uint8_t argc, char** argv)
+{
+    uint8_t  dev = 0;
+
+    if (argc < 2) {
+        return false;
+    }
+
+    //DBG_PRINT_hex2buf(argv[1], txbuf, &size);
+    dev = strtoul(argv[1], NULL, 10);
+
+    if (dev & 1) {
+        SPI_waitForCompletion(0);
+    }
+
+    if (dev & 2) {
+        SPI_waitForCompletion(1);
+    }
+
+    return true;
+}
+
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("adc", NULL)
 	    DEBUG_MENU_CMD("status",	NULL,      NULL, dbgStatus)
 	    DEBUG_MENU_CMD("tx",	    NULL,      NULL, dbgTx)
+	    DEBUG_MENU_CMD("wait",	    NULL,      NULL, dbgWait)
    DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
@@ -242,5 +286,5 @@ void ADCSPI_init(void)
 {
     DBG_TREE_add("/", g_menu);
 
-   _init();
+    _init();
 }

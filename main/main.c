@@ -81,6 +81,8 @@ void app_main(void)
     
     register_wifi();
 
+   esp_log_level_set("*", ESP_LOG_ERROR);
+
     PRINT("\n");
     PRINT(" ==================================================\n");
     PRINT("  Ready.\n");
