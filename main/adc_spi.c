@@ -189,7 +189,6 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 static bool dbgTx(uint8_t argc, char** argv)
 {
-    uint16_t   size;
     bool       ret;
     int i;
     //int bits;
@@ -198,23 +197,30 @@ static bool dbgTx(uint8_t argc, char** argv)
     int64_t time_2;
     int64_t time_end;
     uint8_t  dev = 0;
+    uint16_t   txSize;
+    uint16_t   rxSize;
 
-    if (argc < 2) {
+    if (argc < 3) {
         return false;
     }
 
     dev = strtoul(argv[1], NULL, 10);
-    size = strtoul(argv[2], NULL, 10);
+    txSize = strtoul(argv[2], NULL, 10);
+    rxSize = txSize;
 
-    for (i=0; i<size; i++) {
-        txBuf0[i] = 3*i;
-        txBuf1[i] = 5*i;
+    if (argc >= 4) {
+        rxSize = strtoul(argv[3], NULL, 10);
+    }
+
+    for (i=0; i<txSize; i++) {
+        txBuf0[i] = i;
+        txBuf1[i] = 3*i;
     }
 
     time_start = esp_timer_get_time();
 
     if (dev & 1) {
-        ret = SPI_txStart(0, 0, txBuf0, size, rxBuf0, size);
+        ret = SPI_txStart(0, 0, txBuf0, txSize, rxBuf0, rxSize);
         if (!ret) {
             PRINT("SPI_txStart 0 ailed\n");
             return true;
@@ -224,7 +230,7 @@ static bool dbgTx(uint8_t argc, char** argv)
     time_1 = esp_timer_get_time();
 
     if (dev & 2) {
-        ret = SPI_txStart(1, 0, txBuf1, size, rxBuf1, size);
+        ret = SPI_txStart(1, 0, txBuf1, txSize, rxBuf1, rxSize);
         if (!ret) {
             PRINT("SPI_txStart 1 failed\n");
             return true;
@@ -232,6 +238,8 @@ static bool dbgTx(uint8_t argc, char** argv)
     }
 
     time_2 = esp_timer_get_time();
+
+    txSize = MIN(txSize, 16);
 
     if (dev & 1) {
         SPI_waitForCompletion(0);
@@ -245,8 +253,13 @@ static bool dbgTx(uint8_t argc, char** argv)
 
     PRINT("timer: %lld %lld %lld\n", time_1 - time_start, time_2 - time_start, time_end - time_start);
 
-    //size = MIN(size, 16);
-    //PRINT_BUF(NULL, PRINT_BUF_STYLE_HEX_NL, rxBuf, size);
+    if (dev & 1) {
+        PRINT_BUF("rx0", PRINT_BUF_STYLE_HEX_NL, rxBuf0, txSize);
+    }
+
+    if (dev & 2) {
+        PRINT_BUF("rx1", PRINT_BUF_STYLE_HEX_NL, rxBuf1, txSize);
+    }
 
     return true;
 }
