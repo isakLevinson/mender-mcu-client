@@ -109,12 +109,14 @@ static bool _init(void)
         .post_cb = _spi_post_transfer_callback,
     };
 
-    ret = spi_bus_initialize(ADC_HOST0, &buscfg0, SPI_DMA_CH_AUTO);
+    ret = spi_bus_initialize(ADC_HOST0, &buscfg0, SPI_DMA_CH_AUTO); // SPI_DMA_DISABLED
+    //ret = spi_bus_initialize(ADC_HOST0, &buscfg0, SPI_DMA_DISABLED); // 
     if (ESP_OK != ret) {
         ERROR("spi_bus_initialize0 %x\n", ret);
     }
 
     ret = spi_bus_initialize(ADC_HOST1, &buscfg1, SPI_DMA_CH_AUTO);
+    //ret = spi_bus_initialize(ADC_HOST1, &buscfg1, SPI_DMA_DISABLED);
     if (ESP_OK != ret) {
         ERROR("spi_bus_initialize1 %x\n", ret);
     }
@@ -124,7 +126,7 @@ static bool _init(void)
         ERROR("spi_bus_add_device %x\n", ret);
     }
 
-    ret = spi_bus_add_device(ADC_HOST0, &devcfg1, &spi_dev1);
+    ret = spi_bus_add_device(ADC_HOST1, &devcfg1, &spi_dev1);
     if (ESP_OK != ret) {
         ERROR("spi_bus_add_device %x\n", ret);
     }
