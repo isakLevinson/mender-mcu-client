@@ -54,6 +54,7 @@ DMA_ATTR uint8_t     rxBuf1[1024] = {0};
 
 typedef struct {
     uint8_t dev;
+    uint8_t csGpio;
     uint8_t remainingTrans;
 } USER_TRANSACTION;
 
@@ -63,14 +64,19 @@ static spi_transaction_t    transaction[2][2];
 
 static void _spi_pre_transfer_callback(spi_transaction_t *t)
 {
-//    INFO("lcd_spi_pre_transfer_callback\n");
+    USER_TRANSACTION*   pUser = (USER_TRANSACTION*)t->user;
+    gpio_set_level(pUser->csGpio, 0);
 }
 
 static void _spi_post_transfer_callback(spi_transaction_t *t)
 {
-    USER_TRANSACTION*   pUser = (USER_TRANSACTION*)t;
+    USER_TRANSACTION*   pUser = (USER_TRANSACTION*)t->user;
 
-    if (pUser->remainingTrans) {
+    if (!(t->flags & SPI_TRANS_CS_KEEP_ACTIVE)) {
+        gpio_set_level(pUser->csGpio, 1);
+    }
+
+    if (!pUser->remainingTrans) {
         xEventGroupSetBits(_event_group, 1 << pUser->dev);
     }
 }
@@ -80,6 +86,7 @@ static spi_device_handle_t spi_dev[2];
 static bool _init(void)
 {
     esp_err_t ret;
+    int i, j;
 
     spi_bus_config_t buscfg0 = {
         .miso_io_num    = PIN_NUM_MISO_0,
@@ -99,48 +106,44 @@ static bool _init(void)
         .max_transfer_sz= 1024,
     };
 
-    ret = spi_bus_initialize(_spiHosts[0], &buscfg0, SPI_DMA_CH_AUTO); // SPI_DMA_DISABLED
-    //ret = spi_bus_initialize(ADC_HOST0, &buscfg0, SPI_DMA_DISABLED); // 
-    if (ESP_OK != ret) {
-        ERROR("spi_bus_initialize0 %x\n", ret);
-    }
-
-    ret = spi_bus_initialize(_spiHosts[1], &buscfg1, SPI_DMA_CH_AUTO);
-    //ret = spi_bus_initialize(ADC_HOST1, &buscfg1, SPI_DMA_DISABLED);
-    if (ESP_OK != ret) {
-        ERROR("spi_bus_initialize1 %x\n", ret);
-    }
-
-   _event_group = xEventGroupCreate();
-
-    return true;
-}
-
-static bool _addDevice(uint8_t dev, uint8_t ch)
-{
-    esp_err_t   ret;
-
     spi_device_interface_config_t devcfg = {
         .clock_speed_hz=10*1000*1000,          // Clock out at 10 MHz
         .mode=0,                               // SPI mode 0
         .queue_size = 7,                       // We want to be able to queue 7 transactions at a time
         .pre_cb = _spi_pre_transfer_callback,  // Specify pre-transfer callback to handle D/C line
         .post_cb = _spi_post_transfer_callback,
+        .spics_io_num = -1,
     };
 
-    devcfg.spics_io_num = _csPins[dev][ch];
-
-    ret = spi_bus_add_device(_spiHosts[dev], &devcfg, &spi_dev[dev]);
+    ret = spi_bus_initialize(_spiHosts[0], &buscfg0, SPI_DMA_CH_AUTO); // SPI_DMA_DISABLED
     if (ESP_OK != ret) {
-        ERROR("spi_bus_add_device %d:%d %x\n", dev, ch, ret);
+        ERROR("spi_bus_initialize0 %x\n", ret);
+    }
+
+    ret = spi_bus_initialize(_spiHosts[1], &buscfg1, SPI_DMA_CH_AUTO);
+    if (ESP_OK != ret) {
+        ERROR("spi_bus_initialize1 %x\n", ret);
+    }
+
+    ret = spi_bus_add_device(_spiHosts[0], &devcfg, &spi_dev[0]);
+    if (ESP_OK != ret) {
+        ERROR("spi_bus_add_device 0 %x\n", ret);
         return false;
     }
 
-    ret = spi_device_acquire_bus(spi_dev[dev], portMAX_DELAY);
+    ret = spi_bus_add_device(_spiHosts[1], &devcfg, &spi_dev[1]);
     if (ESP_OK != ret) {
-        ERROR("spi_device_acquire_bus %d %x\n", dev, ret);
+        ERROR("spi_bus_add_device10 %x\n", ret);
         return false;
     }
+
+    for (i=0; i<2; i++) {
+        for (j=0; j<8; j++) {
+            gpio_set_direction(_csPins[i][j], GPIO_MODE_OUTPUT);
+            gpio_set_level(_csPins[i][j], 1);
+        }
+    }
+   _event_group = xEventGroupCreate();
 
     return true;
 }
@@ -157,8 +160,6 @@ bool    SPI_txAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize)
         return false;
     }
 
-    _addDevice(dev, ch);
-
     transaction[dev][0].length = 8 * txSize;
     transaction[dev][0].rxlength = 0;
     transaction[dev][0].flags = 0;
@@ -166,7 +167,14 @@ bool    SPI_txAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize)
     transaction[dev][0].rx_buffer = NULL;
     transaction[dev][0].user = &g_transUser[0];
     g_transUser[0].dev = dev;
+    g_transUser[0].csGpio = _csPins[dev][ch];
     g_transUser[0].remainingTrans = 0;
+
+    ret = spi_device_acquire_bus(spi_dev[dev], portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_acquire_bus %d %x\n", dev, ret);
+        return false;
+    }
 
     ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev][0], portMAX_DELAY);
     if (ESP_OK != ret) {
@@ -189,8 +197,6 @@ bool    SPI_txrxAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void*
         return false;
     }
 
-    _addDevice(dev, ch);
-
     transaction[dev][0].length = 8 * txSize;
     transaction[dev][0].rxlength = 0;
     transaction[dev][0].flags = SPI_TRANS_CS_KEEP_ACTIVE;
@@ -198,18 +204,25 @@ bool    SPI_txrxAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void*
     transaction[dev][0].rx_buffer = NULL;
     transaction[dev][0].user = &g_transUser[0];
     g_transUser[0].dev = dev;
+    g_transUser[0].csGpio = _csPins[dev][ch];
     g_transUser[0].remainingTrans = 1;
-
 
     transaction[dev][1].length = 8 * rxSize;
     transaction[dev][1].rxlength = 8 * rxSize;
-    transaction[dev][1].flags = 0;//SPI_TRANS_USE_TXDATA;
+    transaction[dev][1].flags = 0;
     transaction[dev][1].tx_buffer = txBuf1;
     transaction[dev][1].rx_buffer = rxBuf;
     transaction[dev][1].user = (void*)(1<<dev);
     transaction[dev][1].user = &g_transUser[1];
     g_transUser[1].dev = dev;
+    g_transUser[1].csGpio = _csPins[dev][ch];
     g_transUser[1].remainingTrans = 0;
+
+    ret = spi_device_acquire_bus(spi_dev[dev], portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_acquire_bus %d %x\n", dev, ret);
+        return false;
+    }
 
     ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev][0], portMAX_DELAY);
     if (ESP_OK != ret) {
@@ -249,12 +262,6 @@ bool    SPI_waitForCompletion(uint8_t dev, int timeout)
     } while (pUser->remainingTrans);
 
     spi_device_release_bus(spi_dev[dev]);
-
-    ret = spi_bus_remove_device(spi_dev[dev]);
-    if (ESP_OK != ret) {
-        ERROR("spi_bus_remove_device %d %x\n", dev, ret);
-        return false;
-    }
 
     return true;
 }
