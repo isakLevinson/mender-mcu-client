@@ -201,18 +201,9 @@ bool    SPI_txrxAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void*
     transaction[dev][0].tx_buffer = txBuf;
     transaction[dev][0].rx_buffer = NULL;
     transaction[dev][0].user = &g_transUser[0];
-
     g_transUser[0].dev = dev;
     g_transUser[0].remainingTrans = 1;
 
-/*
-    transaction[dev][1].length = 8 * txSize;
-    transaction[dev][1].rxlength = 0;
-    transaction[dev][1].flags = 0;
-    transaction[dev][1].tx_buffer = txBuf;
-    transaction[dev][1].rx_buffer = NULL;
-    transaction[dev][1].user = (void*)(1<<dev);
-*/
 
     transaction[dev][1].length = 8 * rxSize;
     transaction[dev][1].rxlength = 8 * rxSize;
@@ -220,9 +211,7 @@ bool    SPI_txrxAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void*
     transaction[dev][1].tx_buffer = txBuf1;
     transaction[dev][1].rx_buffer = rxBuf;
     transaction[dev][1].user = (void*)(1<<dev);
-
     transaction[dev][1].user = &g_transUser[1];
-
     g_transUser[1].dev = dev;
     g_transUser[1].remainingTrans = 0;
 
@@ -266,42 +255,17 @@ bool    SPI_waitForCompletion(uint8_t dev, int timeout)
 
     INFO("wait flag ok\n");
 
-    ret = spi_device_get_trans_result(spi_dev[dev], &pTransaction, portMAX_DELAY);
-    if (ESP_OK != ret) {
-        ERROR("spi_device_get_trans_result %d %x\n", dev, ret);
-        return false;
-    }
-    INFO("trans = %x\n", pTransaction);
+    do {
+        ret = spi_device_get_trans_result(spi_dev[dev], &pTransaction, portMAX_DELAY);
+        if (ESP_OK != ret) {
+            ERROR("spi_device_get_trans_result %d %x\n", dev, ret);
+            return false;
+        }
+        INFO("trans = %x\n", pTransaction);
 
-    pUser = (USER_TRANSACTION*)pTransaction->user;
-    INFO("spi_device_get_trans_result 1 ok. remainint=%d\n", pUser->remainingTrans);
-
-    ret = spi_device_get_trans_result(spi_dev[dev], &pTransaction, portMAX_DELAY);
-    if (ESP_OK != ret) {
-        ERROR("spi_device_get_trans_result %d %x\n", dev, ret);
-        return false;
-    }
-    INFO("trans = %x\n", pTransaction);
-
-    pUser = (USER_TRANSACTION*)pTransaction->user;
-    INFO("spi_device_get_trans_result 2 ok. remainint=%d\n", pUser->remainingTrans);
-
-/*
-    ret = spi_device_get_trans_result(spi_dev[dev], &pTransaction, portMAX_DELAY);
-    if (ESP_OK != ret) {
-        ERROR("spi_device_get_trans_result %d %x\n", dev, ret);
-        return false;
-    }
-
-    INFO("trans = %x\n", pTransaction);
-
-    if (pTransaction) {
         pUser = (USER_TRANSACTION*)pTransaction->user;
-        INFO("spi_device_get_trans_result 3 ok. remainint=%d\n", pUser->remainingTrans);
-    }
-*/
-
-
+        INFO("spi_device_get_trans_result ok. remainint=%d\n", pUser->remainingTrans);
+    } while (pUser->remainingTrans);
 
     spi_device_release_bus(spi_dev[dev]);
 
@@ -388,7 +352,6 @@ static bool dbgTx(uint8_t argc, char** argv)
 
 static bool dbgTxRx(uint8_t argc, char** argv)
 {
-    bool       ret;
     uint8_t  dev = 0;
     uint16_t   txSize;
     uint16_t   rxSize;
@@ -402,8 +365,8 @@ static bool dbgTxRx(uint8_t argc, char** argv)
     DBG_PRINT_hex2buf(argv[2], txBuf0, &txSize);
     rxSize = strtoul(argv[3], NULL, 10);
 
-    ret = SPI_txrxAsync(dev, 0, txBuf0, txSize, rxBuf0, rxSize);
-    //SPI_waitForCompletion(dev, portMAX_DELAY);
+    SPI_txrxAsync(dev, 0, txBuf0, txSize, rxBuf0, rxSize);
+    SPI_waitForCompletion(dev, portMAX_DELAY);
 
     PRINT_BUF("rx", PRINT_BUF_STYLE_HEX_NL, rxBuf0, txSize);
 
