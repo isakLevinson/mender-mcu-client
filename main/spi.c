@@ -1,5 +1,5 @@
 
-#define DEF_DBG_MODULE	DBG_MODULE_ADC
+#define DEF_DBG_MODULE	DBG_MODULE_SPI
 
 #include <sys_def.h>
 #include "dbgMenus.h"
@@ -270,6 +270,16 @@ bool    SPI_txrx(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void* rxBu
     bool    ret;
 
     ret = SPI_txrxAsync(dev, ch, txBuf, txSize, rxBuf, rxSize);
+    ret = SPI_waitForCompletion(dev, portMAX_DELAY);
+
+    return true;
+}
+
+bool    SPI_tx(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize)
+{
+    bool    ret;
+
+    ret = SPI_txAsync(dev, ch, txBuf, txSize);
     ret = SPI_waitForCompletion(dev, portMAX_DELAY);
 
     return true;
