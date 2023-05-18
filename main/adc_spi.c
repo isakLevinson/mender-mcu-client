@@ -50,11 +50,18 @@ static const uint8_t _csPins[2][8] = {
 static EventGroupHandle_t _event_group;
 esp_timer_handle_t periodic_timer;
 
-DMA_ATTR uint8_t     txBuf0[1024];
-DMA_ATTR uint8_t     rxBuf0[1024];
-DMA_ATTR uint8_t     txBuf1[1024];
-DMA_ATTR uint8_t     rxBuf1[1024];
-static spi_transaction_t transaction[2];
+DMA_ATTR uint8_t     txBuf0[1024] = {0};
+DMA_ATTR uint8_t     rxBuf0[1024] = {0};
+DMA_ATTR uint8_t     txBuf1[1024] = {0};
+DMA_ATTR uint8_t     rxBuf1[1024] = {0};
+
+typedef struct {
+    uint8_t dev;
+    uint8_t remainingTrans;
+} USER_TRANSACTION;
+
+static USER_TRANSACTION     g_transUser[2];
+static spi_transaction_t    transaction[2][2];
 
 
 static void _spi_pre_transfer_callback(spi_transaction_t *t)
@@ -64,10 +71,11 @@ static void _spi_pre_transfer_callback(spi_transaction_t *t)
 
 static void _spi_post_transfer_callback(spi_transaction_t *t)
 {
-    int devMask = (int)t->user;
-    //INFO("_spi_post_transfer_callback\n");
+    USER_TRANSACTION*   pUser = (USER_TRANSACTION*)t;
 
-    xEventGroupSetBits(_event_group, devMask);
+    if (pUser->remainingTrans) {
+        xEventGroupSetBits(_event_group, 1 << pUser->dev);
+    }
 }
 
 static spi_device_handle_t spi_dev[2];
@@ -111,7 +119,7 @@ static bool _init(void)
     return true;
 }
 
-bool    SPI_txStart(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void* rxBuf, size_t rxSize)
+static bool _addDevice(uint8_t dev, uint8_t ch)
 {
     esp_err_t   ret;
 
@@ -123,14 +131,6 @@ bool    SPI_txStart(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void* r
         .post_cb = _spi_post_transfer_callback,
     };
 
-    if (dev >= 2) {
-        return false;
-    }
-
-    if (ch >= 8) {
-        return false;
-    }
-
     devcfg.spics_io_num = _csPins[dev][ch];
 
     ret = spi_bus_add_device(_spiHosts[dev], &devcfg, &spi_dev[dev]);
@@ -139,14 +139,39 @@ bool    SPI_txStart(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void* r
         return false;
     }
 
-    transaction[dev].length = 8 * txSize;
-    transaction[dev].rxlength = 8 * rxSize;
-    transaction[dev].flags = 0;
-    transaction[dev].tx_buffer = txBuf;
-    transaction[dev].rx_buffer = rxBuf;
-    transaction[dev].user = (void*)(1<<dev);
+    return true;
+}
 
-    ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev], portMAX_DELAY);
+bool    SPI_txAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize)
+{
+    esp_err_t   ret;
+
+    if (dev >= 2) {
+        return false;
+    }
+
+    if (ch >= 8) {
+        return false;
+    }
+
+    _addDevice(dev, ch);
+
+    transaction[dev][0].length = 8 * txSize;
+    transaction[dev][0].rxlength = 0;
+    transaction[dev][0].flags = 0;
+    transaction[dev][0].tx_buffer = txBuf;
+    transaction[dev][0].rx_buffer = NULL;
+    transaction[dev][0].user = &g_transUser[0];
+    g_transUser[0].dev = dev;
+    g_transUser[0].remainingTrans = 0;
+
+    ret = spi_device_acquire_bus(spi_dev[dev], portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_acquire_bus %d %x\n", dev, ret);
+        return false;
+    }
+
+    ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev][0], portMAX_DELAY);
     if (ESP_OK != ret) {
         ERROR("spi_device_queue_trans %d:%d %x\n", dev, ch, ret);
         return false;
@@ -155,22 +180,132 @@ bool    SPI_txStart(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void* r
     return true;
 }
 
-bool    SPI_waitForCompletion(uint8_t dev)
+
+bool    SPI_txrxAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void* rxBuf, size_t rxSize)
 {
     esp_err_t   ret;
-    spi_transaction_t* pTransaction;
 
-    int bits = xEventGroupWaitBits(_event_group, (1<<dev), 1, 1, portMAX_DELAY);
+    if (dev >= 2) {
+        return false;
+    }
 
-    if (bits != (1<<dev)) {
+    if (ch >= 8) {
+        return false;
+    }
+
+    _addDevice(dev, ch);
+
+    transaction[dev][0].length = 8 * txSize;
+    transaction[dev][0].rxlength = 0;
+    transaction[dev][0].flags = SPI_TRANS_CS_KEEP_ACTIVE;
+    transaction[dev][0].tx_buffer = txBuf;
+    transaction[dev][0].rx_buffer = NULL;
+    transaction[dev][0].user = &g_transUser[0];
+
+    g_transUser[0].dev = dev;
+    g_transUser[0].remainingTrans = 1;
+
+/*
+    transaction[dev][1].length = 8 * txSize;
+    transaction[dev][1].rxlength = 0;
+    transaction[dev][1].flags = 0;
+    transaction[dev][1].tx_buffer = txBuf;
+    transaction[dev][1].rx_buffer = NULL;
+    transaction[dev][1].user = (void*)(1<<dev);
+*/
+
+    transaction[dev][1].length = 8 * rxSize;
+    transaction[dev][1].rxlength = 8 * rxSize;
+    transaction[dev][1].flags = 0;//SPI_TRANS_USE_TXDATA;
+    transaction[dev][1].tx_buffer = txBuf1;
+    transaction[dev][1].rx_buffer = rxBuf;
+    transaction[dev][1].user = (void*)(1<<dev);
+
+    transaction[dev][1].user = &g_transUser[1];
+
+    g_transUser[1].dev = dev;
+    g_transUser[1].remainingTrans = 0;
+
+    ret = spi_device_acquire_bus(spi_dev[dev], portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_acquire_bus %d %x\n", dev, ret);
+        return false;
+    }
+
+//    INFO("spi_device_acquire_bus ok\n");
+
+    ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev][0], portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_queue_trans %d:%d %x\n", dev, ch, ret);
+        return false;
+    }
+
+//    INFO("t0 ok\n");
+
+    ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev][1], portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_queue_trans %d:%d %x\n", dev, ch, ret);
+        return false;
+    }
+
+//    INFO("t1 ok\n");
+    return true;
+}
+
+bool    SPI_waitForCompletion(uint8_t dev, int timeout)
+{
+    esp_err_t   ret;
+    spi_transaction_t*  pTransaction;
+    USER_TRANSACTION*   pUser;
+
+    int bits = xEventGroupWaitBits(_event_group, (1<<dev), 1, 1, timeout);
+
+    if (!(bits & (1<<dev))) {
         ERROR("wait error %x %x\n", bits, 1<<dev);
     }
 
-    ret = spi_device_get_trans_result(spi_dev[dev], &pTransaction, 1000);
+    INFO("wait flag ok\n");
+
+    ret = spi_device_get_trans_result(spi_dev[dev], &pTransaction, portMAX_DELAY);
     if (ESP_OK != ret) {
         ERROR("spi_device_get_trans_result %d %x\n", dev, ret);
         return false;
     }
+    INFO("trans = %x\n", pTransaction);
+
+    pUser = (USER_TRANSACTION*)pTransaction->user;
+    INFO("spi_device_get_trans_result 1 ok. remainint=%d\n", pUser->remainingTrans);
+
+    ret = spi_device_get_trans_result(spi_dev[dev], &pTransaction, portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_get_trans_result %d %x\n", dev, ret);
+        return false;
+    }
+    INFO("trans = %x\n", pTransaction);
+
+    pUser = (USER_TRANSACTION*)pTransaction->user;
+    INFO("spi_device_get_trans_result 2 ok. remainint=%d\n", pUser->remainingTrans);
+
+/*
+    ret = spi_device_get_trans_result(spi_dev[dev], &pTransaction, portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_get_trans_result %d %x\n", dev, ret);
+        return false;
+    }
+
+    INFO("trans = %x\n", pTransaction);
+
+    if (pTransaction) {
+        pUser = (USER_TRANSACTION*)pTransaction->user;
+        INFO("spi_device_get_trans_result 3 ok. remainint=%d\n", pUser->remainingTrans);
+    }
+*/
+
+
+
+    spi_device_release_bus(spi_dev[dev]);
+
+    INFO("spi_device_release_bus ok\n");
 
     ret = spi_bus_remove_device(spi_dev[dev]);
     if (ESP_OK != ret) {
@@ -198,7 +333,6 @@ static bool dbgTx(uint8_t argc, char** argv)
     int64_t time_end;
     uint8_t  dev = 0;
     uint16_t   txSize;
-    uint16_t   rxSize;
 
     if (argc < 3) {
         return false;
@@ -206,11 +340,6 @@ static bool dbgTx(uint8_t argc, char** argv)
 
     dev = strtoul(argv[1], NULL, 10);
     txSize = strtoul(argv[2], NULL, 10);
-    rxSize = txSize;
-
-    if (argc >= 4) {
-        rxSize = strtoul(argv[3], NULL, 10);
-    }
 
     for (i=0; i<txSize; i++) {
         txBuf0[i] = i;
@@ -220,9 +349,9 @@ static bool dbgTx(uint8_t argc, char** argv)
     time_start = esp_timer_get_time();
 
     if (dev & 1) {
-        ret = SPI_txStart(0, 0, txBuf0, txSize, rxBuf0, rxSize);
+        ret = SPI_txAsync(0, 0, txBuf0, txSize);
         if (!ret) {
-            PRINT("SPI_txStart 0 ailed\n");
+            PRINT("SPI_txAsync 0 ailed\n");
             return true;
         }
     }
@@ -230,9 +359,9 @@ static bool dbgTx(uint8_t argc, char** argv)
     time_1 = esp_timer_get_time();
 
     if (dev & 2) {
-        ret = SPI_txStart(1, 0, txBuf1, txSize, rxBuf1, rxSize);
+        ret = SPI_txAsync(1, 0, txBuf1, txSize);
         if (!ret) {
-            PRINT("SPI_txStart 1 failed\n");
+            PRINT("SPI_txAsync 1 failed\n");
             return true;
         }
     }
@@ -242,24 +371,41 @@ static bool dbgTx(uint8_t argc, char** argv)
     txSize = MIN(txSize, 16);
 
     if (dev & 1) {
-        SPI_waitForCompletion(0);
+        SPI_waitForCompletion(0, portMAX_DELAY);
     }
 
     if (dev & 2) {
-        SPI_waitForCompletion(1);
+        SPI_waitForCompletion(1, portMAX_DELAY);
     }
 
     time_end = esp_timer_get_time();
 
     PRINT("timer: %lld %lld %lld\n", time_1 - time_start, time_2 - time_start, time_end - time_start);
 
-    if (dev & 1) {
-        PRINT_BUF("rx0", PRINT_BUF_STYLE_HEX_NL, rxBuf0, txSize);
+    return true;
+}
+
+
+static bool dbgTxRx(uint8_t argc, char** argv)
+{
+    bool       ret;
+    uint8_t  dev = 0;
+    uint16_t   txSize;
+    uint16_t   rxSize;
+
+    if (argc < 4) {
+        return false;
     }
 
-    if (dev & 2) {
-        PRINT_BUF("rx1", PRINT_BUF_STYLE_HEX_NL, rxBuf1, txSize);
-    }
+    dev = strtoul(argv[1], NULL, 10);
+
+    DBG_PRINT_hex2buf(argv[2], txBuf0, &txSize);
+    rxSize = strtoul(argv[3], NULL, 10);
+
+    ret = SPI_txrxAsync(dev, 0, txBuf0, txSize, rxBuf0, rxSize);
+    //SPI_waitForCompletion(dev, portMAX_DELAY);
+
+    PRINT_BUF("rx", PRINT_BUF_STYLE_HEX_NL, rxBuf0, txSize);
 
     return true;
 }
@@ -272,16 +418,9 @@ static bool dbgWait(uint8_t argc, char** argv)
         return false;
     }
 
-    //DBG_PRINT_hex2buf(argv[1], txbuf, &size);
     dev = strtoul(argv[1], NULL, 10);
 
-    if (dev & 1) {
-        SPI_waitForCompletion(0);
-    }
-
-    if (dev & 2) {
-        SPI_waitForCompletion(1);
-    }
+    SPI_waitForCompletion(dev, 100);
 
     return true;
 }
@@ -290,6 +429,7 @@ DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("adc", NULL)
 	    DEBUG_MENU_CMD("status",	NULL,      NULL, dbgStatus)
 	    DEBUG_MENU_CMD("tx",	    NULL,      NULL, dbgTx)
+	    DEBUG_MENU_CMD("txrx",	    NULL,      NULL, dbgTxRx)
 	    DEBUG_MENU_CMD("wait",	    NULL,      NULL, dbgWait)
    DEBUG_MENU_DIR_END
 DEBUG_MENU_END
