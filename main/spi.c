@@ -137,12 +137,25 @@ static bool _init(void)
         return false;
     }
 
+    ret = spi_device_acquire_bus(spi_dev[0], portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_acquire_bus 0 %x\n", ret);
+        return false;
+    }
+
+    ret = spi_device_acquire_bus(spi_dev[1], portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_acquire_bus 1 %x\n", ret);
+        return false;
+    }
+
     for (i=0; i<2; i++) {
         for (j=0; j<8; j++) {
             gpio_set_direction(_csPins[i][j], GPIO_MODE_OUTPUT);
             gpio_set_level(_csPins[i][j], 1);
         }
     }
+
    _event_group = xEventGroupCreate();
 
     return true;
@@ -169,12 +182,6 @@ bool    SPI_txAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize)
     g_transUser[0].dev = dev;
     g_transUser[0].csGpio = _csPins[dev][ch];
     g_transUser[0].remainingTrans = 0;
-
-    ret = spi_device_acquire_bus(spi_dev[dev], portMAX_DELAY);
-    if (ESP_OK != ret) {
-        ERROR("spi_device_acquire_bus %d %x\n", dev, ret);
-        return false;
-    }
 
     ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev][0], portMAX_DELAY);
     if (ESP_OK != ret) {
@@ -218,12 +225,6 @@ bool    SPI_txrxAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void*
     g_transUser[1].csGpio = _csPins[dev][ch];
     g_transUser[1].remainingTrans = 0;
 
-    ret = spi_device_acquire_bus(spi_dev[dev], portMAX_DELAY);
-    if (ESP_OK != ret) {
-        ERROR("spi_device_acquire_bus %d %x\n", dev, ret);
-        return false;
-    }
-
     ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev][0], portMAX_DELAY);
     if (ESP_OK != ret) {
         ERROR("spi_device_queue_trans %d:%d %x\n", dev, ch, ret);
@@ -260,8 +261,6 @@ bool    SPI_waitForCompletion(uint8_t dev, int timeout)
 
         pUser = (USER_TRANSACTION*)pTransaction->user;
     } while (pUser->remainingTrans);
-
-    spi_device_release_bus(spi_dev[dev]);
 
     return true;
 }
@@ -345,7 +344,6 @@ static bool dbgTx(uint8_t argc, char** argv)
     return true;
 }
 
-
 static bool dbgTxRx(uint8_t argc, char** argv)
 {
     uint8_t  dev = 0;
@@ -364,7 +362,7 @@ static bool dbgTxRx(uint8_t argc, char** argv)
     SPI_txrxAsync(dev, 0, txBuf0, txSize, rxBuf0, rxSize);
     SPI_waitForCompletion(dev, portMAX_DELAY);
 
-    PRINT_BUF("rx", PRINT_BUF_STYLE_HEX_NL, rxBuf0, txSize);
+    PRINT_BUF("rx", PRINT_BUF_STYLE_HEX_NL, rxBuf0, rxSize);
 
     return true;
 }
