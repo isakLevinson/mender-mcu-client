@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-void ADCSPI_init(void);
+void ADS1299_init(void);
 
 
 #ifdef __cplusplus

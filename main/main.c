@@ -30,9 +30,10 @@
 #include "wifi.h"
 #include "main.h"
 #include "cli.h"
-#include "adc_spi.h"
+#include "spi.h"
 #include "cmd.h"
 #include "wifi.h"
+#include "ads1299.h"
 
 #define BUF_SIZE    1024
 
@@ -76,8 +77,9 @@ void app_main(void)
     initialise_ble();
 
     CLI_init();
-    ADCSPI_init();
+    SPI_init();
     CMD_init();
+    ADS1299_init();
     
     register_wifi();
 

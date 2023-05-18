@@ -22,12 +22,9 @@
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 
-
-
-
 #include "main.h"
 #include "cli.h"
-#include "adc_spi.h"
+#include "spi.h"
 
 #define PIN_NUM_CLK_0  1
 #define PIN_NUM_MOSI_0 2
@@ -180,7 +177,6 @@ bool    SPI_txAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize)
     return true;
 }
 
-
 bool    SPI_txrxAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void* rxBuf, size_t rxSize)
 {
     esp_err_t   ret;
@@ -221,15 +217,11 @@ bool    SPI_txrxAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void*
         return false;
     }
 
-//    INFO("spi_device_acquire_bus ok\n");
-
     ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev][0], portMAX_DELAY);
     if (ESP_OK != ret) {
         ERROR("spi_device_queue_trans %d:%d %x\n", dev, ch, ret);
         return false;
     }
-
-//    INFO("t0 ok\n");
 
     ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev][1], portMAX_DELAY);
     if (ESP_OK != ret) {
@@ -237,7 +229,6 @@ bool    SPI_txrxAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void*
         return false;
     }
 
-//    INFO("t1 ok\n");
     return true;
 }
 
@@ -253,29 +244,33 @@ bool    SPI_waitForCompletion(uint8_t dev, int timeout)
         ERROR("wait error %x %x\n", bits, 1<<dev);
     }
 
-    INFO("wait flag ok\n");
-
     do {
         ret = spi_device_get_trans_result(spi_dev[dev], &pTransaction, portMAX_DELAY);
         if (ESP_OK != ret) {
             ERROR("spi_device_get_trans_result %d %x\n", dev, ret);
             return false;
         }
-        INFO("trans = %x\n", pTransaction);
 
         pUser = (USER_TRANSACTION*)pTransaction->user;
-        INFO("spi_device_get_trans_result ok. remainint=%d\n", pUser->remainingTrans);
     } while (pUser->remainingTrans);
 
     spi_device_release_bus(spi_dev[dev]);
-
-    INFO("spi_device_release_bus ok\n");
 
     ret = spi_bus_remove_device(spi_dev[dev]);
     if (ESP_OK != ret) {
         ERROR("spi_bus_remove_device %d %x\n", dev, ret);
         return false;
     }
+
+    return true;
+}
+
+bool    SPI_txrx(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void* rxBuf, size_t rxSize)
+{
+    bool    ret;
+
+    ret = SPI_txrxAsync(dev, ch, txBuf, txSize, rxBuf, rxSize);
+    ret = SPI_waitForCompletion(dev, portMAX_DELAY);
 
     return true;
 }
@@ -389,7 +384,7 @@ static bool dbgWait(uint8_t argc, char** argv)
 }
 
 DEBUG_MENU_START(g_menu)
-    DEBUG_MENU_DIR("adc", NULL)
+    DEBUG_MENU_DIR("spi", NULL)
 	    DEBUG_MENU_CMD("status",	NULL,      NULL, dbgStatus)
 	    DEBUG_MENU_CMD("tx",	    NULL,      NULL, dbgTx)
 	    DEBUG_MENU_CMD("txrx",	    NULL,      NULL, dbgTxRx)
@@ -398,7 +393,7 @@ DEBUG_MENU_START(g_menu)
 DEBUG_MENU_END
 
 
-void ADCSPI_init(void)
+void SPI_init(void)
 {
     DBG_TREE_add("/", g_menu);
 
