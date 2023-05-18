@@ -136,6 +136,12 @@ static bool _addDevice(uint8_t dev, uint8_t ch)
         return false;
     }
 
+    ret = spi_device_acquire_bus(spi_dev[dev], portMAX_DELAY);
+    if (ESP_OK != ret) {
+        ERROR("spi_device_acquire_bus %d %x\n", dev, ret);
+        return false;
+    }
+
     return true;
 }
 
@@ -161,12 +167,6 @@ bool    SPI_txAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize)
     transaction[dev][0].user = &g_transUser[0];
     g_transUser[0].dev = dev;
     g_transUser[0].remainingTrans = 0;
-
-    ret = spi_device_acquire_bus(spi_dev[dev], portMAX_DELAY);
-    if (ESP_OK != ret) {
-        ERROR("spi_device_acquire_bus %d %x\n", dev, ret);
-        return false;
-    }
 
     ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev][0], portMAX_DELAY);
     if (ESP_OK != ret) {
@@ -210,12 +210,6 @@ bool    SPI_txrxAsync(uint8_t dev, uint8_t ch, void* txBuf, size_t txSize, void*
     transaction[dev][1].user = &g_transUser[1];
     g_transUser[1].dev = dev;
     g_transUser[1].remainingTrans = 0;
-
-    ret = spi_device_acquire_bus(spi_dev[dev], portMAX_DELAY);
-    if (ESP_OK != ret) {
-        ERROR("spi_device_acquire_bus %d %x\n", dev, ret);
-        return false;
-    }
 
     ret = spi_device_queue_trans(spi_dev[dev], &transaction[dev][0], portMAX_DELAY);
     if (ESP_OK != ret) {
