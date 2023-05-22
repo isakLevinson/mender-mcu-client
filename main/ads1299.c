@@ -32,13 +32,19 @@
 #define CMD_RESET   0x06
 #define CMD_START   0x08
 #define CMD_STOP    0x0a
-#define CMD_RDATAC  x010
-#define CMD_SDATAC  x011
+#define CMD_RDATAC  0x10
+#define CMD_SDATAC  0x11
 #define CMD_RDATA   0x12
 #define CMD_RREG    0x20
 #define CMD_WREG    0x40
 
 static const uint8_t _enPins[4] = {47, 48, 21, 26};
+
+static void _initDevice(int dev, int ch)
+{
+    ADS1299_cmd(dev, ch, CMD_RESET);
+    ADS1299_cmd(dev, ch, CMD_SDATAC);
+}
 
 static void _init(void)
 {
@@ -49,7 +55,6 @@ static void _init(void)
         gpio_set_level(_enPins[i], 1);
     }
 }
-
 
 bool ADS1299_cmd(uint8_t dev, uint8_t ch, uint8_t cmd)
 {
@@ -186,8 +191,52 @@ static bool dbgWr(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgId(uint8_t argc, char** argv)
+{
+    bool    ret;
+
+    uint8_t dev = 0;
+    uint8_t ch = 0;
+    uint8_t     regs[2];
+
+    ret = ADS1299_regRd(dev, ch, 0, regs, 1);
+
+    switch (BITFIELD_GET(regs[0], 2, 2)	) {
+        case 3:     PRINT("ADS1299-x\n");   break;
+        default:    PRINT("unexpected device %x\n", regs[0]);   break;
+    }
+
+    switch (BITFIELD_GET(regs[0], 0, 2)	) {
+        case 0:     PRINT("ADS1299-4\n");   break;
+        case 1:     PRINT("ADS1299-6\n");   break;
+        case 2:     PRINT("ADS1299 (8ch)\n");   break;
+        default:    PRINT("unexpected device %x\n", regs[0]);   break;
+    }
+
+    if (!ret) {
+        PRINT("ADS1299_regRd failed\n");
+    }
+
+    return true;
+}
+
+
+static bool dbgInit(uint8_t argc, char** argv)
+{
+    bool    ret;
+
+    uint8_t dev = 0;
+    uint8_t ch = 0;
+
+    _initDevice(dev, ch);
+
+    return true;
+}
+
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("ads1299", NULL)
+	    DEBUG_MENU_CMD("init",      NULL,      NULL, dbgInit)
+	    DEBUG_MENU_CMD("id",        NULL,      NULL, dbgId)
 	    DEBUG_MENU_CMD("cmd",       NULL,      NULL, dbgCmd)
 	    DEBUG_MENU_CMD("r",	        NULL,      NULL, dbgRd)
 	    DEBUG_MENU_CMD("w",	        NULL,      NULL, dbgWr)
