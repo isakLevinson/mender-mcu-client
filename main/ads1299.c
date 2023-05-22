@@ -59,7 +59,6 @@ static void _init(void)
 bool ADS1299_cmd(uint8_t dev, uint8_t ch, uint8_t cmd)
 {
     bool    ret;
-    uint8_t i;
 
     ret = SPI_tx( dev, ch, &cmd, 1);
 
@@ -102,7 +101,7 @@ bool ADS1299_regWr(uint8_t dev, uint8_t ch, uint8_t startReg, uint8_t* regs, uin
         txBuf[2+i] = regs[i];
     }
 
-    ret = SPI_tx( dev, ch, txBuf, count + 2);
+    ret = SPI_tx(dev, ch, txBuf, count + 2);
 
     return ret;
 }
@@ -111,16 +110,25 @@ static bool dbgCmd(uint8_t argc, char** argv)
 {
     bool    ret;
 
-    uint8_t dev = 0;
-    uint8_t ch = 0;
-    uint8_t cmd;
+    uint32_t dev = 0;
+    uint32_t ch = 0;
+    uint32_t cmd;
 
     if (argc < 2) {
         return false;
     }
 
-    cmd     = strtoul(argv[1], NULL, 16);
-    
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("d",		ARGS_TYPE_UINT32,	false, "spi",	        &dev)
+		ARGS_ENTRY("c",		ARGS_TYPE_UINT32,	false, "channel",   	&ch)
+    	ARGS_ENTRY(NULL,	ARGS_TYPE_UINT32,	false, "command",    	&cmd)
+    ARGS_ENTRY_END()
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (false == ret) {
+		return false;
+	}
+
     ret = ADS1299_cmd(dev, ch, cmd);
 
     if (!ret) {
@@ -134,18 +142,23 @@ static bool dbgRd(uint8_t argc, char** argv)
 {
     bool    ret;
 
-    uint8_t dev = 0;
-    uint8_t ch = 0;
-    uint8_t reg;
-    uint8_t count;
+    uint32_t dev = 0;
+    uint32_t ch = 0;
+    uint32_t reg = 0;
+    uint32_t count = 1;
     uint8_t regs[32];
 
-    if (argc < 3) {
-        return false;
-    }
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("d",		ARGS_TYPE_UINT32,	false, "spi",	        &dev)
+		ARGS_ENTRY("c",		ARGS_TYPE_UINT32,	false, "channel",   	&ch)
+    	ARGS_ENTRY("n",		ARGS_TYPE_UINT32,	false, "count", 	    &count)
+    	ARGS_ENTRY(NULL,	ARGS_TYPE_UINT32,	false, "starting reg", 	&reg)
+    ARGS_ENTRY_END()
 
-    reg     = strtoul(argv[1], NULL, 16);
-    count   = strtoul(argv[2], NULL, 16);
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (false == ret) {
+		return false;
+	}
 
     ret = ADS1299_regRd(dev, ch, reg, regs, count);
 
@@ -165,24 +178,28 @@ static bool dbgWr(uint8_t argc, char** argv)
 
     uint8_t dev = 0;
     uint8_t ch = 0;
-    uint8_t reg;
-    uint8_t count = 0;
     uint8_t regs[32];
-    uint8_t i;
     
+	ARG_TYPE_ARRAY	arrRegs = {
+		.array = regs,
+	};
 
-    if (argc < 3) {
-        return false;
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("d",		ARGS_TYPE_UINT32,	    false, "spi",	        &dev)
+		ARGS_ENTRY("c",		ARGS_TYPE_UINT32,	    false, "channel",   	&ch)
+    	ARGS_ENTRY(NULL,	ARGS_TYPE_ARRAY_HEX8,	false, "starting reg", 	&arrRegs)
+    ARGS_ENTRY_END()
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (false == ret) {
+		return false;
+	}
+    
+    if (arrRegs.size < 2) {
+        PRINT("invalid args\n");
     }
 
-    reg     = strtoul(argv[1], NULL, 16);
-    
-    for (i=2; i<argc; i++) {
-        regs[count] = strtoul(argv[i], NULL, 16);
-        count++;
-    }
-
-    ret = ADS1299_regWr(dev, ch, reg, regs, count);
+    ret = ADS1299_regWr(dev, ch, regs[0], regs+1, arrRegs.size - 1);
 
     if (!ret) {
         PRINT("ADS1299_regRd failed\n");
@@ -195,9 +212,19 @@ static bool dbgId(uint8_t argc, char** argv)
 {
     bool    ret;
 
-    uint8_t dev = 0;
-    uint8_t ch = 0;
-    uint8_t     regs[2];
+    uint32_t dev = 0;
+    uint32_t ch = 0;
+    uint8_t  regs[2];
+
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("d",		ARGS_TYPE_UINT32,	false, "spi",	    &dev)
+		ARGS_ENTRY("c",		ARGS_TYPE_UINT32,	false, "channel",	&ch)
+    ARGS_ENTRY_END()
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (false == ret) {
+		return false;
+	}
 
     ret = ADS1299_regRd(dev, ch, 0, regs, 1);
 
@@ -225,8 +252,18 @@ static bool dbgInit(uint8_t argc, char** argv)
 {
     bool    ret;
 
-    uint8_t dev = 0;
-    uint8_t ch = 0;
+    uint32_t dev = 0;
+    uint32_t ch = 0;
+
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("d",		ARGS_TYPE_UINT32,	false, "spi",	        &dev)
+		ARGS_ENTRY("c",		ARGS_TYPE_UINT32,	false, "channel",   	&ch)
+    ARGS_ENTRY_END()
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (false == ret) {
+		return false;
+	}
 
     _initDevice(dev, ch);
 
@@ -235,10 +272,10 @@ static bool dbgInit(uint8_t argc, char** argv)
 
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("ads1299", NULL)
-	    DEBUG_MENU_CMD("init",      NULL,      NULL, dbgInit)
-	    DEBUG_MENU_CMD("id",        NULL,      NULL, dbgId)
-	    DEBUG_MENU_CMD("cmd",       NULL,      NULL, dbgCmd)
-	    DEBUG_MENU_CMD("r",	        NULL,      NULL, dbgRd)
+	    DEBUG_MENU_ARG("init",      NULL,      NULL, dbgInit)
+	    DEBUG_MENU_ARG("id",        NULL,      NULL, dbgId)
+	    DEBUG_MENU_ARG("cmd",       NULL,      NULL, dbgCmd)
+	    DEBUG_MENU_ARG("r",	        NULL,      NULL, dbgRd)
 	    DEBUG_MENU_CMD("w",	        NULL,      NULL, dbgWr)
    DEBUG_MENU_DIR_END
 DEBUG_MENU_END

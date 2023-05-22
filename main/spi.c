@@ -107,7 +107,7 @@ static bool _init(void)
     };
 
     spi_device_interface_config_t devcfg = {
-        .clock_speed_hz=10*1000*100,//20*1000*1000,           // Clock out
+        .clock_speed_hz = 20*1000*100,//20*1000*1000,           // Clock out
         .mode = 1,                              // SPI mode
         .queue_size = 7,                        // We want to be able to queue 7 transactions at a time
         .pre_cb = _spi_pre_transfer_callback,
