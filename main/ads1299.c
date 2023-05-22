@@ -38,6 +38,28 @@
 #define CMD_RREG    0x20
 #define CMD_WREG    0x40
 
+static const uint8_t _enPins[4] = {47, 48, 21, 26};
+
+static void _init(void)
+{
+    int i;
+ 
+    for (i=0; i<4; i++) {
+        gpio_set_direction(_enPins[i], GPIO_MODE_OUTPUT);
+        gpio_set_level(_enPins[i], 1);
+    }
+}
+
+
+bool ADS1299_cmd(uint8_t dev, uint8_t ch, uint8_t cmd)
+{
+    bool    ret;
+    uint8_t i;
+
+    ret = SPI_tx( dev, ch, &cmd, 1);
+
+    return ret;
+}
 
 bool ADS1299_regRd(uint8_t dev, uint8_t ch, uint8_t startReg, uint8_t* regs, uint8_t count)
 {
@@ -80,13 +102,26 @@ bool ADS1299_regWr(uint8_t dev, uint8_t ch, uint8_t startReg, uint8_t* regs, uin
     return ret;
 }
 
-static void _init(void)
+static bool dbgCmd(uint8_t argc, char** argv)
 {
-}
+    bool    ret;
 
-static bool dbgStatus(uint8_t argc, char** argv)
-{
-    PRINT("status\n");
+    uint8_t dev = 0;
+    uint8_t ch = 0;
+    uint8_t cmd;
+
+    if (argc < 2) {
+        return false;
+    }
+
+    cmd     = strtoul(argv[1], NULL, 16);
+    
+    ret = ADS1299_cmd(dev, ch, cmd);
+
+    if (!ret) {
+        PRINT("ADS1299_cmd failed\n");
+    }
+
     return true;
 }
 
@@ -153,9 +188,9 @@ static bool dbgWr(uint8_t argc, char** argv)
 
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("ads1299", NULL)
-	    DEBUG_MENU_CMD("status",	NULL,      NULL, dbgStatus)
-	    DEBUG_MENU_CMD("rd",	    NULL,      NULL, dbgRd)
-	    DEBUG_MENU_CMD("wr",	    NULL,      NULL, dbgWr)
+	    DEBUG_MENU_CMD("cmd",       NULL,      NULL, dbgCmd)
+	    DEBUG_MENU_CMD("r",	        NULL,      NULL, dbgRd)
+	    DEBUG_MENU_CMD("w",	        NULL,      NULL, dbgWr)
    DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 

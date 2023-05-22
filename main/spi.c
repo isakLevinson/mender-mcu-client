@@ -107,12 +107,12 @@ static bool _init(void)
     };
 
     spi_device_interface_config_t devcfg = {
-        .clock_speed_hz=10*1000*1000,          // Clock out at 10 MHz
-        .mode=0,                               // SPI mode 0
-        .queue_size = 7,                       // We want to be able to queue 7 transactions at a time
-        .pre_cb = _spi_pre_transfer_callback,  // Specify pre-transfer callback to handle D/C line
+        .clock_speed_hz=4*1000*100,//20*1000*1000,           // Clock out
+        .mode = 1,                              // SPI mode
+        .queue_size = 7,                        // We want to be able to queue 7 transactions at a time
+        .pre_cb = _spi_pre_transfer_callback,
         .post_cb = _spi_post_transfer_callback,
-        .spics_io_num = -1,
+        .spics_io_num = -1,                     // no automatic cs
     };
 
     ret = spi_bus_initialize(_spiHosts[0], &buscfg0, SPI_DMA_CH_AUTO); // SPI_DMA_DISABLED
