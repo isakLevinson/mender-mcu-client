@@ -78,7 +78,7 @@ void app_main(void)
 
     CLI_init();
     SPI_init();
-    CMD_init();
+    CMD_init(NULL);
     ADS1299_init();
     
     register_wifi();

@@ -284,7 +284,7 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     _socket_close(&socket_listen_stream);
 }
 
-static void task_listener(void)
+static void cmd_tcp_server(void)
 {
     esp_err_t ret = ESP_OK;
     int err = 0;
@@ -312,23 +312,15 @@ static void task_listener(void)
         return;
     }
 
-    INFO("#0\n");
-
     listen_addr4.sin_family = AF_INET;
-    listen_addr4.sin_port = htons(5000);
-
-    INFO("#1\n");
+    listen_addr4.sin_port = htons(TCP_CMD_PORT);
 
     pChannel->ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     ESP_GOTO_ON_FALSE((pChannel->ListenSocket >= 0), ESP_FAIL, exit, TAG, "Unable to create socket: errno %d\n", errno);
 
-    INFO("#2\n");
-
     setsockopt(pChannel->ListenSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     INFO("listen socket created\n");
-
-    INFO("#3\n");
 
     err = bind(pChannel->ListenSocket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
     ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Socket unable to bind: errno %d, IPPROTO: %d\n", errno, AF_INET);
@@ -414,7 +406,7 @@ static void task_server(void *arg)
             continue;
         }
 
-        task_listener();
+        cmd_tcp_server();
         ip = wifi_getSelfIp();
     }
 
