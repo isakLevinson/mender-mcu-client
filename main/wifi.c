@@ -392,7 +392,7 @@ static void cmd_tcp_server(void)
             //s_iperf_ctrl.finish = true;
             break;
         } else {
-            INFO_BUF("recv",	PRINT_BUF_STYLE_HEX_SIZE_NL, buffer, actual_recv);
+            TRACE_BUF("recv",	PRINT_BUF_STYLE_HEX_SIZE_NL, buffer, actual_recv);
             for (i = 0; i < actual_recv; i++) {
                 CMD_parseByte(&cmdContext, buffer[i]);
             }

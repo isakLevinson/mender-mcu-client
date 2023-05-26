@@ -156,9 +156,22 @@ static struct {
 	uint8_t			In_Message_Data[CMD_INCOMING_MESSAGE_MAX_SIZE];
 } g_cmdDb;
 
+#if SIMULATION_MODE
+	static uint8_t			_regsShadow[4][8][32];
+	static const uint8_t	_regsDefault[32] = {0x3e, 0x96, 0xc0, 0x60, 0x00, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61};
+#endif
+
 
 static bool _init(void)
 {
+#if SIMULATION_MODE
+	for (int i=0; i<4; i++) {
+		for (int j=0; j<8; j++) {
+			memcpy(&_regsShadow[i][j], _regsDefault, 32);
+		}
+	}
+#endif
+
     return true;
 }
 
@@ -221,14 +234,116 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 
 static bool	_req_REG_WRITE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_REG_WRITE* i_pReq, uint16_t size)
 {
-    INFO("REG_WRITE\n");
+    bool    retVal = true;
+   	CMD_RSPBUF_REG_WRITE	rsp;
+
+	int spi			= (i_pReq->spiAndChannel >> 2) & 0x03;
+	int ch		    = (i_pReq->spiAndChannel >> 4) & 0x0f;
+	uint8_t	count   = size - sizeof(*i_pReq);
+
+	if (size < 3) {
+		ERROR("invalid size %d\n", size);
+		goto error;
+	}
+
+    // TODO: MAX_SPIs_PER_DEVICE
+	if (spi >= 4) {
+		ERROR("invalid spi %d\n", spi);
+		goto error;
+	}
+
+    // TODO: MAX_MODULES_PER_SPI
+	if (ch >= 8) {
+		ERROR("invalid ch %d\n", ch);
+		goto error;
+	}
+
+	INFO("REG_WRITE %d %d %d: ", spi, ch, i_pReq->typeAndAddress);
+	INFO_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pReq->data, count);
+
+#if SIMULATION_MODE
+	memcpy(&_regsShadow[spi][ch][i_pReq->typeAndAddress], i_pReq->data, count);
+#else
+    //ADS1299_cmd(SDATAC);
+    //ADS1299_regWrd 
+#endif
+
+	rsp.spiAndChannel	= i_pReq->spiAndChannel;
+	rsp.typeAndAddress	= i_pReq->typeAndAddress;
+	rsp.regs			= count;
+	goto ok;
+
+error:
+	rsp.regs			= 0;
+	ERROR("_req_REG_WRITE_func\n");
+	retVal = false;
+
+ok:
+	_sendResp(i_pContext, CMD_RSP_REG_WRITE, &rsp, sizeof(rsp));
+
+	return retVal;
+
+
     return true;
 }
 
 static bool	_req_REG_READ_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_REG_READ* i_pReq, uint16_t size)
 {
-    INFO("REG_READ\n");
-    return true;
+    bool    retVal = true;
+   	CMD_DECLARE_RSP_BUF(REG_READ, 32);
+	int spi		= (i_pReq->spiAndChannel >> 2) & 0x03;
+	int ch		= (i_pReq->spiAndChannel >> 4) & 0x0f;
+	int start	= i_pReq->firstReg & 0x1f;
+	int count	= i_pReq->count;
+    uint8_t	buf[32];
+    int i;
+
+	if (size < 3) {
+		ERROR("invalid size %d\n", size);
+		goto error;
+	}
+
+    //MAX_SPIs_PER_DEVICE
+	if (spi >= 4) {
+		ERROR("invalid spi %d\n", spi);
+		goto error;
+	}
+
+    // MAX_MODULES_PER_SPI
+	if (ch >= 8) {
+		ERROR("invalid ch %d\n", ch);
+		goto error;
+	}
+
+#if SIMULATION_MODE
+	memcpy(buf, &_regsShadow[spi][ch][start], count);
+	INFO("REG_READ %d %d %d: ", spi, ch, start);
+	INFO_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, count);
+#else
+    //ADS1299_cmd(SDATAC);
+    //ADS1299_regRd
+#endif
+
+	// Prepare Result Message Data To Send
+	pRsp->spiAndChannel	= i_pReq->spiAndChannel;
+	pRsp->firstReg		= i_pReq->firstReg;
+
+	// Copy Registers Values That We Read From Sensor
+	for (i = 0 ; i < count ; i++) {
+		pRsp->data[i] = buf[i];
+	}
+
+	goto ok;
+
+error:
+	count = 0;
+	ERROR("_req_REG_READ_func\n");
+	retVal = false;
+
+ok:
+	_sendResp(i_pContext, CMD_RSP_REG_READ, pRsp, sizeof(*pRsp) + count);
+
+	return retVal;
 }
 
 static bool	_req_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START* i_pReq, uint16_t size)
@@ -239,7 +354,18 @@ static bool	_req_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START* i_pReq, u
 
 static bool	_req_TURN_ON_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TURN_ON* i_pReq, uint16_t size)
 {
+	CMD_RSPBUF_TURN_OFF	rsp;
+
     INFO("TURN_ON\n");
+
+    // TODO: do actual power on
+
+	vTaskDelay(100);
+
+    rsp.notMeasuring = 1;
+
+	_sendResp(i_pContext, CMD_RSP_TURN_ON, &rsp, sizeof(rsp));
+
     return true;
 }
 
@@ -251,7 +377,25 @@ static bool	_req_TURN_OFF_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TURN_OFF* i_p
 
 static bool	_req_RESET_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_RESET* i_pReq, uint16_t size)
 {
-    INFO("RESET\n");
+	CMD_RSPBUF_RESET	rsp = {0};
+
+	INFO("RESET\n");
+
+#if !SIMULATION_MODE
+	// Check That We Are Not During Meassure
+	if (!Measurement_Details.isActive) {
+		// We Are Not During Meassure ==> Set Response Value
+		rsp.notMeasuring = 1;
+
+		ADS_resetAll(0);
+		ADS_resetAll(1);
+		ADS_resetAll(2);
+		ADS_resetAll(3);
+	}
+#endif
+
+	_sendResp(i_pContext, CMD_RSP_RESET, &rsp, sizeof(rsp));
+
     return true;
 }
 
@@ -400,11 +544,11 @@ bool  CMD_init(CMD_CONTEXT* i_pDefaultContext)
 	DBG_TREE_add("/", g_menu);
 
 #if SIMULATION_MODE
-	for (int i=0; i<4; i++) {
-		for (int j=0; j<8; j++) {
-			memcpy(&_regsShadow[i][j], _regsDefault, 32);
-		}
-	}
+//	for (int i=0; i<4; i++) {
+//		for (int j=0; j<8; j++) {
+//			memcpy(&_regsShadow[i][j], _regsDefault, 32);
+//		}
+//	}
 #endif
 
 	if (i_pDefaultContext) {
