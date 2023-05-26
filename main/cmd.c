@@ -6,7 +6,6 @@
 #include "dbgPrint.h"
 #include "parseArgs.h"
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,9 +42,6 @@
 											uint8_t		hwMinor;	\
 											uint32_t	ip;			\
 											uint32_t	guid[3];)	\
-
-
-#if 0
 	req(REG_WRITE,					0x11,	uint8_t		spiAndChannel;	\
 											uint8_t		typeAndAddress;	\
 											uint8_t		data[];)		\
@@ -78,13 +74,12 @@
 											uint64_t	currentTime1;		\
 											uint64_t	currentTime2;)		\
 	req(IMU_START,					0x58,	uint8_t		ascale;				/* 0-2G, 1-16G, 2-4G, 3-8G */					\
-											uint8_t		gscale)				/* 0-250dps, 1-500dps, 2-1000dps, 3-2000dps */	\
+											uint8_t		gscale;)			/* 0-250dps, 1-500dps, 2-1000dps, 3-2000dps */	\
 	rsp(IMU_START,					0x58,	uint8_t		ascale;				/* 0-2G, 1-16G, 2-4G, 3-8G */					\
-											uint8_t		gscale)				/* 0-250dps, 1-500dps, 2-1000dps, 3-2000dps */	\
+											uint8_t		gscale;)			/* 0-250dps, 1-500dps, 2-1000dps, 3-2000dps */	\
 	rsp(NTP,						0x59,	uint64_t	sysTime;			\
 											uint64_t	ntpTime;)			\
 
-#endif
 
 // *INDENT-ON*
 
@@ -224,7 +219,65 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 	return true;
 }
 
+static bool	_req_REG_WRITE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_REG_WRITE* i_pReq, uint16_t size)
+{
+    INFO("REG_WRITE\n");
+    return true;
+}
 
+static bool	_req_REG_READ_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_REG_READ* i_pReq, uint16_t size)
+{
+    INFO("REG_READ\n");
+    return true;
+}
+
+static bool	_req_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START* i_pReq, uint16_t size)
+{
+    INFO("START\n");
+    return true;
+}
+
+static bool	_req_TURN_ON_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TURN_ON* i_pReq, uint16_t size)
+{
+    INFO("TURN_ON\n");
+    return true;
+}
+
+static bool	_req_TURN_OFF_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TURN_OFF* i_pReq, uint16_t size)
+{
+    INFO("TURN_OFF\n");
+    return true;
+}
+
+static bool	_req_RESET_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_RESET* i_pReq, uint16_t size)
+{
+    INFO("RESET\n");
+    return true;
+}
+
+static bool	_req_SPI_SPEED_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SPI_SPEED* i_pReq, uint16_t size)
+{
+    INFO("SPI_SPEED\n");
+    return true;
+}
+
+static bool	_req_SYNC_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SYNC_START* i_pReq, uint16_t size)
+{
+    INFO("SYNC_START\n");
+    return true;
+}
+
+static bool	_req_TIME_SYNC_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TIME_SYNC* i_pReq, uint16_t size)
+{
+    INFO("TIME_SYNC\n");
+    return true;
+}
+
+static bool	_req_IMU_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_IMU_START* i_pReq, uint16_t size)
+{
+    INFO("IMU_START\n");
+    return true;
+}
 
 static bool _isValidMsgType(uint8_t type)
 {
