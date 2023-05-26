@@ -39,8 +39,7 @@
 #include "cmd_wifi.h"
 #include "nvs.h"
 #include "wifi.h"
-
-typedef bool (*CMD_RESPONSE_CB)(void* pArg, void* i_pBuf);
+#include "cmd.h"
 
 #define   WIFI_MAX_SSID_LENGTH    32
 #define   WIFI_MAX_PASSWD_LENGTH  32
@@ -48,7 +47,7 @@ typedef bool (*CMD_RESPONSE_CB)(void* pArg, void* i_pBuf);
 typedef struct {
     int    Socket;
     int    ListenSocket;
-    int     uart;
+    int    uart;
 } CHANNEL;
 
 CHANNEL g_channel;
@@ -284,12 +283,36 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     _socket_close(&socket_listen_stream);
 }
 
+static bool _tcpSend(int socket, COMM_TYPE type, void* i_pBuf, uint8_t size)
+{
+	uint8_t	buf[300];
+	uint8_t*	pBuf = buf;
+
+	*pBuf	= START_MESSAGE_CHARACTER;
+	pBuf++;
+	*pBuf	= type;
+	pBuf++;
+	*pBuf	= size;
+	pBuf++;
+
+	memcpy(pBuf, i_pBuf, size);
+	pBuf += size;
+
+	//INFO_BUF("tx header", PRINT_BUF_STYLE_HEX_SIZE_NL, header, sizeof(header));
+	//INFO_BUF("tx data  ", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+	TRACE_BUF("_cmdSend", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf - buf);
+
+    send(socket, buf, pBuf - buf, 0);
+
+	return true;
+}
+
+
 static void cmd_tcp_server(void)
 {
     esp_err_t ret = ESP_OK;
     int err = 0;
     CHANNEL* pChannel = &g_channel;
-
     esp_netif_ip_info_t ip;
     struct sockaddr_in listen_addr4 = { 0 };
     struct sockaddr_storage listen_addr = { 0 };
@@ -325,8 +348,6 @@ static void cmd_tcp_server(void)
     err = bind(pChannel->ListenSocket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
     ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Socket unable to bind: errno %d, IPPROTO: %d\n", errno, AF_INET);
 
-    INFO("#4\n");
-
     err = listen(pChannel->ListenSocket, 5);
     ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Error occurred during listen: errno %d\n", errno);
     memcpy(&listen_addr, &listen_addr4, sizeof(listen_addr4));
@@ -355,6 +376,13 @@ static void cmd_tcp_server(void)
     buffer = g_wifi.recvBuf;
     want_recv = sizeof(g_wifi.recvBuf);
     while (true) {
+        int i;
+
+        CMD_CONTEXT	cmdContext = {
+            .p_cbSend	= _tcpSend,
+            .socket		= pChannel->Socket,
+        };
+
         actual_recv = recvfrom(pChannel->Socket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
         if (actual_recv < 0) {
             //iperf_show_socket_error_reason(error_log, recv_socket);
@@ -365,6 +393,10 @@ static void cmd_tcp_server(void)
             break;
         } else {
             INFO_BUF("recv",	PRINT_BUF_STYLE_HEX_SIZE_NL, buffer, actual_recv);
+            for (i = 0; i < actual_recv; i++) {
+                CMD_parseByte(&cmdContext, buffer[i]);
+            }
+
         }
     }
 
@@ -587,7 +619,7 @@ static bool dbgScan(uint8_t argc, char **argv)
     return true;
 }
 
-static bool dbgQuery(uint8_t argc, char **argv)
+static bool dbgStatus(uint8_t argc, char **argv)
 {
     wifi_config_t cfg;
     wifi_mode_t mode;
@@ -726,10 +758,10 @@ static bool dbgNvs(uint8_t argc, char **argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("wifi", NULL)
-		DEBUG_MENU_CMD("apn",	NULL,		NULL, dbgConnect)
-		DEBUG_MENU_CMD("scan",	NULL,		NULL, dbgScan)
-		DEBUG_MENU_CMD("query",	NULL,		NULL, dbgQuery)
-		DEBUG_MENU_CMD("nvs",	NULL,		NULL, dbgNvs)
+		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
+		DEBUG_MENU_CMD("apn",	    NULL,		NULL, dbgConnect)
+		DEBUG_MENU_CMD("scan",	    NULL,		NULL, dbgScan)
+		DEBUG_MENU_CMD("nvs",	    NULL,		NULL, dbgNvs)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

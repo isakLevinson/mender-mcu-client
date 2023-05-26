@@ -30,10 +30,6 @@
 #include "cli.h"
 
 
-#define START_MESSAGE_CHARACTER			0x55
-
-
-
 
 // *INDENT-OFF*
 
@@ -189,11 +185,11 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 		return false;
 	}
 
-	if (NULL == pContext->pArg) {
+	if (!pContext->socket) {
 		return false;
 	}
 
-	pContext->p_cbSend(pContext->pArg, msgType, i_pBuf, size);
+	pContext->p_cbSend(pContext->socket, msgType, i_pBuf, size);
 
     return true;
 }
@@ -204,6 +200,8 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
     //esp_err_t   ret;
 	CMD_RSPBUF_VER	rsp;
     //esp_flash_t chip;
+
+    INFO("VER\n");
 
 	rsp.swMagor	= SOFTWARE_MAJOR_VERSION;
 	rsp.swMinor	= SOFTWARE_MINOR_VERSION;
@@ -279,84 +277,58 @@ void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 
 void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 {
-	// Check If We Are Waiting For Message "Start" Character ,According To State
-	if (g_cmdDb.state == CMD_STATE_WAIT_FOR_START) {
-		// We Are Waiting For Message "Start" Character ,According To State ==> Compare New Byte Recieved To "Start Message Character"
-		if (data == START_MESSAGE_CHARACTER) {
-			// Get Start Of Message Character ==> Prefrom Init To "Communication Manager"
-			_parsingInit();
+    switch (g_cmdDb.state) {
+        case CMD_STATE_WAIT_FOR_START:
+            if (data == START_MESSAGE_CHARACTER) {
+                _parsingInit();
+                g_cmdDb.state = CMD_STATE_WAIT_FOR_TYPE;
+            }
+        break;
 
-			// Set Communication Manager Relevant State
-			g_cmdDb.state = CMD_STATE_WAIT_FOR_TYPE;
-		}
-	}
-	// Check According To State If We Are Waiting To Get Message Type
-	else if (g_cmdDb.state == CMD_STATE_WAIT_FOR_START) {
-		// We Are Waiting To Get Message Type ==> Check If We Get Valid Message Type
-		if (_isValidMsgType(data)) {
-			TRACE("valid type %02x\n", data);
-			// We Get Valid Message Type ==> Save Message Type Recieved
-			g_cmdDb.In_Message_Type = (COMM_TYPE)data;
+        case CMD_STATE_WAIT_FOR_TYPE:
+            if (_isValidMsgType(data)) {
+                TRACE("valid type %02x\n", data);
+                g_cmdDb.In_Message_Type = (COMM_TYPE)data;
+                g_cmdDb.state = CMD_STATE_WAIT_FOR_LENGTH;
+            }
+            else {
+                WARN("invalid msg type %02x\n", data);
+                _parsingInit();
+            }
+        break;
 
-			// Set Communication Manager Relevant State
-			g_cmdDb.state = CMD_STATE_WAIT_FOR_LENGTH;
-		}
-		// Get Invalid Message Type ==> Prefrom Init To Communication Manager
-		else {
-			WARN("invalid msg type %02x\n", data);
-			_parsingInit();
-		}
-	}
-	// Check According To State If We Are Waiting To Get Message Length
-	else if (g_cmdDb.state == CMD_STATE_WAIT_FOR_LENGTH) {
-		TRACE("length %02x\n", data);
+        case CMD_STATE_WAIT_FOR_LENGTH:
+            TRACE("length %02x\n", data);
 
-		//We Are Waiting To Get Message Length ==> Check If Recieved Message Length Is "0"
-		if (data == 0) {
-			// Recieved Message Length Is "0" ==> Process New Message Recieved
-			CMD_processMessage(i_pContext, g_cmdDb.In_Message_Type, g_cmdDb.In_Message_Data, g_cmdDb.In_Message_Length);
+            if (data == 0) {
+                CMD_processMessage(i_pContext, g_cmdDb.In_Message_Type, g_cmdDb.In_Message_Data, g_cmdDb.In_Message_Length);
+                _parsingInit();
+            } else if (data < CMD_INCOMING_MESSAGE_MAX_SIZE) {
+                g_cmdDb.In_Message_Length   = data;
+                g_cmdDb.state       = CMD_STATE_WAIT_FOR_DATA;
+                g_cmdDb.Total_Byte_Recieved = 0;
+            } else {
+                _parsingInit();
+            }
+        break;
 
-			// Prefrom Init To Communication Manager (Prepare To get Next Message)
-			_parsingInit();
-		}
-		// Getting Message Length Greater Than "0" ==> Do Validation On Message Length (Avoid Of Too Long Message)
-		else if (data < CMD_INCOMING_MESSAGE_MAX_SIZE) {
-			// Getting Valid Message Length ==> Save Recieved Message Length,And Set Relevant State
-			g_cmdDb.In_Message_Length   = data;
-			g_cmdDb.state       = CMD_STATE_WAIT_FOR_DATA;
-			g_cmdDb.Total_Byte_Recieved = 0;
-		}
-		// Getting Too Big Message Length  ==> Prefrom Init To Communication Manager
-		else {
-			_parsingInit();
-		}
-	}
+        case CMD_STATE_WAIT_FOR_DATA:
+            TRACE("data %02x[%02x] of %02x\n", data, g_cmdDb.Total_Byte_Recieved, g_cmdDb.In_Message_Length);
 
-	// Check According To State If We Are Waiting To Get Message Data
-	else if (g_cmdDb.state == CMD_STATE_WAIT_FOR_DATA) {
-		TRACE("data %02x[%02x] of %02x\n", data, g_cmdDb.Total_Byte_Recieved, g_cmdDb.In_Message_Length);
+            g_cmdDb.In_Message_Data[g_cmdDb.Total_Byte_Recieved] = data;
+            g_cmdDb.Total_Byte_Recieved++;
 
-		// We Are Waiting To Get Message Data ==> Save New Meessage Data Recieved ,And Increase Message Length
-		g_cmdDb.In_Message_Data[g_cmdDb.Total_Byte_Recieved] = data;
-		g_cmdDb.Total_Byte_Recieved++;
+            if (g_cmdDb.Total_Byte_Recieved >= g_cmdDb.In_Message_Length) {
+                TRACE("CMD_processMessage\n");
+                CMD_processMessage(i_pContext, g_cmdDb.In_Message_Type, g_cmdDb.In_Message_Data, g_cmdDb.In_Message_Length);
+                _parsingInit();
+            }
+        break;
 
-		// Check According To Message Length If We Finish To Get The Whole Message
-		if (g_cmdDb.Total_Byte_Recieved >= g_cmdDb.In_Message_Length) {
-			TRACE("CMD_processMessage\n");
-			// We Finish To Get The Whole Message ==> Process New Message Recieved
-			CMD_processMessage(i_pContext, g_cmdDb.In_Message_Type, g_cmdDb.In_Message_Data, g_cmdDb.In_Message_Length);
-
-			// Prefrom Init To Communication Manager (Prepare To get Next Message)
-			_init();
-		}
-	}
-	// Communication Manager Have Invalid State ==> Prefrom Init
-	else {
-		_init();
-	}
+        default:
+            _parsingInit();
+    }
 }
-
-
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
