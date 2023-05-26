@@ -420,6 +420,17 @@ static bool	_req_TIME_SYNC_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TIME_SYNC* i
 static bool	_req_IMU_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_IMU_START* i_pReq, uint16_t size)
 {
     INFO("IMU_START\n");
+ 
+ 	CMD_RSPBUF_IMU_START	rsp;
+
+	INFO("IMU_START\n");
+
+    // TODO: actual values
+	rsp.ascale	= 10;
+	rsp.gscale	= 10;
+
+	_sendResp(i_pContext, CMD_RSP_IMU_START, &rsp, sizeof(rsp));
+
     return true;
 }
 
