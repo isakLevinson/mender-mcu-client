@@ -72,11 +72,11 @@ void app_main(void)
     ESP_ERROR_CHECK( ret );
 
     uart_init();
+    CLI_init();
 
     initialise_wifi();
     initialise_ble();
 
-    CLI_init();
     SPI_init();
     CMD_init(NULL);
     ADS1299_init();

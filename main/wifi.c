@@ -47,7 +47,6 @@
 typedef struct {
     int    Socket;
     int    ListenSocket;
-    int    uart;
 } CHANNEL;
 
 CHANNEL g_channel;
@@ -97,7 +96,8 @@ static esp_netif_t *netif_sta = NULL;
 static EventGroupHandle_t wifi_event_group;
 const int FLAG_CONNECTED  = BIT0;
 const int FLAG_DISCONNECT = BIT1;
-const int FLAG_GOT_IP     = BIT2;
+const int FLAG_GOT_IP_1   = BIT2;
+const int FLAG_GOT_IP_2   = BIT3;
 
 #define NVS_NAMESPACE_WIFI      "wifi"
 #define NVS_KEY_WIFI_SSID       "ssid"
@@ -253,7 +253,8 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
     INFO("got_ip_handler\n");
     xEventGroupClearBits(wifi_event_group, FLAG_DISCONNECT);
     xEventGroupSetBits(wifi_event_group, FLAG_CONNECTED);
-    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP);
+    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_1);
+    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_2);
 
     wifi_nvs_set_ssid(g_wifi.currentSsid, g_wifi.currentPasswd);
 }
@@ -277,7 +278,8 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     xEventGroupClearBits(wifi_event_group, FLAG_CONNECTED);
     xEventGroupSetBits(wifi_event_group, FLAG_DISCONNECT);
 
-    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP);
+    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_1);
+    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_2);
 
     _socket_close(&socket_listen_cmd);
     _socket_close(&socket_listen_stream);
@@ -352,8 +354,6 @@ static void cmd_tcp_server(void)
     ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Error occurred during listen: errno %d\n", errno);
     memcpy(&listen_addr, &listen_addr4, sizeof(listen_addr4));
 
- //   INFO("listen on:"IPSTR, IP2STR(&listen_addr4));
-
     INFO("listen on addr %d.%d.%d.%d\n",
              listen_addr4.sin_addr.s_addr & 0xFF,
              (listen_addr4.sin_addr.s_addr >> 8) & 0xFF,
@@ -364,10 +364,6 @@ static void cmd_tcp_server(void)
     ESP_GOTO_ON_FALSE((pChannel->Socket >= 0), ESP_FAIL, exit, TAG, "Unable to accept connection: errno %d\n", errno);
     INFO("accept %s,%d\n\n", inet_ntoa(remote_addr.sin_addr), htons(remote_addr.sin_port));
 
-    //timeout.tv_sec = IPERF_SOCKET_RX_TIMEOUT;
-    //setsockopt(*pSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-
-/////////////////////////////////////////////////
     uint8_t *buffer;
     int want_recv = 0;
     int actual_recv = 0;
@@ -385,11 +381,7 @@ static void cmd_tcp_server(void)
 
         actual_recv = recvfrom(pChannel->Socket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
         if (actual_recv < 0) {
-            //iperf_show_socket_error_reason(error_log, recv_socket);
-            //WARN("error, error code: %d, reason: %s\n", error_log, strerror(error_log));
             WARN("recv error, error code: %d\n", actual_recv);
-
-            //s_iperf_ctrl.finish = true;
             break;
         } else {
             TRACE_BUF("recv",	PRINT_BUF_STYLE_HEX_SIZE_NL, buffer, actual_recv);
@@ -403,8 +395,6 @@ static void cmd_tcp_server(void)
 exit:
     if (pChannel->Socket != -1) {
         INFO("client socket closed.\n");
-        //close(pChannel->pSocket);
-        //pChannel->pSocket = -1;
         _socket_close(&pChannel->Socket);
     }
 
@@ -418,16 +408,71 @@ exit:
     }
 }
 
-static void task_server(void *arg)
+static void cmd_udp_server(void)
+{
+    esp_err_t ret = ESP_OK;
+    int err = 0;
+    CHANNEL* pChannel = &g_channel;
+    esp_netif_ip_info_t ip;
+    struct sockaddr_in listen_addr4 = { 0 };
+    struct sockaddr_storage listen_addr = { 0 };
+    struct sockaddr_in remote_addr;
+    int actual_recv = 0;
+    socklen_t addr_len = sizeof(struct sockaddr);
+    int opt = 1;
+    int    s;
+    uint8_t buf[64];
+    socklen_t socklen = sizeof(struct sockaddr_in);
+
+    INFO("UDP listener loop started\n");
+
+    listen_addr4.sin_family = AF_INET;
+    listen_addr4.sin_port = htons(UDP_CMD_PORT);
+
+    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
+        INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
+        INFO("MASK:" IPSTR "\n", IP2STR(&ip.netmask));
+        INFO("GW:" IPSTR "\n", IP2STR(&ip.gw));
+
+        listen_addr4.sin_addr.s_addr = ip.ip.addr;
+
+    } else {
+        ERROR("esp_netif_get_ip_info failed\n");
+        return;
+    }
+
+    s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    err = bind(s, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
+
+    while (true) {
+        actual_recv = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&listen_addr, &socklen);
+        if (actual_recv < 0) {
+            WARN("recv error, error code: %d\n", actual_recv);
+            break;
+        } else {
+            TRACE_BUF("recv",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, actual_recv);
+        }
+    }
+
+//exit:
+    if (s != -1) {
+        INFO("client socket closed.\n");
+        close(s);
+    }
+}
+
+static void task_TcpServer(void *arg)
 {
     esp_ip4_addr_t  ip  = {0};
+
+    INFO("TCP started\n");
 
     while(true) {
         if (!ip.addr) {
             INFO("waiting for FLAG_GOT_IP\n");
-            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP, 1, 1, 1000);
+            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_1, 1, 1, 1000);
 
-            if (bits & FLAG_GOT_IP) {
+            if (bits & FLAG_GOT_IP_1) {
                 INFO("got FLAG_GOT_IP\n");
                 ip = wifi_getSelfIp();
                 INFO("got ip=%08x\n", ip.addr);
@@ -445,13 +490,48 @@ static void task_server(void *arg)
     vTaskDelete(NULL);
 }
 
+static void task_UdpServer(void *arg)
+{
+    esp_ip4_addr_t  ip  = {0};
+
+    INFO("UDP started\n");
+
+    while(true) {
+        if (!ip.addr) {
+            INFO("waiting for FLAG_GOT_IP\n");
+            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_2, 1, 1, 1000);
+
+            if (bits & FLAG_GOT_IP_2) {
+                INFO("got FLAG_GOT_IP\n");
+                ip = wifi_getSelfIp();
+                INFO("got ip=%08x\n", ip.addr);
+            }
+        }
+    
+        if (!ip.addr) {
+            continue;
+        }
+
+        cmd_udp_server();
+        ip = wifi_getSelfIp();
+    }
+
+    vTaskDelete(NULL);
+}
+
 static int _startServer(void)
 {
     BaseType_t ret;
 
-    INFO("starting listener task\n");
+    INFO("starting listener tasks\n");
 
-    ret = xTaskCreate(task_server, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL);
+    ret = xTaskCreate(task_TcpServer, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL);
+    if (ret != pdPASS) {
+        ERROR("create task %s failed\n", IPERF_TRAFFIC_TASK_NAME);
+        return ESP_FAIL;
+    }
+
+    ret = xTaskCreate(task_UdpServer, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL);
     if (ret != pdPASS) {
         ERROR("create task %s failed\n", IPERF_TRAFFIC_TASK_NAME);
         return ESP_FAIL;
