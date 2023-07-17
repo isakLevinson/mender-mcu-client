@@ -45,13 +45,6 @@
 #define   WIFI_MAX_PASSWD_LENGTH  32
 
 typedef struct {
-    int    Socket;
-    int    ListenSocket;
-} CHANNEL;
-
-CHANNEL g_channel;
-
-typedef struct {
     struct arg_str *ip;
     struct arg_lit *server;
     struct arg_lit *udp;
@@ -285,7 +278,7 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     _socket_close(&socket_listen_stream);
 }
 
-static bool _tcpSend(int socket, COMM_TYPE type, void* i_pBuf, uint8_t size)
+static bool _sockSend(int socket, COMM_TYPE type, void* i_pBuf, uint8_t size)
 {
 	uint8_t	buf[300];
 	uint8_t*	pBuf = buf;
@@ -309,12 +302,10 @@ static bool _tcpSend(int socket, COMM_TYPE type, void* i_pBuf, uint8_t size)
 	return true;
 }
 
-
 static void cmd_tcp_server(void)
 {
     esp_err_t ret = ESP_OK;
     int err = 0;
-    CHANNEL* pChannel = &g_channel;
     esp_netif_ip_info_t ip;
     struct sockaddr_in listen_addr4 = { 0 };
     struct sockaddr_storage listen_addr = { 0 };
@@ -322,6 +313,8 @@ static void cmd_tcp_server(void)
     //struct timeval timeout = { 0 };
     socklen_t addr_len = sizeof(struct sockaddr);
     int opt = 1;
+    int s;
+    int listenS;
 
     INFO("listener loop started\n");
 
@@ -340,17 +333,17 @@ static void cmd_tcp_server(void)
     listen_addr4.sin_family = AF_INET;
     listen_addr4.sin_port = htons(TCP_CMD_PORT);
 
-    pChannel->ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    ESP_GOTO_ON_FALSE((pChannel->ListenSocket >= 0), ESP_FAIL, exit, TAG, "Unable to create socket: errno %d\n", errno);
+    listenS = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ESP_GOTO_ON_FALSE((listenS >= 0), ESP_FAIL, exit, TAG, "Unable to create socket: errno %d\n", errno);
 
-    setsockopt(pChannel->ListenSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(listenS, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     INFO("listen socket created\n");
 
-    err = bind(pChannel->ListenSocket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
+    err = bind(listenS, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
     ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Socket unable to bind: errno %d, IPPROTO: %d\n", errno, AF_INET);
 
-    err = listen(pChannel->ListenSocket, 5);
+    err = listen(listenS, 5);
     ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Error occurred during listen: errno %d\n", errno);
     memcpy(&listen_addr, &listen_addr4, sizeof(listen_addr4));
 
@@ -360,8 +353,8 @@ static void cmd_tcp_server(void)
              (listen_addr4.sin_addr.s_addr >> 16) & 0xFF,
              (listen_addr4.sin_addr.s_addr >> 24) & 0xFF);
 
-    pChannel->Socket = accept(pChannel->ListenSocket, (struct sockaddr *)&remote_addr, &addr_len);
-    ESP_GOTO_ON_FALSE((pChannel->Socket >= 0), ESP_FAIL, exit, TAG, "Unable to accept connection: errno %d\n", errno);
+    s = accept(listenS, (struct sockaddr *)&remote_addr, &addr_len);
+    ESP_GOTO_ON_FALSE((s >= 0), ESP_FAIL, exit, TAG, "Unable to accept connection: errno %d\n", errno);
     INFO("accept %s,%d\n\n", inet_ntoa(remote_addr.sin_addr), htons(remote_addr.sin_port));
 
     uint8_t *buffer;
@@ -375,31 +368,30 @@ static void cmd_tcp_server(void)
         int i;
 
         CMD_CONTEXT	cmdContext = {
-            .p_cbSend	= _tcpSend,
-            .socket		= pChannel->Socket,
+            .p_cbSend	= _sockSend,
+            .socket		= s,
         };
 
-        actual_recv = recvfrom(pChannel->Socket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
+        actual_recv = recvfrom(s, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
         if (actual_recv < 0) {
             WARN("recv error, error code: %d\n", actual_recv);
             break;
         } else {
-            TRACE_BUF("recv",	PRINT_BUF_STYLE_HEX_SIZE_NL, buffer, actual_recv);
+            TRACE_BUF("tcp recv",	PRINT_BUF_STYLE_HEX_SIZE_NL, buffer, actual_recv);
             for (i = 0; i < actual_recv; i++) {
                 CMD_parseByte(&cmdContext, buffer[i]);
             }
-
         }
     }
 
 exit:
-    if (pChannel->Socket != -1) {
+    if (s != -1) {
         INFO("client socket closed.\n");
-        _socket_close(&pChannel->Socket);
+        _socket_close(&s);
     }
 
-    if (pChannel->ListenSocket != -1) {
-        _socket_close(&pChannel->ListenSocket);
+    if (listenS != -1) {
+        _socket_close(&listenS);
         INFO("listener socket closed.\n");
     }
 
@@ -410,16 +402,10 @@ exit:
 
 static void cmd_udp_server(void)
 {
-    esp_err_t ret = ESP_OK;
-    int err = 0;
-    CHANNEL* pChannel = &g_channel;
     esp_netif_ip_info_t ip;
     struct sockaddr_in listen_addr4 = { 0 };
     struct sockaddr_storage listen_addr = { 0 };
-    struct sockaddr_in remote_addr;
     int actual_recv = 0;
-    socklen_t addr_len = sizeof(struct sockaddr);
-    int opt = 1;
     int    s;
     uint8_t buf[64];
     socklen_t socklen = sizeof(struct sockaddr_in);
@@ -442,15 +428,25 @@ static void cmd_udp_server(void)
     }
 
     s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    err = bind(s, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
+    bind(s, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
 
     while (true) {
+        CMD_CONTEXT	cmdContext = {
+            .p_cbSend	= _sockSend,
+            .socket		= s,
+        };
+
         actual_recv = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&listen_addr, &socklen);
         if (actual_recv < 0) {
             WARN("recv error, error code: %d\n", actual_recv);
             break;
         } else {
-            TRACE_BUF("recv",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, actual_recv);
+            TRACE_BUF("udp recv", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, actual_recv);
+
+            if (actual_recv >= 1) {
+                uint8_t cmd = buf[0];
+                CMD_processMessage(&cmdContext, cmd, buf+1, actual_recv-1);
+            }
         }
     }
 
@@ -655,30 +651,6 @@ esp_ip4_addr_t  wifi_getSelfIp(void)
     esp_netif_get_ip_info(netif_sta, &ip);
 
     return ip.ip;
-}
-
-static uint32_t wifi_get_local_ip(void)
-{
-    int bits;
-    esp_netif_t *netif = netif_ap;
-    esp_netif_ip_info_t ip_info;
-    wifi_mode_t mode;
-
-    esp_wifi_get_mode(&mode);
-//    INFO("wifi_get_local_ip mode=%d\n", mode);
-    if (WIFI_MODE_STA == mode) {
-        bits = xEventGroupWaitBits(wifi_event_group, FLAG_CONNECTED, 0, 1, 100);
-        if (bits & FLAG_CONNECTED) {
-            INFO("FLAG_CONNECTED ip=%08x\n", ip_info.ip.addr);
-            netif = netif_sta;
-        } else {
-            ERROR("sta has no IP\n");
-            return 0;
-        }
-    }
-
-    esp_netif_get_ip_info(netif, &ip_info);
-    return ip_info.ip.addr;
 }
 
 static bool dbgConnect(uint8_t argc, char** argv)

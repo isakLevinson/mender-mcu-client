@@ -451,7 +451,6 @@ static void _parsingInit(void)
 	g_cmdDb.Total_Byte_Recieved = 0;
 }
 
-
 void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, uint16_t size)
 {
 	bool	retVal = false;
