@@ -15,6 +15,8 @@
 #include "iperf.h"
 
 #include "driver/uart.h"
+#include "esp_timer.h"
+
 #include "main.h"
 
 #include "cli.h"
@@ -69,6 +71,10 @@ static void _free(void* i_pBuf)
 	free(i_pBuf);
 }
 
+int64_t _getTime(void)
+{
+	return esp_timer_get_time();
+}
 
 static void _task(void *arg)
 {
@@ -99,7 +105,13 @@ bool CLI_getc(char* o_pChar)
 
 static bool dbgVer(uint8_t argc, char** argv)
 {
-    PRINT("ver\n");
+    PRINT("ver %d %d %d %d %d \n",
+		SOFTWARE_MAJOR_VERSION,
+		SOFTWARE_MINOR_VERSION,
+		SOFTWARE_PATCH_VERSION,
+		HARDWARE_MAJOR_VERSION,
+		HARDWARE_MINOR_VERSION);
+
     return true;
 }
 
@@ -113,13 +125,13 @@ bool	CLI_init(void)
 		.cbPuts				= _puts,
 		.cbMutexGet			=_mutexGet,
 		.cbMutexRelease		= _mutexPost,
-		.cbGetTime64		= NULL,
+		.cbGetTime64		= _getTime,
 	};
 
 	DBG_MENU_CONFIG cfg = {
 		.eol		= '\r',
 		.ignore		= '\n',
-		.pPrompt	= "\\w\\$ ",
+		.pPrompt	= PROMPT " \\w\\$ ",
 		.pfAlloc	= _alloc,
 		.pfFree		= _free,
 	};

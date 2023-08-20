@@ -9,14 +9,14 @@
 #include <string.h>
 #include "memory.h"
 
-#define VERSION     "0.1"
-#define _PROMPT     "esp"
+#define VERSION    "0.1"
+#define PROMPT     "eeg"
 
 #define SIMULATION_MODE     true
 
 #define SOFTWARE_MAJOR_VERSION			7
 #define SOFTWARE_MINOR_VERSION			0
-#define SOFTWARE_PATCH_VERSION			251
+#define SOFTWARE_PATCH_VERSION			1
 #define HARDWARE_MAJOR_VERSION			5
 #define HARDWARE_MINOR_VERSION			0
 

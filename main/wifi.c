@@ -413,7 +413,7 @@ static void cmd_udp_server(void)
     INFO("UDP listener loop started\n");
 
     listen_addr4.sin_family = AF_INET;
-    listen_addr4.sin_port = htons(UDP_CMD_PORT);
+    listen_addr4.sin_port = htons(UDP_SERVER_PORT);
 
     if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
         INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
@@ -482,8 +482,6 @@ static void task_TcpServer(void *arg)
         cmd_tcp_server();
         ip = wifi_getSelfIp();
     }
-
-    vTaskDelete(NULL);
 }
 
 static void task_UdpServer(void *arg)
@@ -494,13 +492,12 @@ static void task_UdpServer(void *arg)
 
     while(true) {
         if (!ip.addr) {
-            INFO("waiting for FLAG_GOT_IP\n");
+            INFO("UDP waiting for FLAG_GOT_IP\n");
             int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_2, 1, 1, 1000);
 
             if (bits & FLAG_GOT_IP_2) {
-                INFO("got FLAG_GOT_IP\n");
                 ip = wifi_getSelfIp();
-                INFO("got ip=%08x\n", ip.addr);
+                INFO("UDP got ip=%08x\n", ip.addr);
             }
         }
     
@@ -821,5 +818,5 @@ DEBUG_MENU_END
 
 void register_wifi(void)
 {
-	DBG_TREE_add("/\n", g_menu);
+	DBG_TREE_add("/", g_menu);
 }

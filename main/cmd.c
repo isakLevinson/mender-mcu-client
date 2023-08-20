@@ -16,7 +16,6 @@
 
 #include "esp_event.h"
 #include "esp_check.h"
-
 #include "soc/soc_caps.h"
 #include "driver/gpio.h"
 #include "driver/uart.h"
@@ -27,8 +26,8 @@
 #include "main.h"
 #include "cmd.h"
 #include "cli.h"
-
-
+#include "time.h"
+#include "wifi.h"
 
 // *INDENT-OFF*
 
@@ -69,10 +68,10 @@
 	rsp(SPI_SPEED,					0x53,	uint8_t		isOk;)				\
 	req(SYNC_START,					0x56,	;)							\
 	rsp(SYNC_START,					0x56,	uint8_t		dummy;)				\
-	req(TIME_SYNC,					0x57,	uint64_t	time;)				\
-	rsp(TIME_SYNC,					0x57,	uint64_t	requestTime;		\
-											uint64_t	currentTime1;		\
-											uint64_t	currentTime2;)		\
+	req(TIME_SYNC,					0x57,	int64_t		time;)				\
+	rsp(TIME_SYNC,					0x57,	int64_t		requestTime;		\
+											int64_t		currentTime1;		\
+											int64_t		currentTime2;)		\
 	req(IMU_START,					0x58,	uint8_t		ascale;				/* 0-2G, 1-16G, 2-4G, 3-8G */					\
 											uint8_t		gscale;)			/* 0-250dps, 1-500dps, 2-1000dps, 3-2000dps */	\
 	rsp(IMU_START,					0x58,	uint8_t		ascale;				/* 0-2G, 1-16G, 2-4G, 3-8G */					\
@@ -156,6 +155,11 @@ static struct {
 	uint8_t			In_Message_Data[CMD_INCOMING_MESSAGE_MAX_SIZE];
 } g_cmdDb;
 
+static int imu_a = 1;
+static int imu_g =1;
+
+
+
 #if SIMULATION_MODE
 	static uint8_t			_regsShadow[4][8][32];
 	static const uint8_t	_regsDefault[32] = {0x3e, 0x96, 0xc0, 0x60, 0x00, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61};
@@ -197,6 +201,8 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 		return false;
 	}
 
+	INFO_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+
 	pContext->p_cbSend(pContext->socket, msgType, i_pBuf, size);
 
     return true;
@@ -207,7 +213,7 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 {
     //esp_err_t   ret;
 	CMD_RSPBUF_VER	rsp;
-    //esp_flash_t chip;
+    esp_ip4_addr_t ip;
 
     INFO("VER\n");
 
@@ -217,8 +223,9 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 	rsp.hwMagor	= HARDWARE_MAJOR_VERSION;
 	rsp.hwMinor	= HARDWARE_MINOR_VERSION;
 	
-    // TODO: use actual IP address
-    rsp.ip = 0x11223344;
+	ip = wifi_getSelfIp();
+    //rsp.ip = ip.addr;
+	rsp.ip = 0x23e1e448;
 	
     // TODO:     use actual GUID
     //esp_err_t esp_flash_init(&chip);
@@ -227,6 +234,14 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 	rsp.guid[1]	= 0x34;
 	rsp.guid[2]	= 0x56;
 
+	INFO("ver:(%x %x %x %x %x) addr=%x\n",
+		rsp.swMagor	= SOFTWARE_MAJOR_VERSION,
+		rsp.swMinor	= SOFTWARE_MINOR_VERSION,
+		rsp.swPatch = SOFTWARE_PATCH_VERSION,
+		rsp.hwMagor	= HARDWARE_MAJOR_VERSION,
+		rsp.hwMinor	= HARDWARE_MINOR_VERSION,
+		rsp.ip);
+
 	_sendResp(i_pContext, CMD_RSP_VER, &rsp, sizeof(rsp));
 
 	return true;
@@ -234,7 +249,7 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 
 static bool	_req_REG_WRITE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_REG_WRITE* i_pReq, uint16_t size)
 {
-    bool    retVal = true;
+    bool    ret = true;
    	CMD_RSPBUF_REG_WRITE	rsp;
 
 	int spi			= (i_pReq->spiAndChannel >> 2) & 0x03;
@@ -264,8 +279,8 @@ static bool	_req_REG_WRITE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_REG_WRITE* i
 #if SIMULATION_MODE
 	memcpy(&_regsShadow[spi][ch][i_pReq->typeAndAddress], i_pReq->data, count);
 #else
-    //ADS1299_cmd(SDATAC);
-    //ADS1299_regWrd 
+    ADS1299_cmd(SDATAC);
+	ret = ADS1299_regWr(spi, ch,  i_pReq->typeAndAddress, i_pReq->data, count);
 #endif
 
 	rsp.spiAndChannel	= i_pReq->spiAndChannel;
@@ -276,20 +291,17 @@ static bool	_req_REG_WRITE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_REG_WRITE* i
 error:
 	rsp.regs			= 0;
 	ERROR("_req_REG_WRITE_func\n");
-	retVal = false;
+	ret = false;
 
 ok:
 	_sendResp(i_pContext, CMD_RSP_REG_WRITE, &rsp, sizeof(rsp));
 
-	return retVal;
-
-
-    return true;
+	return ret;
 }
 
 static bool	_req_REG_READ_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_REG_READ* i_pReq, uint16_t size)
 {
-    bool    retVal = true;
+    bool    ret = true;
    	CMD_DECLARE_RSP_BUF(REG_READ, 32);
 	int spi		= (i_pReq->spiAndChannel >> 2) & 0x03;
 	int ch		= (i_pReq->spiAndChannel >> 4) & 0x0f;
@@ -319,37 +331,77 @@ static bool	_req_REG_READ_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_REG_READ* i_p
 	memcpy(buf, &_regsShadow[spi][ch][start], count);
 	INFO("REG_READ %d %d %d: ", spi, ch, start);
 	INFO_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, count);
+
+	// Copy Registers Values That We Read From Sensor
+	for (i = 0 ; i < count ; i++) {
+		pRsp->data[i] = buf[i];
+	}
 #else
-    //ADS1299_cmd(SDATAC);
-    //ADS1299_regRd
+    ADS1299_cmd(SDATAC);
+    ret = ADS1299_regRd(spi, ch, start, pRsp->data, count);
 #endif
 
 	// Prepare Result Message Data To Send
 	pRsp->spiAndChannel	= i_pReq->spiAndChannel;
 	pRsp->firstReg		= i_pReq->firstReg;
 
-	// Copy Registers Values That We Read From Sensor
-	for (i = 0 ; i < count ; i++) {
-		pRsp->data[i] = buf[i];
-	}
-
 	goto ok;
 
 error:
 	count = 0;
 	ERROR("_req_REG_READ_func\n");
-	retVal = false;
+	ret = false;
 
 ok:
 	_sendResp(i_pContext, CMD_RSP_REG_READ, pRsp, sizeof(*pRsp) + count);
 
-	return retVal;
+	return ret;
+}
+
+static uint8_t _countBits8(uint8_t val)
+{
+	uint8_t bits = 0;
+
+	while (val) {
+		if (val & 1) {
+			bits++;
+		}
+		val >>= 1;
+	}
+	return bits;
 }
 
 static bool	_req_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START* i_pReq, uint16_t size)
 {
-    INFO("START\n");
+   	CMD_RSPBUF_START	rsp;
+
+	INFO("START (%d,%d) int:%d bitmask:%02x %02x %02x %02x\n",
+			i_pReq->isSim,
+			i_pReq->simMode,
+			i_pReq->interval,
+			i_pReq->channelBitmask[0],
+			i_pReq->channelBitmask[1],
+			i_pReq->channelBitmask[2],
+			i_pReq->channelBitmask[3]);
+
+	if (i_pReq->channelBitmask[2]) {
+		ERROR("invalid bitmask [2] %x\n");
+		goto error;
+	}
+
+	if (i_pReq->channelBitmask[3]) {
+		ERROR("invalid bitmask [3] %x\n");
+		goto error;
+	}
+
+	rsp.totalModules  = _countBits8(i_pReq->channelBitmask[0]);
+	rsp.totalModules += _countBits8(i_pReq->channelBitmask[1]);
+	_sendResp(i_pContext, CMD_RSP_START, &rsp, sizeof(rsp));
+
     return true;
+
+	error:
+	return false;
 }
 
 static bool	_req_TURN_ON_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TURN_ON* i_pReq, uint16_t size)
@@ -408,12 +460,28 @@ static bool	_req_SPI_SPEED_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SPI_SPEED* i
 static bool	_req_SYNC_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SYNC_START* i_pReq, uint16_t size)
 {
     INFO("SYNC_START\n");
+	TIME_set64(0);
     return true;
 }
 
 static bool	_req_TIME_SYNC_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TIME_SYNC* i_pReq, uint16_t size)
 {
     INFO("TIME_SYNC\n");
+	int64_t	t1, t2;
+
+
+	CMD_RSPBUF_TIME_SYNC	rsp = {0};
+
+	rsp.requestTime 	= i_pReq->time;
+	TIME_get64(&t1);
+	TIME_get64(&t2);
+
+	rsp.currentTime1 = t1;
+	rsp.currentTime2 = t2;
+
+
+	_sendResp(i_pContext, CMD_RSP_TIME_SYNC, &rsp, sizeof(rsp));
+
     return true;
 }
 
@@ -423,11 +491,11 @@ static bool	_req_IMU_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_IMU_START* i
  
  	CMD_RSPBUF_IMU_START	rsp;
 
-	INFO("IMU_START\n");
+	INFO("IMU_START g=%d a=%d\n", i_pReq->gscale, i_pReq->ascale);
 
     // TODO: actual values
-	rsp.ascale	= 10;
-	rsp.gscale	= 10;
+	rsp.gscale	= i_pReq->gscale;
+	rsp.ascale	= i_pReq->ascale;
 
 	_sendResp(i_pContext, CMD_RSP_IMU_START, &rsp, sizeof(rsp));
 
@@ -468,6 +536,8 @@ void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 		ERROR("invalid context\n");
 		return;
 	}
+
+	TRACE_BUF("cmd",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
 	switch (t) {
 			CMD(CMD_SWITCH, CMD_NONE)
@@ -542,9 +612,23 @@ static bool dbgStatus(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgImuSim(uint8_t argc, char** argv)
+{
+	if (argc < 3) {
+		PRINT("g=%d, a=%d\n", imu_g, imu_a);
+		return true;
+	}
+
+    imu_g = strtoul(argv[1], NULL, 10);
+    imu_a = strtoul(argv[1], NULL, 10);
+
+    return true;
+}
+
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("cmd", NULL)
 	    DEBUG_MENU_CMD("status",		NULL,		NULL, dbgStatus)
+	    DEBUG_MENU_CMD("imuSim",		"<a> <g>",		NULL, dbgImuSim)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 

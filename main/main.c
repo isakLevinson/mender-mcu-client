@@ -34,6 +34,7 @@
 #include "cmd.h"
 #include "wifi.h"
 #include "ads1299.h"
+#include "measure.h"
 
 #define BUF_SIZE    1024
 
@@ -80,6 +81,7 @@ void app_main(void)
     SPI_init();
     CMD_init(NULL);
     ADS1299_init();
+    MEASURE_init();
     
     register_wifi();
 
