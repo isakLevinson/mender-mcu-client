@@ -31,33 +31,82 @@
 #include "main.h"
 #include "cli.h"
 #include "spi.h"
-#include "cmd.h"
+#include "wifi.h"
 #include "ads1299.h"
 #include "measure.h"
+#include "buffer.h"
 
 static struct {
-    TaskHandle_t        pxCreatedTask;
+    TaskHandle_t        hTaskFiller;
+    TaskHandle_t        hTaskSender;
     esp_timer_handle_t  timer;
+
+    bool    isSim;
 
 } g_measure;
 
-static void _task(void *arg)
+static void _taskFillter(void *arg)
 {
     uint32_t	event;
+    BUFFER*     pBuffer;
+    int         count = 0;
+    int         i;
 
     while (true) {
-        //event = osSignalWait(1, 500);
         event = xTaskNotifyWait(0, 0x01, NULL, 5000);
 
         if (event) {
-            TRACE("## %x\n", event);
+            //TRACE("# %x\n", event);
+
+            pBuffer = BUFFER_getHead();
+            if (!pBuffer) {
+                continue;
+            }
+
+            pBuffer->len = 0;
+            pBuffer->len += sprintf((char*)pBuffer->buf+pBuffer->len, "%d, ", count++);
+
+            for (i=0; i<2000; i++) {
+                pBuffer->len += sprintf((char*)pBuffer->buf+pBuffer->len, "#");
+            }
+            pBuffer->len += sprintf((char*)pBuffer->buf+pBuffer->len, "\n");
+
+            BUFFER_push();
+
+            xTaskNotify(g_measure.hTaskSender, 1, eSetBits);
+        }
+    }
+}
+
+static void _taskSender(void *arg)
+{
+    uint32_t	event;
+    BUFFER*     pBuffer;
+
+    while (true) {
+        event = xTaskNotifyWait(0, 0x01, NULL, 5000);
+
+        if (event) {
+            //TRACE("## %x\n", event);
+            do {
+                pBuffer = BUFFER_getTail();
+                if (!pBuffer) {
+                    continue;
+                }
+
+                TRACE("send (%d)[%s]\n", pBuffer->len, pBuffer->buf);
+
+                SER_sendUdp(pBuffer->buf, pBuffer->len);
+
+                BUFFER_pop();
+            } while (pBuffer);
         }
     }
 }
 
 static void _timerCb(void* arg)
 {
-    xTaskNotify(g_measure.pxCreatedTask, 1, eSetBits);
+    xTaskNotify(g_measure.hTaskFiller, 1, eSetBits);
 }
 
 static void _init(void)
@@ -74,22 +123,46 @@ static void _init(void)
         ERROR("esp_timer_create %d\n", ret);
     }
 
-    ret = xTaskCreate(_task, "measure", 4096, NULL, 3, &g_measure.pxCreatedTask);
+    ret = xTaskCreate(_taskFillter, "fillter", 4096, NULL, 3, &g_measure.hTaskFiller);
     if (ret != pdPASS) {
-        ERROR("create task %s failed\n", "measure");
+        ERROR("create task %s failed\n", "filler");
+        return;
+    }
+
+    ret = xTaskCreate(_taskSender, "sender", 4096, NULL, 3, &g_measure.hTaskSender);
+    if (ret != pdPASS) {
+        ERROR("create task %s failed\n", "sender");
         return;
     }
 }
 
-static bool dbgStatus(uint8_t argc, char **argv)
+bool MEASURE_start(int interval, bool isSim)
 {
+    bool    ret;
+
+    g_measure.isSim = isSim;
+
+    if (isSim) {
+        ret = esp_timer_start_periodic(g_measure.timer, interval * 1000);
+        if (ESP_OK != ret) {
+            ERROR("esp_timer_start_periodic %d\n", ret);
+        }
+    }
+
     return true;
 }
 
-static bool dbgTrig(uint8_t argc, char **argv)
+bool MEASURE_stop(void)
 {
-    xTaskNotify( g_measure.pxCreatedTask, 1, eSetBits);
+    if (g_measure.isSim) {
+        esp_timer_stop(g_measure.timer);
+    }
 
+    return true;
+}
+
+static bool dbgStatus(uint8_t argc, char **argv)
+{
     return true;
 }
 
@@ -99,16 +172,24 @@ static bool dbgStart(uint8_t argc, char **argv)
     int     interval;
 
     if (argc < 2) {
-        esp_timer_stop(g_measure.timer);
+        MEASURE_stop();
         return true;
     }
 
     interval = strtol(argv[1], NULL, 10);
+    MEASURE_start(interval, true);
 
-    ret = esp_timer_start_periodic(g_measure.timer, interval * 1000);
-    if (ESP_OK != ret) {
-        ERROR("esp_timer_start_periodic %d\n", ret);
-    }
+    return true;
+}
+
+static bool dbgTx(uint8_t argc, char **argv)
+{
+    uint8_t     buf[64];
+    uint16_t    size = sizeof(buf);
+
+    DBG_PRINT_hex2buf(argv[1], buf, &size);
+
+    SER_sendUdp(buf, size);
 
     return true;
 }
@@ -118,8 +199,8 @@ static bool dbgStart(uint8_t argc, char **argv)
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("measure", NULL)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
-		DEBUG_MENU_CMD("trig",	    NULL,		NULL, dbgTrig)
 		DEBUG_MENU_CMD("start",	    NULL,		NULL, dbgStart)
+		DEBUG_MENU_CMD("tx",	    NULL,		NULL, dbgTx)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
@@ -132,8 +213,6 @@ bool MEASURE_init(void)
 	DBG_TREE_add("/", g_menu);
 
     _init();
-
-
 
     return true;
 }

@@ -4,7 +4,10 @@ idf_component_register(SRCS	"main.c"
 				"gatt_svr.c"
 				"wifi.c"
 				"spi.c"
+				"time.c"
 				"ads1299.c"
+				"measure.c"
+				"buffer.c"
 
 				INCLUDE_DIRS ".")
 

@@ -12,9 +12,19 @@
 extern "C" {
 #endif
 
-bool MEASURE_init(void);
-bool MEASURE_start(int interval, bool isSim);
-bool MEASURE_stop(void);
+#define MAXIMAL_PROCESSING_BUFFERS_COUNT	50
+#define PROCESSING_BUFFER_MAX_SIZE			2200//(2156)
+
+typedef struct {
+   uint16_t len;
+   uint8_t  buf[PROCESSING_BUFFER_MAX_SIZE];
+} BUFFER;
+
+bool     BUFFER_init(void);
+BUFFER*  BUFFER_getHead(void);
+BUFFER*  BUFFER_getTail(void);
+bool     BUFFER_push(void);
+bool     BUFFER_pop(void);
 
 #ifdef __cplusplus
 }

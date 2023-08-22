@@ -65,6 +65,12 @@ static struct {
     uint8_t recvBuf[1024];
 } g_wifi;
 
+static struct {
+    int uspSocket;
+    struct sockaddr_in udp_addr4;
+} g_server;
+
+
 typedef struct {
     struct arg_str *ssid;
     struct arg_str *password;
@@ -75,6 +81,8 @@ typedef struct {
     struct arg_str *ssid;
     struct arg_end *end;
 } wifi_scan_arg_t;
+
+
 
 int socket_cmd = -1;
 int socket_listen_cmd = -1;
@@ -406,7 +414,6 @@ static void cmd_udp_server(void)
     struct sockaddr_in listen_addr4 = { 0 };
     struct sockaddr_storage listen_addr = { 0 };
     int actual_recv = 0;
-    int    s;
     uint8_t buf[64];
     socklen_t socklen = sizeof(struct sockaddr_in);
 
@@ -427,20 +434,24 @@ static void cmd_udp_server(void)
         return;
     }
 
-    s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    bind(s, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
+    g_server.uspSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    bind(g_server.uspSocket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
 
     while (true) {
         CMD_CONTEXT	cmdContext = {
             .p_cbSend	= _sockSend,
-            .socket		= s,
+            .socket		= g_server.uspSocket,
         };
 
-        actual_recv = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&listen_addr, &socklen);
+        //actual_recv = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&listen_addr, &socklen);
+        actual_recv = recvfrom(g_server.uspSocket, buf, sizeof(buf), 0, (struct sockaddr *)&g_server.udp_addr4, &socklen);
+
         if (actual_recv < 0) {
             WARN("recv error, error code: %d\n", actual_recv);
             break;
         } else {
+            //TRACE("ufp from:" IPSTR "\n", IP2STR(&g_server.udp_addr4));
+            TRACE("udp from: %08x\n", g_server.udp_addr4.sin_addr);
             TRACE_BUF("udp recv", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, actual_recv);
 
             if (actual_recv >= 1) {
@@ -451,9 +462,9 @@ static void cmd_udp_server(void)
     }
 
 //exit:
-    if (s != -1) {
+    if (g_server.uspSocket!= -1) {
         INFO("client socket closed.\n");
-        close(s);
+        close(g_server.uspSocket);
     }
 }
 
@@ -531,6 +542,21 @@ static int _startServer(void)
     }
 
     return ESP_OK;
+}
+
+bool    SER_sendUdp(void* i_pBuf, uint16_t len)
+{
+    int sent;
+
+    TRACE_BUF("UDP tx", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, len);
+//    sent = send(g_server.uspSocket, i_pBuf, len, 0);
+    sent = sendto(g_server.uspSocket, i_pBuf, len, 0, (struct sockaddr*)&g_server.udp_addr4, sizeof(g_server.udp_addr4));
+
+    if (len != sent) {
+        TRACE("send %d\n", sent);
+    }
+
+    return true;
 }
 
 void initialise_wifi(void)

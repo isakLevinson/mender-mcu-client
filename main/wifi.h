@@ -18,6 +18,9 @@ esp_ip4_addr_t  wifi_getSelfIp(void);
 bool    wifi_nvs_get_ssid(char* ssid, char* passwd);
 bool    wifi_nvs_set_ssid(char* ssid, char* passwd);
 
+bool    SER_sendUdp(void* i_pBuf, uint16_t len);
+
+
 #ifdef __cplusplus
 }
 #endif
