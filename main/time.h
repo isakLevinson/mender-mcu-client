@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 void	TIME_get64(int64_t* o_pTime);
-void	TIME_get32(void);
+int32_t	TIME_get32(void);
 int64_t	TIME_set64(int64_t time);
 
 #ifdef __cplusplus

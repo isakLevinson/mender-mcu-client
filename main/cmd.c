@@ -78,6 +78,7 @@
 											uint8_t		gscale;)			/* 0-250dps, 1-500dps, 2-1000dps, 3-2000dps */	\
 	rsp(NTP,						0x59,	uint64_t	sysTime;			\
 											uint64_t	ntpTime;)			\
+	req(UDP_ACK,					0x70,	uint32_t	count;)				\
 
 
 // *INDENT-ON*
@@ -501,6 +502,14 @@ static bool	_req_IMU_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_IMU_START* i
 
     return true;
 }
+
+static bool	_req_UDP_ACK_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_UDP_ACK* i_pReq, uint16_t size)
+{
+    INFO("UDP_ACK %d\n", i_pReq->count);
+ 
+    return true;
+}
+
 
 static bool _isValidMsgType(uint8_t type)
 {

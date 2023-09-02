@@ -22,7 +22,7 @@ typedef bool (*CMD_RESPONSE_CB)(int socket, COMM_TYPE Message_Type, void* i_pBuf
 
 typedef struct {
 	CMD_RESPONSE_CB	p_cbSend;
-	int     			socket;
+	int     		socket;
 } CMD_CONTEXT;
 
 bool	CMD_init(CMD_CONTEXT* i_pDefaultContext);

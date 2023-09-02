@@ -35,11 +35,13 @@
 #include "ads1299.h"
 #include "measure.h"
 #include "buffer.h"
+#include "time.h"
 
 static struct {
     TaskHandle_t        hTaskFiller;
     TaskHandle_t        hTaskSender;
     esp_timer_handle_t  timer;
+    uint32_t            count;
 
     bool    isSim;
 
@@ -49,7 +51,6 @@ static void _taskFillter(void *arg)
 {
     uint32_t	event;
     BUFFER*     pBuffer;
-    int         count = 0;
     int         i;
 
     while (true) {
@@ -63,10 +64,16 @@ static void _taskFillter(void *arg)
                 continue;
             }
 
-            pBuffer->len = 0;
-            pBuffer->len += sprintf((char*)pBuffer->buf+pBuffer->len, "%d, ", count++);
+            int32_t t;
 
-            for (i=0; i<2000; i++) {
+            t = TIME_get32();
+
+            pBuffer->len = 0;
+            pBuffer->len += sprintf((char*)pBuffer->buf+pBuffer->len, "%d, %d, ", g_measure.count, t);
+
+            g_measure.count++;
+
+            for (i=0; i<500; i++) {
                 pBuffer->len += sprintf((char*)pBuffer->buf+pBuffer->len, "#");
             }
             pBuffer->len += sprintf((char*)pBuffer->buf+pBuffer->len, "\n");
@@ -141,6 +148,8 @@ bool MEASURE_start(int interval, bool isSim)
     bool    ret;
 
     g_measure.isSim = isSim;
+    g_measure.count = 0;
+    TIME_set64(0);
 
     if (isSim) {
         ret = esp_timer_start_periodic(g_measure.timer, interval * 1000);

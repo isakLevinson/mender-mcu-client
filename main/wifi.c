@@ -548,8 +548,7 @@ bool    SER_sendUdp(void* i_pBuf, uint16_t len)
 {
     int sent;
 
-    TRACE_BUF("UDP tx", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, len);
-//    sent = send(g_server.uspSocket, i_pBuf, len, 0);
+    //TRACE_BUF("UDP tx", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, len);
     sent = sendto(g_server.uspSocket, i_pBuf, len, 0, (struct sockaddr*)&g_server.udp_addr4, sizeof(g_server.udp_addr4));
 
     if (len != sent) {
