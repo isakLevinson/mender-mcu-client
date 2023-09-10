@@ -15,6 +15,7 @@ extern "C" {
 bool MEASURE_init(void);
 bool MEASURE_start(int interval, bool isSim);
 bool MEASURE_stop(void);
+bool MEASURE_udpAck(int id, int count);
 
 #ifdef __cplusplus
 }

@@ -28,6 +28,7 @@
 #include "cli.h"
 #include "time.h"
 #include "wifi.h"
+#include "measure.h"
 
 // *INDENT-OFF*
 
@@ -78,7 +79,8 @@
 											uint8_t		gscale;)			/* 0-250dps, 1-500dps, 2-1000dps, 3-2000dps */	\
 	rsp(NTP,						0x59,	uint64_t	sysTime;			\
 											uint64_t	ntpTime;)			\
-	req(UDP_ACK,					0x70,	uint32_t	count;)				\
+	req(UDP_ACK,					0x70,	uint32_t	id;					\
+											uint8_t		count;)				\
 
 
 // *INDENT-ON*
@@ -214,7 +216,7 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 {
     //esp_err_t   ret;
 	CMD_RSPBUF_VER	rsp;
-    esp_ip4_addr_t ip;
+    //esp_ip4_addr_t ip;
 
     INFO("VER\n");
 
@@ -224,7 +226,7 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 	rsp.hwMagor	= HARDWARE_MAJOR_VERSION;
 	rsp.hwMinor	= HARDWARE_MINOR_VERSION;
 	
-	ip = wifi_getSelfIp();
+	//ip = wifi_getSelfIp();
     //rsp.ip = ip.addr;
 	rsp.ip = 0x23e1e448;
 	
@@ -505,8 +507,10 @@ static bool	_req_IMU_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_IMU_START* i
 
 static bool	_req_UDP_ACK_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_UDP_ACK* i_pReq, uint16_t size)
 {
-    INFO("UDP_ACK %d\n", i_pReq->count);
+//    INFO("UDP_ACK %d\n", i_pReq->count);
  
+	MEASURE_udpAck(i_pReq->id, i_pReq->count);
+
     return true;
 }
 

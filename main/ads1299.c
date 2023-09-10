@@ -106,6 +106,24 @@ bool ADS1299_regWr(uint8_t dev, uint8_t ch, uint8_t startReg, uint8_t* regs, uin
     return ret;
 }
 
+bool ADS1299_dataRd(uint8_t dev, uint8_t ch, uint8_t* o_pBuf, uint16_t size)
+{
+    bool ret;
+
+    ret =  ADS1299_cmd(dev, ch, 0x12); // RDATA
+    if (!ret) {
+        ERROR("dataRd cmd failed\n");
+        return false;
+    }
+
+    ret = SPI_txrxAsync(dev, ch, NULL, 0, o_pBuf, size);
+    if (!ret) {
+        ERROR("dataRd data failed\n");
+        return false;
+    }
+    return true;
+}
+
 static bool dbgCmd(uint8_t argc, char** argv)
 {
     bool    ret;
