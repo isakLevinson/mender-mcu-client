@@ -6,6 +6,7 @@
 extern "C" {
 #endif
 
+void    TIME_getUpdateTime(int64_t* o_pTime);
 void	TIME_get64(int64_t* o_pTime);
 int32_t	TIME_get32(void);
 int64_t	TIME_set64(int64_t time);

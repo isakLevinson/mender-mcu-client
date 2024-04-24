@@ -40,6 +40,7 @@
 #include "nvs.h"
 #include "wifi.h"
 #include "cmd.h"
+#include "time.h"
 
 #define   WIFI_MAX_SSID_LENGTH    32
 #define   WIFI_MAX_PASSWD_LENGTH  32
@@ -450,14 +451,37 @@ static void cmd_udp_server(void)
             WARN("recv error, error code: %d\n", actual_recv);
             break;
         } else {
+            int64_t time;
+            int64_t lastUpdated;
+
+            TIME_get64(&time);
+            TIME_getUpdateTime(&lastUpdated);
+
             //TRACE("ufp from:" IPSTR "\n", IP2STR(&g_server.udp_addr4));
             TRACE("udp from: %08x\n", g_server.udp_addr4.sin_addr);
-            TRACE_BUF("udp recv", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, actual_recv);
+            
+#if 1
+            TRACE_BUF("udp recv", PRINT_BUF_STYLE_ASC_SIZE_NL, buf, actual_recv);
+            buf[actual_recv] = 0;
+           	int64_t t = strtoull((char*)buf, NULL, 10);
+#else
+            INFO_BUF("udp recv", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, actual_recv);
+           	int64_t t = *(uint64_t*)buf;
+#endif
+            int64_t dt = time - t;
+            TIME_set64(t);
 
+            INFO("t:%d.%d dt:%d.%d since:%ds\n",
+                (uint32_t)(t/1000000), (uint32_t)(t%1000000),
+                (uint32_t)(dt/1000), (uint32_t)(dt%1000000),
+                (uint32_t)((time - lastUpdated)/1000000));
+
+#if 0
             if (actual_recv >= 1) {
                 uint8_t cmd = buf[0];
                 CMD_processMessage(&cmdContext, cmd, buf+1, actual_recv-1);
             }
+#endif            
         }
     }
 
@@ -829,13 +853,50 @@ static bool dbgNvs(uint8_t argc, char **argv)
     return true;
 }
 
+static bool dbgBroadcastTime(uint8_t argc, char **argv)
+{
+    int s;
+    struct sockaddr_in dest = { 0 };
+    int opt = 1;
+    int64_t time;
+
+    char buf[32];
+    int     len;
+    int     sent;
+
+    s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (!s) {
+        ERROR("socket error\n");
+    }
+    setsockopt(s, SOL_SOCKET, SO_BROADCAST, &opt, sizeof(opt));
+
+    //bind(s, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
+
+    dest.sin_family = AF_INET;
+    inet_aton("192.168.1.255", &dest.sin_addr);
+    dest.sin_port = htons(5000);
+
+    TIME_get64(&time);
+    len = sprintf(buf, "%d%d", (uint32_t)(time/1000000), (uint32_t)(time%1000000));
+    //ulltoa(time, buf, 10);
+
+    sent = sendto(s, buf, len, 0, (struct sockaddr*)&dest, sizeof(dest));
+    if (sent != len) {
+        ERROR("sendto %d != %d", sent, len);
+    }
+    close(s);
+
+    return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("wifi", NULL)
-		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
-		DEBUG_MENU_CMD("apn",	    NULL,		NULL, dbgConnect)
-		DEBUG_MENU_CMD("scan",	    NULL,		NULL, dbgScan)
-		DEBUG_MENU_CMD("nvs",	    NULL,		NULL, dbgNvs)
+		DEBUG_MENU_CMD("status",	        NULL,		NULL, dbgStatus)
+		DEBUG_MENU_CMD("apn",	            NULL,		NULL, dbgConnect)
+		DEBUG_MENU_CMD("scan",	            NULL,		NULL, dbgScan)
+		DEBUG_MENU_CMD("nvs",	            NULL,		NULL, dbgNvs)
+		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
