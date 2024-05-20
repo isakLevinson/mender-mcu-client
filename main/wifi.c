@@ -482,6 +482,7 @@ static void _udp_time_server(void)
     int actual_recv = 0;
     uint8_t buf[64];
     socklen_t socklen = sizeof(struct sockaddr_in);
+    int s;
 
     INFO("UDP time server listener loop started\n");
 
@@ -500,11 +501,11 @@ static void _udp_time_server(void)
         return;
     }
 
-    g_server.udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    bind(g_server.udpSocket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
+    s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    bind(s, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
 
     while (true) {
-        actual_recv = recvfrom(g_server.udpSocket, buf, sizeof(buf), 0, (struct sockaddr *)&g_server.udp_addr4, &socklen);
+        actual_recv = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&g_server.udp_addr4, &socklen);
 
         if (actual_recv < 0) {
             WARN("recv error, error code: %d\n", actual_recv);
@@ -516,27 +517,25 @@ static void _udp_time_server(void)
             TIME_get64(&time);
             TIME_getUpdateTime(&lastUpdated);
 
-            //TRACE("ufp from:" IPSTR "\n", IP2STR(&g_server.udp_addr4));
-            TRACE("udp from: %08x\n", g_server.udp_addr4.sin_addr);
-            
-            TRACE_BUF("udp recv", PRINT_BUF_STYLE_ASC_SIZE_NL, buf, actual_recv);
             buf[actual_recv] = 0;
            	int64_t t = strtoull((char*)buf, NULL, 10);
             int64_t dt = time - t;
             TIME_set64(t);
 
+            *(int64_t*)&buf[0] = dt;
+            send(s, buf, 8, 0);
+
+            TRACE("udp from: %08x\n", g_server.udp_addr4.sin_addr);
+            TRACE_BUF("udp recv", PRINT_BUF_STYLE_ASC_SIZE_NL, buf, actual_recv);
             INFO("dt: " PRINT_FRAC_STR(3) " since:%dms\n",
                 PRINT_FRAC_ARGS(dt, 1000, 1000),
                 (uint32_t)((time - lastUpdated)/1000));
-
-            //INFO("dt: %d.%d\n", (int32_t)(dt/1000), (int32_t)(dt%1000));
-
         }
     }
 
-    if (g_server.udpSocket!= -1) {
+    if (s!= -1) {
         INFO("client socket closed.\n");
-        close(g_server.udpSocket);
+        close(s);
     }
     INFO("_udp_time_server exited\n");
 }
