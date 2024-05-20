@@ -314,6 +314,31 @@ static bool _sockSend(int socket, COMM_TYPE type, void* i_pBuf, uint8_t size)
 	return true;
 }
 
+
+static bool _sendUdpTo(struct sockaddr_in dest, uint8_t* pBuf, size_t size)
+{
+    int s;
+
+    int     sent;
+
+    s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (!s) {
+        ERROR("socket error\n");
+    }
+
+    dest.sin_family = AF_INET;
+    dest.sin_port = htons(UDP_SERVER_PORT);
+
+    sent = sendto(s, pBuf, size, 0, (struct sockaddr*)&dest, sizeof(dest));
+    if (sent != size) {
+        ERROR("sendto %d != %d", sent, size);
+    }
+    close(s);
+
+    return true;
+}
+
+
 static void cmd_tcp_server(void)
 {
     esp_err_t ret = ESP_OK;
@@ -523,13 +548,14 @@ static void _udp_time_server(void)
             TIME_set64(t);
 
             *(int64_t*)&buf[0] = dt;
-            send(s, buf, 8, 0);
 
             TRACE("udp from: %08x\n", g_server.udp_addr4.sin_addr);
             TRACE_BUF("udp recv", PRINT_BUF_STYLE_ASC_SIZE_NL, buf, actual_recv);
             INFO("dt: " PRINT_FRAC_STR(3) " since:%dms\n",
                 PRINT_FRAC_ARGS(dt, 1000, 1000),
                 (uint32_t)((time - lastUpdated)/1000));
+
+            _sendUdpTo(g_server.udp_addr4, buf, 8);
         }
     }
 
