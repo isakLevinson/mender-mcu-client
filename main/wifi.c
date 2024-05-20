@@ -67,7 +67,7 @@ static struct {
 } g_wifi;
 
 static struct {
-    int uspSocket;
+    int udpSocket;
     struct sockaddr_in udp_addr4;
 } g_server;
 
@@ -96,10 +96,11 @@ static esp_netif_t *netif_ap = NULL;
 static esp_netif_t *netif_sta = NULL;
 
 static EventGroupHandle_t wifi_event_group;
-const int FLAG_CONNECTED  = BIT0;
-const int FLAG_DISCONNECT = BIT1;
-const int FLAG_GOT_IP_1   = BIT2;
-const int FLAG_GOT_IP_2   = BIT3;
+const int FLAG_CONNECTED            = BIT0;
+const int FLAG_DISCONNECT           = BIT1;
+const int FLAG_GOT_IP_TCP           = BIT2;
+const int FLAG_GOT_IP_UDP           = BIT3;
+const int FLAG_GOT_IP_UDP_TIME_SYNC = BIT4;
 
 #define NVS_NAMESPACE_WIFI      "wifi"
 #define NVS_KEY_WIFI_SSID       "ssid"
@@ -255,8 +256,9 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
     INFO("got_ip_handler\n");
     xEventGroupClearBits(wifi_event_group, FLAG_DISCONNECT);
     xEventGroupSetBits(wifi_event_group, FLAG_CONNECTED);
-    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_1);
-    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_2);
+    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_TCP);
+    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_UDP);
+    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 
     wifi_nvs_set_ssid(g_wifi.currentSsid, g_wifi.currentPasswd);
 }
@@ -280,8 +282,9 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     xEventGroupClearBits(wifi_event_group, FLAG_CONNECTED);
     xEventGroupSetBits(wifi_event_group, FLAG_DISCONNECT);
 
-    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_1);
-    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_2);
+    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_TCP);
+    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_UDP);
+    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 
     _socket_close(&socket_listen_cmd);
     _socket_close(&socket_listen_stream);
@@ -409,7 +412,7 @@ exit:
     }
 }
 
-static void cmd_udp_server(void)
+static void _udp_server(void)
 {
     esp_netif_ip_info_t ip;
     struct sockaddr_in listen_addr4 = { 0 };
@@ -435,17 +438,73 @@ static void cmd_udp_server(void)
         return;
     }
 
-    g_server.uspSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    bind(g_server.uspSocket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
+    g_server.udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    bind(g_server.udpSocket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
 
     while (true) {
         CMD_CONTEXT	cmdContext = {
             .p_cbSend	= _sockSend,
-            .socket		= g_server.uspSocket,
+            .socket		= g_server.udpSocket,
         };
 
         //actual_recv = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&listen_addr, &socklen);
-        actual_recv = recvfrom(g_server.uspSocket, buf, sizeof(buf), 0, (struct sockaddr *)&g_server.udp_addr4, &socklen);
+        actual_recv = recvfrom(g_server.udpSocket, buf, sizeof(buf), 0, (struct sockaddr *)&g_server.udp_addr4, &socklen);
+
+        if (actual_recv < 0) {
+            WARN("recv error, error code: %d\n", actual_recv);
+            break;
+        } else {
+            //TRACE("ufp from:" IPSTR "\n", IP2STR(&g_server.udp_addr4));
+            TRACE("udp from: %08x\n", g_server.udp_addr4.sin_addr);
+            
+            INFO_BUF("udp recv", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, actual_recv);
+
+            if (actual_recv >= 1) {
+                uint8_t cmd = buf[0];
+                CMD_processMessage(&cmdContext, cmd, buf+1, actual_recv-1);
+            }
+        }
+    }
+
+//exit:
+    if (g_server.udpSocket!= -1) {
+        INFO("client socket closed.\n");
+        close(g_server.udpSocket);
+    }
+    INFO("_udp_server exited\n");
+}
+
+static void _udp_time_server(void)
+{
+    esp_netif_ip_info_t ip;
+    struct sockaddr_in listen_addr4 = { 0 };
+    struct sockaddr_storage listen_addr = { 0 };
+    int actual_recv = 0;
+    uint8_t buf[64];
+    socklen_t socklen = sizeof(struct sockaddr_in);
+
+    INFO("UDP time server listener loop started\n");
+
+    listen_addr4.sin_family = AF_INET;
+    listen_addr4.sin_port = htons(UDP_TIME_SERVER_PORT);
+
+    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
+        INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
+        INFO("MASK:" IPSTR "\n", IP2STR(&ip.netmask));
+        INFO("GW:" IPSTR "\n", IP2STR(&ip.gw));
+
+        listen_addr4.sin_addr.s_addr = ip.ip.addr;
+
+    } else {
+        ERROR("esp_netif_get_ip_info failed\n");
+        return;
+    }
+
+    g_server.udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    bind(g_server.udpSocket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
+
+    while (true) {
+        actual_recv = recvfrom(g_server.udpSocket, buf, sizeof(buf), 0, (struct sockaddr *)&g_server.udp_addr4, &socklen);
 
         if (actual_recv < 0) {
             WARN("recv error, error code: %d\n", actual_recv);
@@ -460,39 +519,29 @@ static void cmd_udp_server(void)
             //TRACE("ufp from:" IPSTR "\n", IP2STR(&g_server.udp_addr4));
             TRACE("udp from: %08x\n", g_server.udp_addr4.sin_addr);
             
-#if 1
             TRACE_BUF("udp recv", PRINT_BUF_STYLE_ASC_SIZE_NL, buf, actual_recv);
             buf[actual_recv] = 0;
            	int64_t t = strtoull((char*)buf, NULL, 10);
-#else
-            INFO_BUF("udp recv", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, actual_recv);
-           	int64_t t = *(uint64_t*)buf;
-#endif
             int64_t dt = time - t;
             TIME_set64(t);
 
-            INFO("t:%d.%d dt:%d.%d since:%ds\n",
-                (uint32_t)(t/1000000), (uint32_t)(t%1000000),
-                (uint32_t)(dt/1000), (uint32_t)(dt%1000000),
-                (uint32_t)((time - lastUpdated)/1000000));
+            INFO("dt: " PRINT_FRAC_STR(3) " since:%dms\n",
+                PRINT_FRAC_ARGS(dt, 1000, 1000),
+                (uint32_t)((time - lastUpdated)/1000));
 
-#if 0
-            if (actual_recv >= 1) {
-                uint8_t cmd = buf[0];
-                CMD_processMessage(&cmdContext, cmd, buf+1, actual_recv-1);
-            }
-#endif            
+            //INFO("dt: %d.%d\n", (int32_t)(dt/1000), (int32_t)(dt%1000));
+
         }
     }
 
-//exit:
-    if (g_server.uspSocket!= -1) {
+    if (g_server.udpSocket!= -1) {
         INFO("client socket closed.\n");
-        close(g_server.uspSocket);
+        close(g_server.udpSocket);
     }
+    INFO("_udp_time_server exited\n");
 }
 
-static void task_TcpServer(void *arg)
+static void task_tcp_server(void *arg)
 {
     esp_ip4_addr_t  ip  = {0};
 
@@ -501,9 +550,9 @@ static void task_TcpServer(void *arg)
     while(true) {
         if (!ip.addr) {
             INFO("waiting for FLAG_GOT_IP\n");
-            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_1, 1, 1, 1000);
+            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_TCP, 1, 1, 1000);
 
-            if (bits & FLAG_GOT_IP_1) {
+            if (bits & FLAG_GOT_IP_TCP) {
                 INFO("got FLAG_GOT_IP\n");
                 ip = wifi_getSelfIp();
                 INFO("got ip=%08x\n", ip.addr);
@@ -519,18 +568,18 @@ static void task_TcpServer(void *arg)
     }
 }
 
-static void task_UdpServer(void *arg)
+static void task_udp_server(void *arg)
 {
     esp_ip4_addr_t  ip  = {0};
 
-    INFO("UDP started\n");
+    INFO("UDP server started\n");
 
     while(true) {
         if (!ip.addr) {
             INFO("UDP waiting for FLAG_GOT_IP\n");
-            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_2, 1, 1, 1000);
+            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_UDP, 1, 1, 1000);
 
-            if (bits & FLAG_GOT_IP_2) {
+            if (bits & FLAG_GOT_IP_UDP) {
                 ip = wifi_getSelfIp();
                 INFO("UDP got ip=%08x\n", ip.addr);
             }
@@ -540,7 +589,35 @@ static void task_UdpServer(void *arg)
             continue;
         }
 
-        cmd_udp_server();
+        _udp_server();
+        ip = wifi_getSelfIp();
+    }
+
+    vTaskDelete(NULL);
+}
+
+static void task_udp_time_server(void *arg)
+{
+    esp_ip4_addr_t  ip  = {0};
+
+    INFO("UDP server started\n");
+
+    while(true) {
+        if (!ip.addr) {
+            INFO("UDP waiting for FLAG_GOT_IP\n");
+            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC, 1, 1, 1000);
+
+            if (bits & FLAG_GOT_IP_UDP_TIME_SYNC) {
+                ip = wifi_getSelfIp();
+                INFO("UDP got ip=%08x\n", ip.addr);
+            }
+        }
+    
+        if (!ip.addr) {
+            continue;
+        }
+
+        _udp_time_server();
         ip = wifi_getSelfIp();
     }
 
@@ -553,15 +630,23 @@ static int _startServer(void)
 
     INFO("starting listener tasks\n");
 
-    ret = xTaskCreate(task_TcpServer, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL);
+    ret = xTaskCreate(task_tcp_server, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, 4, NULL);
     if (ret != pdPASS) {
-        ERROR("create task %s failed\n", IPERF_TRAFFIC_TASK_NAME);
+        ERROR("create task %s failed\n", task_tcp_server);
         return ESP_FAIL;
     }
 
-    ret = xTaskCreate(task_UdpServer, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, IPERF_TRAFFIC_TASK_PRIORITY, NULL);
+#if 1
+    ret = xTaskCreate(task_udp_server, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, 4, NULL);
     if (ret != pdPASS) {
-        ERROR("create task %s failed\n", IPERF_TRAFFIC_TASK_NAME);
+        ERROR("create task %s failed\n", task_udp_server);
+        return ESP_FAIL;
+    }
+#endif
+
+    ret = xTaskCreate(task_udp_time_server, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, 3, NULL);
+    if (ret != pdPASS) {
+        ERROR("create task %s failed\n", task_udp_time_server);
         return ESP_FAIL;
     }
 
@@ -573,7 +658,7 @@ bool    SER_sendUdp(void* i_pBuf, uint16_t len)
     int sent;
 
     //TRACE_BUF("UDP tx", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, len);
-    sent = sendto(g_server.uspSocket, i_pBuf, len, 0, (struct sockaddr*)&g_server.udp_addr4, sizeof(g_server.udp_addr4));
+    sent = sendto(g_server.udpSocket, i_pBuf, len, 0, (struct sockaddr*)&g_server.udp_addr4, sizeof(g_server.udp_addr4));
 
     if (len != sent) {
         TRACE("send %d\n", sent);
@@ -870,15 +955,12 @@ static bool dbgBroadcastTime(uint8_t argc, char **argv)
     }
     setsockopt(s, SOL_SOCKET, SO_BROADCAST, &opt, sizeof(opt));
 
-    //bind(s, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
-
     dest.sin_family = AF_INET;
     inet_aton("192.168.1.255", &dest.sin_addr);
-    dest.sin_port = htons(5000);
+    dest.sin_port = htons(UDP_TIME_SERVER_PORT);
 
     TIME_get64(&time);
     len = sprintf(buf, "%d%d", (uint32_t)(time/1000000), (uint32_t)(time%1000000));
-    //ulltoa(time, buf, 10);
 
     sent = sendto(s, buf, len, 0, (struct sockaddr*)&dest, sizeof(dest));
     if (sent != len) {

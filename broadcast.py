@@ -83,7 +83,7 @@ def main():
         send_broadcast_message(time_string, broadcast_address, broadcast_port)
         # print_time_buffer(time_buffer)
         count += 1
-        time.sleep(10)
+        time.sleep(1)
 
 
 #if _name_ == "_main_":
