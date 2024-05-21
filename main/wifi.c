@@ -68,9 +68,9 @@ static struct {
 
 static struct {
     int udpSocket;
-    struct sockaddr_in udp_addr4;
+    struct sockaddr_in udp_addr;
+    struct sockaddr_in udp_time_sync_addr;
 } g_server;
-
 
 typedef struct {
     struct arg_str *ssid;
@@ -290,7 +290,7 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     _socket_close(&socket_listen_stream);
 }
 
-static bool _sockSend(int socket, COMM_TYPE type, void* i_pBuf, uint8_t size)
+static bool _sockSend(int s, COMM_TYPE type, void* i_pBuf, uint8_t size)
 {
 	uint8_t	buf[300];
 	uint8_t*	pBuf = buf;
@@ -309,35 +309,40 @@ static bool _sockSend(int socket, COMM_TYPE type, void* i_pBuf, uint8_t size)
 	//INFO_BUF("tx data  ", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 	TRACE_BUF("_cmdSend", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf - buf);
 
-    send(socket, buf, pBuf - buf, 0);
+    send(s, buf, pBuf - buf, 0);
 
 	return true;
 }
 
-
-static bool _sendUdpTo(struct sockaddr_in dest, uint8_t* pBuf, size_t size)
+static bool _sendUdpTo(int s, COMM_TYPE type, void* i_pBuf, uint8_t size)
 {
-    int s;
+	uint8_t	buf[300];
+	uint8_t*	pBuf = buf;
+    int sent;
 
-    int     sent;
+    //INFO("_sendUdpTo s:%d, addr:%08x\n", s, g_server.udp_time_sync_addr.sin_addr);
+    //INFO_BUF("_sendUdpTo", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
-    s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (!s) {
-        ERROR("socket error\n");
-    }
+//	*pBuf	= START_MESSAGE_CHARACTER;
+//	pBuf++;
+	*pBuf	= type;
+	pBuf++;
+	//*pBuf	= size;
+	//pBuf++;
+	memcpy(pBuf, i_pBuf, size);
+	pBuf += size;
 
-    dest.sin_family = AF_INET;
-    dest.sin_port = htons(UDP_SERVER_PORT);
+    g_server.udp_time_sync_addr.sin_family = AF_INET;
+    g_server.udp_time_sync_addr.sin_port = htons(UDP_SERVER_PORT);
 
-    sent = sendto(s, pBuf, size, 0, (struct sockaddr*)&dest, sizeof(dest));
+    size = pBuf - buf;
+    sent = sendto(s, buf, size, 0, (struct sockaddr*)&g_server.udp_time_sync_addr, sizeof(g_server.udp_time_sync_addr));
     if (sent != size) {
         ERROR("sendto %d != %d", sent, size);
     }
-    close(s);
 
     return true;
 }
-
 
 static void cmd_tcp_server(void)
 {
@@ -411,7 +416,7 @@ static void cmd_tcp_server(void)
 
         actual_recv = recvfrom(s, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
         if (actual_recv < 0) {
-            WARN("recv error, error code: %d\n", actual_recv);
+            WARN("tcp recvfrom error, error code: %d\n", actual_recv);
             break;
         } else {
             TRACE_BUF("tcp recv",	PRINT_BUF_STYLE_HEX_SIZE_NL, buffer, actual_recv);
@@ -441,12 +446,12 @@ static void _udp_server(void)
 {
     esp_netif_ip_info_t ip;
     struct sockaddr_in listen_addr4 = { 0 };
-    struct sockaddr_storage listen_addr = { 0 };
+    //struct sockaddr_storage listen_addr = { 0 };
     int actual_recv = 0;
     uint8_t buf[64];
     socklen_t socklen = sizeof(struct sockaddr_in);
 
-    INFO("UDP listener loop started\n");
+    INFO("_udp_server()\n");
 
     listen_addr4.sin_family = AF_INET;
     listen_addr4.sin_port = htons(UDP_SERVER_PORT);
@@ -473,16 +478,15 @@ static void _udp_server(void)
         };
 
         //actual_recv = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&listen_addr, &socklen);
-        actual_recv = recvfrom(g_server.udpSocket, buf, sizeof(buf), 0, (struct sockaddr *)&g_server.udp_addr4, &socklen);
+        actual_recv = recvfrom(g_server.udpSocket, buf, sizeof(buf), 0, (struct sockaddr *)&g_server.udp_addr, &socklen);
 
         if (actual_recv < 0) {
-            WARN("recv error, error code: %d\n", actual_recv);
+            WARN("udp recvfrom error, error code: %d\n", actual_recv);
             break;
         } else {
-            //TRACE("ufp from:" IPSTR "\n", IP2STR(&g_server.udp_addr4));
-            TRACE("udp from: %08x\n", g_server.udp_addr4.sin_addr);
+            TRACE("udp from: %08x\n", g_server.udp_addr.sin_addr);
             
-            INFO_BUF("udp recv", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, actual_recv);
+            TRACE_BUF("udp recv", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, actual_recv);
 
             if (actual_recv >= 1) {
                 uint8_t cmd = buf[0];
@@ -509,7 +513,7 @@ static void _udp_time_server(void)
     socklen_t socklen = sizeof(struct sockaddr_in);
     int s;
 
-    INFO("UDP time server listener loop started\n");
+    INFO("_udp_time_server\n");
 
     listen_addr4.sin_family = AF_INET;
     listen_addr4.sin_port = htons(UDP_TIME_SERVER_PORT);
@@ -530,14 +534,26 @@ static void _udp_time_server(void)
     bind(s, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
 
     while (true) {
-        actual_recv = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&g_server.udp_addr4, &socklen);
+        actual_recv = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&g_server.udp_time_sync_addr, &socklen);
 
         if (actual_recv < 0) {
-            WARN("recv error, error code: %d\n", actual_recv);
+            WARN("udp time sync recvfrom error, error code: %d\n", actual_recv);
             break;
         } else {
             int64_t time;
             int64_t lastUpdated;
+            int     txs;
+
+            CMD_CONTEXT	cmdContext = {
+                .p_cbSend	= _sendUdpTo,
+            };
+            
+            txs = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            if (!txs) {
+                ERROR("socket error\n");
+            }
+
+            cmdContext.socket = txs;
 
             TIME_get64(&time);
             TIME_getUpdateTime(&lastUpdated);
@@ -547,15 +563,14 @@ static void _udp_time_server(void)
             int64_t dt = time - t;
             TIME_set64(t);
 
-            *(int64_t*)&buf[0] = dt;
-
-            TRACE("udp from: %08x\n", g_server.udp_addr4.sin_addr);
+            TRACE("udp from: %08x1n", g_server.udp_time_sync_addr.sin_addr);
             TRACE_BUF("udp recv", PRINT_BUF_STYLE_ASC_SIZE_NL, buf, actual_recv);
             INFO("dt: " PRINT_FRAC_STR(3) " since:%dms\n",
                 PRINT_FRAC_ARGS(dt, 1000, 1000),
                 (uint32_t)((time - lastUpdated)/1000));
 
-            _sendUdpTo(g_server.udp_addr4, buf, 8);
+            CMD_sendTimeSyncAck(&cmdContext, dt);
+            close(txs);
         }
     }
 
@@ -634,7 +649,7 @@ static void task_udp_time_server(void *arg)
 
             if (bits & FLAG_GOT_IP_UDP_TIME_SYNC) {
                 ip = wifi_getSelfIp();
-                INFO("UDP got ip=%08x\n", ip.addr);
+                INFO("UDP server got ip=%08x\n", ip.addr);
             }
         }
     
@@ -661,13 +676,11 @@ static int _startServer(void)
         return ESP_FAIL;
     }
 
-#if 1
     ret = xTaskCreate(task_udp_server, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, 4, NULL);
     if (ret != pdPASS) {
         ERROR("create task %s failed\n", task_udp_server);
         return ESP_FAIL;
     }
-#endif
 
     ret = xTaskCreate(task_udp_time_server, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, 3, NULL);
     if (ret != pdPASS) {
@@ -683,7 +696,7 @@ bool    SER_sendUdp(void* i_pBuf, uint16_t len)
     int sent;
 
     //TRACE_BUF("UDP tx", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, len);
-    sent = sendto(g_server.udpSocket, i_pBuf, len, 0, (struct sockaddr*)&g_server.udp_addr4, sizeof(g_server.udp_addr4));
+    sent = sendto(g_server.udpSocket, i_pBuf, len, 0, (struct sockaddr*)&g_server.udp_addr, sizeof(g_server.udp_addr));
 
     if (len != sent) {
         TRACE("send %d\n", sent);

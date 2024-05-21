@@ -79,6 +79,7 @@
 											uint8_t		gscale;)			/* 0-250dps, 1-500dps, 2-1000dps, 3-2000dps */	\
 	rsp(NTP,						0x59,	uint64_t	sysTime;			\
 											uint64_t	ntpTime;)			\
+	req(TIME_SYNC_ACK,				0x60,	int64_t		dt;)				\
 	req(UDP_ACK,					0x70,	uint32_t	id;					\
 											uint8_t		count;)				\
 
@@ -207,6 +208,36 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 	INFO_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
 	pContext->p_cbSend(pContext->socket, msgType, i_pBuf, size);
+
+    return true;
+}
+
+bool CMD_sendTimeSyncAck(CMD_CONTEXT* i_pContext, int64_t dt)
+{
+	CMD_CONTEXT* pContext = i_pContext;
+	CMD_REQBUF_TIME_SYNC_ACK	req;
+
+	if (!i_pContext) {
+		pContext = &g_cmdDb.defaultContext;
+	}
+
+	if (!pContext) {
+		ERROR("invalid context\n");
+		return false;
+	}
+
+	if (!pContext->p_cbSend) {
+		return false;
+	}
+
+	if (!pContext->socket) {
+		return false;
+	}
+
+	req.dt = dt;
+	//INFO("CMD_sendTimeSyncAck: " PRINT_FRAC_STR(3) "\n", PRINT_FRAC_ARGS(dt, 1000, 1000));
+
+	pContext->p_cbSend(pContext->socket, CMD_REQ_TIME_SYNC_ACK, &req, sizeof(req));
 
     return true;
 }
@@ -472,7 +503,6 @@ static bool	_req_TIME_SYNC_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TIME_SYNC* i
     INFO("TIME_SYNC\n");
 	int64_t	t1, t2;
 
-
 	CMD_RSPBUF_TIME_SYNC	rsp = {0};
 
 	rsp.requestTime 	= i_pReq->time;
@@ -481,7 +511,6 @@ static bool	_req_TIME_SYNC_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TIME_SYNC* i
 
 	rsp.currentTime1 = t1;
 	rsp.currentTime2 = t2;
-
 
 	_sendResp(i_pContext, CMD_RSP_TIME_SYNC, &rsp, sizeof(rsp));
 
@@ -514,6 +543,11 @@ static bool	_req_UDP_ACK_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_UDP_ACK* i_pRe
     return true;
 }
 
+static bool	_req_TIME_SYNC_ACK_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TIME_SYNC_ACK* i_pReq, uint16_t size)
+{
+	INFO("TIME_SYNC_ACK dt:" PRINT_FRAC_STR(3) "\n", PRINT_FRAC_ARGS(i_pReq->dt, 1000, 1000));
+    return true;
+}
 
 static bool _isValidMsgType(uint8_t type)
 {
@@ -553,7 +587,7 @@ void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 	TRACE_BUF("cmd",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
 	switch (t) {
-			CMD(CMD_SWITCH, CMD_NONE)
+		CMD(CMD_SWITCH, CMD_NONE)
 
 		default:
 			WARN("unhandled msg 0x%02x: ", type);
