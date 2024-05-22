@@ -19,7 +19,7 @@ bool    wifi_nvs_get_ssid(char* ssid, char* passwd);
 bool    wifi_nvs_set_ssid(char* ssid, char* passwd);
 
 bool    SER_sendUdp(void* i_pBuf, uint16_t len);
-
+bool    SER_sendTcp(void* i_pBuf, uint16_t len);
 
 #ifdef __cplusplus
 }

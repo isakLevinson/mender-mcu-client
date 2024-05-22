@@ -236,7 +236,7 @@ static void _taskSender(void *arg)
 
                 TRACE("send (len=%d) id=%d, ack=%d\n", pBuffer->len, pBuffer->id, pBuffer->id - g_measure.ackedId);
 
-                SER_sendUdp(pBuffer->buf, pBuffer->len);
+                SER_sendTcp(pBuffer->buf, pBuffer->len);
 
                 g_measure.sentId = pBuffer->id;
 
@@ -305,7 +305,7 @@ bool MEASURE_start(int interval, bool isSim)
     g_measure.ackedId   = 0;
     g_measure.sentId    = 0;
 
-    TIME_set64(0);
+//    TIME_set64(0);
 
     if (isSim) {
         ret = esp_timer_start_periodic(g_measure.timer, interval * 1000);

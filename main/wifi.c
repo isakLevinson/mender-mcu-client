@@ -68,6 +68,7 @@ static struct {
 
 static struct {
     int udpSocket;
+    int tcpSocket;
     struct sockaddr_in udp_addr;
     struct sockaddr_in udp_time_sync_addr;
 } g_server;
@@ -355,7 +356,6 @@ static void cmd_tcp_server(void)
     //struct timeval timeout = { 0 };
     socklen_t addr_len = sizeof(struct sockaddr);
     int opt = 1;
-    int s;
     int listenS;
 
     INFO("listener loop started\n");
@@ -395,8 +395,8 @@ static void cmd_tcp_server(void)
              (listen_addr4.sin_addr.s_addr >> 16) & 0xFF,
              (listen_addr4.sin_addr.s_addr >> 24) & 0xFF);
 
-    s = accept(listenS, (struct sockaddr *)&remote_addr, &addr_len);
-    ESP_GOTO_ON_FALSE((s >= 0), ESP_FAIL, exit, TAG, "Unable to accept connection: errno %d\n", errno);
+    g_server.tcpSocket = accept(listenS, (struct sockaddr *)&remote_addr, &addr_len);
+    ESP_GOTO_ON_FALSE((g_server.tcpSocket >= 0), ESP_FAIL, exit, TAG, "Unable to accept connection: errno %d\n", errno);
     INFO("accept %s,%d\n\n", inet_ntoa(remote_addr.sin_addr), htons(remote_addr.sin_port));
 
     uint8_t *buffer;
@@ -411,10 +411,10 @@ static void cmd_tcp_server(void)
 
         CMD_CONTEXT	cmdContext = {
             .p_cbSend	= _sockSend,
-            .socket		= s,
+            .socket		= g_server.tcpSocket,
         };
 
-        actual_recv = recvfrom(s, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
+        actual_recv = recvfrom(g_server.tcpSocket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
         if (actual_recv < 0) {
             WARN("tcp recvfrom error, error code: %d\n", actual_recv);
             break;
@@ -427,9 +427,9 @@ static void cmd_tcp_server(void)
     }
 
 exit:
-    if (s != -1) {
+    if (g_server.tcpSocket != -1) {
         INFO("client socket closed.\n");
-        _socket_close(&s);
+        _socket_close(&g_server.tcpSocket);
     }
 
     if (listenS != -1) {
@@ -700,6 +700,21 @@ bool    SER_sendUdp(void* i_pBuf, uint16_t len)
 
     if (len != sent) {
         TRACE("send %d\n", sent);
+    }
+
+    return true;
+}
+
+
+bool    SER_sendTcp(void* i_pBuf, uint16_t len)
+{
+    int sent;
+
+    TRACE_BUF("TCP tx", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, len);
+    sent = send(g_server.tcpSocket, i_pBuf, len, 0);
+
+    if (len != sent) {
+        ERROR("send s:%d len:%d sent:%d\n", g_server.tcpSocket, len, sent);
     }
 
     return true;
