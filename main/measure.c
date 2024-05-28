@@ -43,6 +43,7 @@ static struct {
     TaskHandle_t        hTaskSender;
     esp_timer_handle_t  timer;
     uint32_t            count;
+    uint32_t            totalSent;
 
     uint8_t             activeModules[SPI_DEVICES];
     
@@ -192,15 +193,15 @@ static void _taskFillter(void *arg)
 
             t = TIME_get32();
 
-            pBuffer->len = 0;
-            pBuffer->len += sprintf((char*)pBuffer->buf+pBuffer->len, "%d, %d, ", g_measure.count, t);
+            pBuffer->len = 512;
+
+            memset(pBuffer->buf, '#', pBuffer->len);
+            pBuffer->buf[pBuffer->len-1] = '\n';
+
+            sprintf((char*)pBuffer->buf, "#%d, %d bytes, %dmS Bps:%d ", g_measure.count, g_measure.totalSent, t/1000, g_measure.totalSent*1000 / (t/1000));
 
             g_measure.count++;
-
-            for (i=0; i<500; i++) {
-                pBuffer->len += sprintf((char*)pBuffer->buf+pBuffer->len, "#");
-            }
-            pBuffer->len += sprintf((char*)pBuffer->buf+pBuffer->len, "\n");
+            g_measure.totalSent += pBuffer->len;
 
             BUFFER_push();
 
@@ -265,7 +266,7 @@ static void _init(void)
         ERROR("esp_timer_create %d\n", ret);
     }
 
-    ret = xTaskCreate(_taskFillter, "fillter", 4096, NULL, 3, &g_measure.hTaskFiller);
+    ret = xTaskCreate(_taskFillter, "fillter", 4096, NULL, 4, &g_measure.hTaskFiller);
     if (ret != pdPASS) {
         ERROR("create task %s failed\n", "filler");
         return;
@@ -302,10 +303,11 @@ bool MEASURE_start(int interval, bool isSim)
 
     g_measure.isSim     = isSim;
     g_measure.count     = 0;
+    g_measure.totalSent = 0;
     g_measure.ackedId   = 0;
     g_measure.sentId    = 0;
 
-//    TIME_set64(0);
+    TIME_set64(0);
 
     if (isSim) {
         ret = esp_timer_start_periodic(g_measure.timer, interval * 1000);

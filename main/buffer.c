@@ -218,6 +218,8 @@ static bool dbgStatus(uint8_t argc, char **argv)
         }
     }
 
+    g_buf.maxCount = 0;
+
     return true;
 }
 
