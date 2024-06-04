@@ -44,11 +44,13 @@ static struct {
     esp_timer_handle_t  timer;
     uint32_t            count;
     uint32_t            totalSent;
+    uint32_t            sentCount;
 
     uint8_t             activeModules[SPI_DEVICES];
     
     uint32_t            sentId;
     uint32_t            ackedId;
+    uint32_t            packetLength;
 
     bool    isSim;
 } g_measure;
@@ -193,7 +195,7 @@ static void _taskFillter(void *arg)
 
             t = TIME_get32();
 
-            pBuffer->len = 512;
+            pBuffer->len = g_measure.packetLength;
 
             memset(pBuffer->buf, '#', pBuffer->len);
             pBuffer->buf[pBuffer->len-1] = '\n';
@@ -238,8 +240,8 @@ static void _taskSender(void *arg)
                 TRACE("send (len=%d) id=%d, ack=%d\n", pBuffer->len, pBuffer->id, pBuffer->id - g_measure.ackedId);
 
                 SER_sendTcp(pBuffer->buf, pBuffer->len);
-
                 g_measure.sentId = pBuffer->id;
+                g_measure.sentCount++;
 
                 BUFFER_pop();
             } while (pBuffer);
@@ -307,6 +309,8 @@ bool MEASURE_start(int interval, bool isSim)
     g_measure.ackedId   = 0;
     g_measure.sentId    = 0;
 
+    g_measure.sentCount = 0;
+
     TIME_set64(0);
 
     if (isSim) {
@@ -330,6 +334,7 @@ bool MEASURE_stop(void)
 
 static bool dbgStatus(uint8_t argc, char **argv)
 {
+    PRINT("sentCount: %d\n", g_measure.sentCount);
     return true;
 }
 
@@ -344,6 +349,8 @@ static bool dbgStart(uint8_t argc, char **argv)
     }
 
     interval = strtol(argv[1], NULL, 10);
+    g_measure.packetLength = strtol(argv[2], NULL, 10);
+
     MEASURE_start(interval, true);
 
     return true;
