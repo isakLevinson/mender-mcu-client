@@ -16,8 +16,6 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#include "iperf.h"
-
 #include "esp_log.h"
 #include "esp_console.h"
 #include "esp_wifi.h"
@@ -670,19 +668,19 @@ static int _startServer(void)
 
     INFO("starting listener tasks\n");
 
-    ret = xTaskCreate(task_tcp_server, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, 4, NULL);
+    ret = xTaskCreate(task_tcp_server, "tcp_server", 8192, NULL, 4, NULL);
     if (ret != pdPASS) {
         ERROR("create task %s failed\n", task_tcp_server);
         return ESP_FAIL;
     }
 
-    ret = xTaskCreate(task_udp_server, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, 4, NULL);
+    ret = xTaskCreate(task_udp_server, "udp_server", 8192, NULL, 4, NULL);
     if (ret != pdPASS) {
         ERROR("create task %s failed\n", task_udp_server);
         return ESP_FAIL;
     }
 
-    ret = xTaskCreate(task_udp_time_server, IPERF_TRAFFIC_TASK_NAME, IPERF_TRAFFIC_TASK_STACK, NULL, 3, NULL);
+    ret = xTaskCreate(task_udp_time_server, "udp_time", 8192, NULL, 3, NULL);
     if (ret != pdPASS) {
         ERROR("create task %s failed\n", task_udp_time_server);
         return ESP_FAIL;

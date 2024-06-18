@@ -36,6 +36,8 @@
 #include "ads1299.h"
 #include "buffer.h"
 #include "measure.h"
+#include "pump.h"
+
 
 #define BUF_SIZE    1024
 
@@ -84,6 +86,7 @@ void app_main(void)
     ADS1299_init();
     BUFFER_init();
     MEASURE_init();
+    PMP_init();
     
     register_wifi();
 
