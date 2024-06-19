@@ -27,45 +27,24 @@
 
 #define SERVO_TIMEBASE_RESOLUTION_HZ 10000000  // 1MHz, 1us per tick
 #define SERVO_TIMEBASE_PERIOD        370    // 20000 ticks, 20ms
+#define CHANNEL_COUNT   2
 #define GENERATOR_COUNT 2
 
-static const mcpwm_generator_config_t generator_bridge_config[] = {
-    {.gen_gpio_num = 4},
-    {.gen_gpio_num = 5, .flags.invert_pwm = true},
-    {.gen_gpio_num = 6},
-    {.gen_gpio_num = 7, .flags.invert_pwm = true},
+static const mcpwm_generator_config_t generator_bridge_config[CHANNEL_COUNT][2] = {
+    {{.gen_gpio_num = 4},   {.gen_gpio_num = 5, .flags.invert_pwm = true}},
+    {{.gen_gpio_num = 6},   {.gen_gpio_num = 7, .flags.invert_pwm = true}},
 };
 
-mcpwm_oper_handle_t oper_bridge = NULL;
-mcpwm_cmpr_handle_t comparator_bridge = NULL;
+mcpwm_oper_handle_t oper_bridge[CHANNEL_COUNT];
+mcpwm_cmpr_handle_t comparator_bridge[CHANNEL_COUNT];
 mcpwm_gen_handle_t generator_bridge[GENERATOR_COUNT] = {0};
 
-
-bool _tmrFullCb(mcpwm_timer_handle_t timer, const mcpwm_timer_event_data_t *edata, void *user_ctx)
-{
-    return true;
-}
-
-bool _tmrEmptyCb(mcpwm_timer_handle_t timer, const mcpwm_timer_event_data_t *edata, void *user_ctx)
-{
-    gpio_set_level(generator_bridge_config[2].gen_gpio_num, 1);
-    return true;
-}
-
-bool _tmrStopCb(mcpwm_timer_handle_t timer, const mcpwm_timer_event_data_t *edata, void *user_ctx)
-{
-    return true;
-}
-
-static bool _cmpReachCb(mcpwm_cmpr_handle_t comparator, const mcpwm_compare_event_data_t *edata, void *user_ctx)
-{
-    gpio_set_level(generator_bridge_config[2].gen_gpio_num, 0);
-    return true;
-}
 
 static void _init(void)
 {
     esp_err_t   err;
+    uint8_t     i;
+
     mcpwm_timer_handle_t timer = NULL;
     mcpwm_timer_config_t timer_config = {
         .group_id = 0,
@@ -84,35 +63,12 @@ static void _init(void)
     };
 
     ESP_ERROR_CHECK(mcpwm_new_timer(&timer_config, &timer));
-    ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &oper_bridge));
-    ESP_ERROR_CHECK(mcpwm_operator_connect_timer(oper_bridge, timer));
-    ESP_ERROR_CHECK(mcpwm_new_comparator(oper_bridge, &comparator_config, &comparator_bridge));
-    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator_bridge, SERVO_TIMEBASE_PERIOD/2));
 
-    gpio_set_direction(generator_bridge_config[2].gen_gpio_num, GPIO_MODE_OUTPUT);
-    gpio_set_direction(generator_bridge_config[2].gen_gpio_num, GPIO_MODE_OUTPUT);
-    gpio_set_level(generator_bridge_config[2].gen_gpio_num, 0);
-    gpio_set_level(generator_bridge_config[2].gen_gpio_num, 0);
-
-
-    mcpwm_timer_event_callbacks_t   timer_cb = {
-        .on_full = _tmrFullCb,
-        .on_empty = _tmrEmptyCb,
-        .on_stop = _tmrStopCb,
-    };
-
-    mcpwm_comparator_event_callbacks_t comparator_cb = {
-        .on_reach = _cmpReachCb,
-    };
-
-    err = mcpwm_timer_register_event_callbacks(timer, &timer_cb, NULL);
-    if (ESP_OK != err) {
-        ERROR("mcpwm_timer_register_event_callbacks %d\n", err);
-    }
-
-    err = mcpwm_comparator_register_event_callbacks(comparator_bridge, &comparator_cb, NULL);
-    if (ESP_OK != err) {
-        ERROR("mcpwm_comparator_register_event_callbacks %d\n", err);
+    for (i=0; i<CHANNEL_COUNT; i++) {
+        ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &oper_bridge[i]));
+        ESP_ERROR_CHECK(mcpwm_operator_connect_timer(oper_bridge[i], timer));
+        ESP_ERROR_CHECK(mcpwm_new_comparator(oper_bridge[i], &comparator_config, &comparator_bridge[i]));
+        ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator_bridge[i], SERVO_TIMEBASE_PERIOD/2));
     }
 
     ESP_ERROR_CHECK(mcpwm_timer_enable(timer));
@@ -127,15 +83,15 @@ static bool _setPwm(uint8_t ch, uint32_t val)
     if (!val) {
         mcpwm_del_generator(generator_bridge[0]);
         mcpwm_del_generator(generator_bridge[1]);
-        gpio_set_direction(generator_bridge_config[ch*2 + 0].gen_gpio_num, GPIO_MODE_OUTPUT);
-        gpio_set_direction(generator_bridge_config[ch*2 + 1].gen_gpio_num, GPIO_MODE_OUTPUT);
-        gpio_set_level(generator_bridge_config[ch*2 + 0].gen_gpio_num, 0);
-        gpio_set_level(generator_bridge_config[ch*2 + 1].gen_gpio_num, 0);
+        gpio_set_direction(generator_bridge_config[ch][0].gen_gpio_num, GPIO_MODE_OUTPUT);
+        gpio_set_direction(generator_bridge_config[ch][1].gen_gpio_num, GPIO_MODE_OUTPUT);
+        gpio_set_level(generator_bridge_config[ch][0].gen_gpio_num, 0);
+        gpio_set_level(generator_bridge_config[ch][1].gen_gpio_num, 0);
         return true;
     }
 
     for (i=0; i<2; i++) {
-        err = mcpwm_new_generator(oper_bridge, &generator_bridge_config[ch*2 + i], &generator_bridge[i]);
+        err = mcpwm_new_generator(oper_bridge[ch], &generator_bridge_config[ch][i], &generator_bridge[i]);
         if (ESP_OK != err) {
             ERROR("mcpwm_new_generator %d\n", err);
         }
@@ -149,7 +105,7 @@ static bool _setPwm(uint8_t ch, uint32_t val)
 
         // go low on compare threshold
         err = mcpwm_generator_set_actions_on_compare_event(generator_bridge[i],
-                        MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator_bridge, MCPWM_GEN_ACTION_LOW),
+                        MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator_bridge[ch], MCPWM_GEN_ACTION_LOW),
                         MCPWM_GEN_COMPARE_EVENT_ACTION_END());
         if (ESP_OK != err) {
             ERROR("mcpwm_generator_set_actions_on_compare_event %d\n", err);
