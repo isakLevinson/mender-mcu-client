@@ -33,11 +33,8 @@
 #include "spi.h"
 #include "cmd.h"
 #include "wifi.h"
-#include "ads1299.h"
-#include "buffer.h"
-#include "measure.h"
 #include "pump.h"
-
+#include "app.h"
 
 #define BUF_SIZE    1024
 
@@ -83,10 +80,8 @@ void app_main(void)
 
     SPI_init();
     CMD_init(NULL);
-    ADS1299_init();
-    BUFFER_init();
-    MEASURE_init();
     PMP_init();
+    APP_init();
     
     register_wifi();
 

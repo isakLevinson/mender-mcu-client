@@ -28,7 +28,6 @@
 #include "cli.h"
 #include "time.h"
 #include "wifi.h"
-#include "measure.h"
 
 // *INDENT-OFF*
 
@@ -42,29 +41,6 @@
 											uint8_t		hwMinor;	\
 											uint32_t	ip;			\
 											uint32_t	guid[3];)	\
-	req(REG_WRITE,					0x11,	uint8_t		spiAndChannel;	\
-											uint8_t		typeAndAddress;	\
-											uint8_t		data[];)		\
-	rsp(REG_WRITE,					0x11,	uint8_t		spiAndChannel;	\
-											uint8_t		typeAndAddress;	\
-											uint8_t		regs;)			\
-	req(REG_READ,					0x21,	uint8_t		spiAndChannel;	\
-											uint8_t		firstReg;		\
-											uint8_t		count;)			\
-	rsp(REG_READ,					0x21,	uint8_t		spiAndChannel;	\
-											uint8_t		firstReg;		\
-											uint8_t		data[];)		\
-	req(START,						0x31,	uint16_t	interval;	\
-											uint8_t		channelBitmask[4];	\
-											uint8_t		isSim;				\
-											uint8_t		simMode;)			\
-	rsp(START,						0x31,	uint8_t		totalModules;)		\
-	req(TURN_ON,					0x51,	;)							\
-	rsp(TURN_ON,					0x51,	uint8_t		notMeasuring;)		\
-	req(TURN_OFF,					0x52,	;)							\
-	rsp(TURN_OFF,					0x52,	uint8_t		notMeasuring;)		\
-	req(RESET,						0x54,	;)							\
-	rsp(RESET,						0x54,	uint8_t		notMeasuring;)		\
 	req(SPI_SPEED,					0x53,	uint8_t		speed;)				\
 	rsp(SPI_SPEED,					0x53,	uint8_t		isOk;)				\
 	req(SYNC_START,					0x56,	;)							\
@@ -73,15 +49,7 @@
 	rsp(TIME_SYNC,					0x57,	int64_t		requestTime;		\
 											int64_t		currentTime1;		\
 											int64_t		currentTime2;)		\
-	req(IMU_START,					0x58,	uint8_t		ascale;				/* 0-2G, 1-16G, 2-4G, 3-8G */					\
-											uint8_t		gscale;)			/* 0-250dps, 1-500dps, 2-1000dps, 3-2000dps */	\
-	rsp(IMU_START,					0x58,	uint8_t		ascale;				/* 0-2G, 1-16G, 2-4G, 3-8G */					\
-											uint8_t		gscale;)			/* 0-250dps, 1-500dps, 2-1000dps, 3-2000dps */	\
-	rsp(NTP,						0x59,	uint64_t	sysTime;			\
-											uint64_t	ntpTime;)			\
 	req(TIME_SYNC_ACK,				0x60,	int64_t		dt;)				\
-	req(UDP_ACK,					0x70,	uint32_t	id;					\
-											uint8_t		count;)				\
 
 
 // *INDENT-ON*
@@ -281,210 +249,6 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 	return true;
 }
 
-static bool	_req_REG_WRITE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_REG_WRITE* i_pReq, uint16_t size)
-{
-    bool    ret = true;
-   	CMD_RSPBUF_REG_WRITE	rsp;
-
-	int spi			= (i_pReq->spiAndChannel >> 2) & 0x03;
-	int ch		    = (i_pReq->spiAndChannel >> 4) & 0x0f;
-	uint8_t	count   = size - sizeof(*i_pReq);
-
-	if (size < 3) {
-		ERROR("invalid size %d\n", size);
-		goto error;
-	}
-
-    // TODO: MAX_SPIs_PER_DEVICE
-	if (spi >= 4) {
-		ERROR("invalid spi %d\n", spi);
-		goto error;
-	}
-
-    // TODO: MAX_MODULES_PER_SPI
-	if (ch >= 8) {
-		ERROR("invalid ch %d\n", ch);
-		goto error;
-	}
-
-	INFO("REG_WRITE %d %d %d: ", spi, ch, i_pReq->typeAndAddress);
-	INFO_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pReq->data, count);
-
-#if SIMULATION_MODE
-	memcpy(&_regsShadow[spi][ch][i_pReq->typeAndAddress], i_pReq->data, count);
-#else
-    ADS1299_cmd(SDATAC);
-	ret = ADS1299_regWr(spi, ch,  i_pReq->typeAndAddress, i_pReq->data, count);
-#endif
-
-	rsp.spiAndChannel	= i_pReq->spiAndChannel;
-	rsp.typeAndAddress	= i_pReq->typeAndAddress;
-	rsp.regs			= count;
-	goto ok;
-
-error:
-	rsp.regs			= 0;
-	ERROR("_req_REG_WRITE_func\n");
-	ret = false;
-
-ok:
-	_sendResp(i_pContext, CMD_RSP_REG_WRITE, &rsp, sizeof(rsp));
-
-	return ret;
-}
-
-static bool	_req_REG_READ_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_REG_READ* i_pReq, uint16_t size)
-{
-    bool    ret = true;
-   	CMD_DECLARE_RSP_BUF(REG_READ, 32);
-	int spi		= (i_pReq->spiAndChannel >> 2) & 0x03;
-	int ch		= (i_pReq->spiAndChannel >> 4) & 0x0f;
-	int start	= i_pReq->firstReg & 0x1f;
-	int count	= i_pReq->count;
-    uint8_t	buf[32];
-    int i;
-
-	if (size < 3) {
-		ERROR("invalid size %d\n", size);
-		goto error;
-	}
-
-    //MAX_SPIs_PER_DEVICE
-	if (spi >= 4) {
-		ERROR("invalid spi %d\n", spi);
-		goto error;
-	}
-
-    // MAX_MODULES_PER_SPI
-	if (ch >= 8) {
-		ERROR("invalid ch %d\n", ch);
-		goto error;
-	}
-
-#if SIMULATION_MODE
-	memcpy(buf, &_regsShadow[spi][ch][start], count);
-	INFO("REG_READ %d %d %d: ", spi, ch, start);
-	INFO_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, count);
-
-	// Copy Registers Values That We Read From Sensor
-	for (i = 0 ; i < count ; i++) {
-		pRsp->data[i] = buf[i];
-	}
-#else
-    ADS1299_cmd(SDATAC);
-    ret = ADS1299_regRd(spi, ch, start, pRsp->data, count);
-#endif
-
-	// Prepare Result Message Data To Send
-	pRsp->spiAndChannel	= i_pReq->spiAndChannel;
-	pRsp->firstReg		= i_pReq->firstReg;
-
-	goto ok;
-
-error:
-	count = 0;
-	ERROR("_req_REG_READ_func\n");
-	ret = false;
-
-ok:
-	_sendResp(i_pContext, CMD_RSP_REG_READ, pRsp, sizeof(*pRsp) + count);
-
-	return ret;
-}
-
-static uint8_t _countBits8(uint8_t val)
-{
-	uint8_t bits = 0;
-
-	while (val) {
-		if (val & 1) {
-			bits++;
-		}
-		val >>= 1;
-	}
-	return bits;
-}
-
-static bool	_req_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START* i_pReq, uint16_t size)
-{
-   	CMD_RSPBUF_START	rsp;
-
-	INFO("START (%d,%d) int:%d bitmask:%02x %02x %02x %02x\n",
-			i_pReq->isSim,
-			i_pReq->simMode,
-			i_pReq->interval,
-			i_pReq->channelBitmask[0],
-			i_pReq->channelBitmask[1],
-			i_pReq->channelBitmask[2],
-			i_pReq->channelBitmask[3]);
-
-	if (i_pReq->channelBitmask[2]) {
-		ERROR("invalid bitmask [2] %x\n");
-		goto error;
-	}
-
-	if (i_pReq->channelBitmask[3]) {
-		ERROR("invalid bitmask [3] %x\n");
-		goto error;
-	}
-
-	rsp.totalModules  = _countBits8(i_pReq->channelBitmask[0]);
-	rsp.totalModules += _countBits8(i_pReq->channelBitmask[1]);
-	_sendResp(i_pContext, CMD_RSP_START, &rsp, sizeof(rsp));
-
-    return true;
-
-	error:
-	return false;
-}
-
-static bool	_req_TURN_ON_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TURN_ON* i_pReq, uint16_t size)
-{
-	CMD_RSPBUF_TURN_OFF	rsp;
-
-    INFO("TURN_ON\n");
-
-    // TODO: do actual power on
-
-	vTaskDelay(100);
-
-    rsp.notMeasuring = 1;
-
-	_sendResp(i_pContext, CMD_RSP_TURN_ON, &rsp, sizeof(rsp));
-
-    return true;
-}
-
-static bool	_req_TURN_OFF_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TURN_OFF* i_pReq, uint16_t size)
-{
-    INFO("TURN_OFF\n");
-    return true;
-}
-
-static bool	_req_RESET_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_RESET* i_pReq, uint16_t size)
-{
-	CMD_RSPBUF_RESET	rsp = {0};
-
-	INFO("RESET\n");
-
-#if !SIMULATION_MODE
-	// Check That We Are Not During Meassure
-	if (!Measurement_Details.isActive) {
-		// We Are Not During Meassure ==> Set Response Value
-		rsp.notMeasuring = 1;
-
-		ADS_resetAll(0);
-		ADS_resetAll(1);
-		ADS_resetAll(2);
-		ADS_resetAll(3);
-	}
-#endif
-
-	_sendResp(i_pContext, CMD_RSP_RESET, &rsp, sizeof(rsp));
-
-    return true;
-}
-
 static bool	_req_SPI_SPEED_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SPI_SPEED* i_pReq, uint16_t size)
 {
     INFO("SPI_SPEED\n");
@@ -513,32 +277,6 @@ static bool	_req_TIME_SYNC_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TIME_SYNC* i
 	rsp.currentTime2 = t2;
 
 	_sendResp(i_pContext, CMD_RSP_TIME_SYNC, &rsp, sizeof(rsp));
-
-    return true;
-}
-
-static bool	_req_IMU_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_IMU_START* i_pReq, uint16_t size)
-{
-    INFO("IMU_START\n");
- 
- 	CMD_RSPBUF_IMU_START	rsp;
-
-	INFO("IMU_START g=%d a=%d\n", i_pReq->gscale, i_pReq->ascale);
-
-    // TODO: actual values
-	rsp.gscale	= i_pReq->gscale;
-	rsp.ascale	= i_pReq->ascale;
-
-	_sendResp(i_pContext, CMD_RSP_IMU_START, &rsp, sizeof(rsp));
-
-    return true;
-}
-
-static bool	_req_UDP_ACK_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_UDP_ACK* i_pReq, uint16_t size)
-{
-//    INFO("UDP_ACK %d\n", i_pReq->count);
- 
-	MEASURE_udpAck(i_pReq->id, i_pReq->count);
 
     return true;
 }

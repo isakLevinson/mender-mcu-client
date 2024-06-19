@@ -30,10 +30,10 @@
 #define CHANNEL_COUNT   4
 
 static const mcpwm_generator_config_t generator_bridge_config[CHANNEL_COUNT][2] = {
-    {{.gen_gpio_num = 4},   {.gen_gpio_num = 5, .flags.invert_pwm = true}},
-    {{.gen_gpio_num = 6},   {.gen_gpio_num = 7, .flags.invert_pwm = true}},
-    {{.gen_gpio_num = 8},   {.gen_gpio_num = 9, .flags.invert_pwm = true}},
-    {{.gen_gpio_num = 10},  {.gen_gpio_num = 11, .flags.invert_pwm = true}},
+    {{.gen_gpio_num = 41},  {.gen_gpio_num = 40, .flags.invert_pwm = true}},
+    {{.gen_gpio_num = 39},  {.gen_gpio_num = 38, .flags.invert_pwm = true}},
+    {{.gen_gpio_num = 37},  {.gen_gpio_num = 36, .flags.invert_pwm = true}},
+    {{.gen_gpio_num = 35},  {.gen_gpio_num = 34, .flags.invert_pwm = true}},
 };
 
 mcpwm_timer_handle_t timer[CHANNEL_COUNT/2] = {0};
@@ -83,7 +83,7 @@ static void _init(void)
     }
 }
 
-static bool _setPwm(uint8_t ch, uint32_t val)
+bool PMP_on(uint8_t ch, uint32_t val)
 {
     esp_err_t err;
     uint8_t i;
@@ -140,21 +140,15 @@ static bool dbgPwm(uint8_t argc, char** argv)
     ch = strtoul(argv[1], NULL, 10);
     on = strtoul(argv[2], NULL, 10);
 
-    _setPwm(ch, on);
+    PMP_on(ch, on);
 
-    return true;
-}
-
-static bool dbgGpio(uint8_t argc, char** argv)
-{
     return true;
 }
 
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("pump", NULL)
 	    DEBUG_MENU_CMD("status",		NULL,		NULL, dbgStatus)
-	    DEBUG_MENU_CMD("pwm",			NULL,		NULL, dbgPwm)
-	    DEBUG_MENU_CMD("gpio",			NULL,		NULL, dbgGpio)
+	    DEBUG_MENU_CMD("on",			NULL,		NULL, dbgPwm)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
