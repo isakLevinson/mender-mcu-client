@@ -27,17 +27,18 @@
 
 #define SERVO_TIMEBASE_RESOLUTION_HZ 10000000  // 1MHz, 1us per tick
 #define SERVO_TIMEBASE_PERIOD        370    // 20000 ticks, 20ms
-#define CHANNEL_COUNT   2
-#define GENERATOR_COUNT 2
+#define CHANNEL_COUNT   3
 
 static const mcpwm_generator_config_t generator_bridge_config[CHANNEL_COUNT][2] = {
     {{.gen_gpio_num = 4},   {.gen_gpio_num = 5, .flags.invert_pwm = true}},
     {{.gen_gpio_num = 6},   {.gen_gpio_num = 7, .flags.invert_pwm = true}},
+    {{.gen_gpio_num = 8},   {.gen_gpio_num = 9, .flags.invert_pwm = true}},
+//    {{.gen_gpio_num = 10},  {.gen_gpio_num = 11, .flags.invert_pwm = true}},
 };
 
-mcpwm_oper_handle_t oper_bridge[CHANNEL_COUNT];
-mcpwm_cmpr_handle_t comparator_bridge[CHANNEL_COUNT];
-mcpwm_gen_handle_t generator_bridge[GENERATOR_COUNT] = {0};
+mcpwm_oper_handle_t oper_bridge[CHANNEL_COUNT] = {0};
+mcpwm_cmpr_handle_t comparator_bridge[CHANNEL_COUNT] = {0};
+mcpwm_gen_handle_t generator_bridge[CHANNEL_COUNT][2] = {0};
 
 
 static void _init(void)
@@ -81,8 +82,8 @@ static bool _setPwm(uint8_t ch, uint32_t val)
     uint8_t i;
 
     if (!val) {
-        mcpwm_del_generator(generator_bridge[0]);
-        mcpwm_del_generator(generator_bridge[1]);
+        mcpwm_del_generator(generator_bridge[ch][0]);
+        mcpwm_del_generator(generator_bridge[ch][1]);
         gpio_set_direction(generator_bridge_config[ch][0].gen_gpio_num, GPIO_MODE_OUTPUT);
         gpio_set_direction(generator_bridge_config[ch][1].gen_gpio_num, GPIO_MODE_OUTPUT);
         gpio_set_level(generator_bridge_config[ch][0].gen_gpio_num, 0);
@@ -91,12 +92,12 @@ static bool _setPwm(uint8_t ch, uint32_t val)
     }
 
     for (i=0; i<2; i++) {
-        err = mcpwm_new_generator(oper_bridge[ch], &generator_bridge_config[ch][i], &generator_bridge[i]);
+        err = mcpwm_new_generator(oper_bridge[ch], &generator_bridge_config[ch][i], &generator_bridge[ch][i]);
         if (ESP_OK != err) {
             ERROR("mcpwm_new_generator %d\n", err);
         }
 
-        err = mcpwm_generator_set_actions_on_timer_event(generator_bridge[i],
+        err = mcpwm_generator_set_actions_on_timer_event(generator_bridge[ch][i],
                         MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH),
                         MCPWM_GEN_TIMER_EVENT_ACTION_END());
         if (ESP_OK != err) {
@@ -104,7 +105,7 @@ static bool _setPwm(uint8_t ch, uint32_t val)
         }
 
         // go low on compare threshold
-        err = mcpwm_generator_set_actions_on_compare_event(generator_bridge[i],
+        err = mcpwm_generator_set_actions_on_compare_event(generator_bridge[ch][i],
                         MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator_bridge[ch], MCPWM_GEN_ACTION_LOW),
                         MCPWM_GEN_COMPARE_EVENT_ACTION_END());
         if (ESP_OK != err) {
