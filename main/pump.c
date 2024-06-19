@@ -26,14 +26,14 @@
 
 
 #define SERVO_TIMEBASE_RESOLUTION_HZ 10000000  // 1MHz, 1us per tick
-#define SERVO_TIMEBASE_PERIOD        400    // 20000 ticks, 20ms
+#define SERVO_TIMEBASE_PERIOD        370    // 20000 ticks, 20ms
 #define GENERATOR_COUNT 2
 
 static const mcpwm_generator_config_t generator_bridge_config[] = {
     {.gen_gpio_num = 4},
-    {.gen_gpio_num = 5},
+    {.gen_gpio_num = 5, .flags.invert_pwm = true},
     {.gen_gpio_num = 6},
-    {.gen_gpio_num = 7},
+    {.gen_gpio_num = 7, .flags.invert_pwm = true},
 };
 
 mcpwm_oper_handle_t oper_bridge = NULL;
@@ -64,29 +64,7 @@ static void _init(void)
     ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &oper_bridge));
     ESP_ERROR_CHECK(mcpwm_operator_connect_timer(oper_bridge, timer));
     ESP_ERROR_CHECK(mcpwm_new_comparator(oper_bridge, &comparator_config, &comparator_bridge));
-    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator_bridge, 0));
-
-#if 0
-    mcpwm_timer_event_callbacks_t   timer_cb = {
-        .on_full = _tmrFullCb,
-        .on_empty = _tmrEmptyCb,
-        .on_stop = _tmrStopCb,
-    };
-
-    mcpwm_comparator_event_callbacks_t comparator_cb = {
-        .on_reach = _cmpReachCb,
-    };
-
-    err = mcpwm_timer_register_event_callbacks(timer, &timer_cb, NULL);
-    if (ESP_OK != err) {
-        ERROR("mcpwm_timer_register_event_callbacks %d\n", err);
-    }
-
-    err = mcpwm_comparator_register_event_callbacks(comparator_bridge, &comparator_cb, NULL);
-    if (ESP_OK != err) {
-        ERROR("mcpwm_comparator_register_event_callbacks %d\n", err);
-    }
-#endif
+    ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator_bridge, SERVO_TIMEBASE_PERIOD/2));
 
     ESP_ERROR_CHECK(mcpwm_timer_enable(timer));
     ESP_ERROR_CHECK(mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP));
@@ -127,11 +105,6 @@ static bool _setPwm(uint8_t ch, uint32_t val)
         if (ESP_OK != err) {
             ERROR("mcpwm_generator_set_actions_on_compare_event %d\n", err);
         }
-    }
-
-    err =mcpwm_comparator_set_compare_value(comparator_bridge, 50);
-    if (ESP_OK != err) {
-        ERROR("mcpwm_comparator_set_compare_value %d\n", err);
     }
 
     return true;
