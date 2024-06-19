@@ -40,6 +40,29 @@ mcpwm_oper_handle_t oper_bridge = NULL;
 mcpwm_cmpr_handle_t comparator_bridge = NULL;
 mcpwm_gen_handle_t generator_bridge[GENERATOR_COUNT] = {0};
 
+
+bool _tmrFullCb(mcpwm_timer_handle_t timer, const mcpwm_timer_event_data_t *edata, void *user_ctx)
+{
+    return true;
+}
+
+bool _tmrEmptyCb(mcpwm_timer_handle_t timer, const mcpwm_timer_event_data_t *edata, void *user_ctx)
+{
+    gpio_set_level(generator_bridge_config[2].gen_gpio_num, 1);
+    return true;
+}
+
+bool _tmrStopCb(mcpwm_timer_handle_t timer, const mcpwm_timer_event_data_t *edata, void *user_ctx)
+{
+    return true;
+}
+
+static bool _cmpReachCb(mcpwm_cmpr_handle_t comparator, const mcpwm_compare_event_data_t *edata, void *user_ctx)
+{
+    gpio_set_level(generator_bridge_config[2].gen_gpio_num, 0);
+    return true;
+}
+
 static void _init(void)
 {
     esp_err_t   err;
@@ -65,6 +88,32 @@ static void _init(void)
     ESP_ERROR_CHECK(mcpwm_operator_connect_timer(oper_bridge, timer));
     ESP_ERROR_CHECK(mcpwm_new_comparator(oper_bridge, &comparator_config, &comparator_bridge));
     ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator_bridge, SERVO_TIMEBASE_PERIOD/2));
+
+    gpio_set_direction(generator_bridge_config[2].gen_gpio_num, GPIO_MODE_OUTPUT);
+    gpio_set_direction(generator_bridge_config[2].gen_gpio_num, GPIO_MODE_OUTPUT);
+    gpio_set_level(generator_bridge_config[2].gen_gpio_num, 0);
+    gpio_set_level(generator_bridge_config[2].gen_gpio_num, 0);
+
+
+    mcpwm_timer_event_callbacks_t   timer_cb = {
+        .on_full = _tmrFullCb,
+        .on_empty = _tmrEmptyCb,
+        .on_stop = _tmrStopCb,
+    };
+
+    mcpwm_comparator_event_callbacks_t comparator_cb = {
+        .on_reach = _cmpReachCb,
+    };
+
+    err = mcpwm_timer_register_event_callbacks(timer, &timer_cb, NULL);
+    if (ESP_OK != err) {
+        ERROR("mcpwm_timer_register_event_callbacks %d\n", err);
+    }
+
+    err = mcpwm_comparator_register_event_callbacks(comparator_bridge, &comparator_cb, NULL);
+    if (ESP_OK != err) {
+        ERROR("mcpwm_comparator_register_event_callbacks %d\n", err);
+    }
 
     ESP_ERROR_CHECK(mcpwm_timer_enable(timer));
     ESP_ERROR_CHECK(mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP));
