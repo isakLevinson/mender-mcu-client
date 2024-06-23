@@ -26,7 +26,7 @@
 
 
 #define SERVO_TIMEBASE_RESOLUTION_HZ 10000000  // 1MHz, 1us per tick
-#define SERVO_TIMEBASE_PERIOD        370    // 20000 ticks, 20ms
+#define SERVO_TIMEBASE_PERIOD        436       // 20000 ticks, 43uS (23KHz)
 #define CHANNEL_COUNT   4
 
 static const mcpwm_generator_config_t generator_bridge_config[CHANNEL_COUNT][2] = {
