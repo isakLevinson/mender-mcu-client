@@ -25,6 +25,10 @@
 #include "freertos/task.h"
 
 #include "app.h"
+#include "pump.h"
+#include "adc.h"
+#include "cli.h"
+
 
 static const uint8_t g_valveGpios[] = {
     9,//v0
@@ -108,6 +112,41 @@ static bool dbgGpio(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgCuff(uint8_t argc, char** argv)
+{
+    bool    ret;
+    uint8_t cuff;
+    int8_t  op;
+    char    c;
+
+    if (argc < 3)  {
+        return false;
+    }
+
+    cuff = strtol(argv[1], NULL, 10);
+    op = strtol(argv[2], NULL, 10);
+
+    if (op > 0) {
+        PMP_on(cuff, 1);
+        _valveOn(cuff, 1);
+    } else if (op < 0) {
+        PMP_on(cuff, 0);
+        _valveOn(cuff, 1);
+    } else {
+        PMP_on(cuff, 0);
+        _valveOn(cuff, 0);
+    }
+
+    do {
+        ADC_getPressure();
+        vTaskDelay(100);
+        ret = CLI_getc(&c);
+    } while (!ret);
+
+
+    return true;
+}
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
     return true;
@@ -118,6 +157,7 @@ DEBUG_MENU_START(g_menu)
 	    DEBUG_MENU_CMD("status",		NULL,		NULL, dbgStatus)
 	    DEBUG_MENU_CMD("valve",			NULL,		NULL, dbgValve)
 	    DEBUG_MENU_CMD("gpio",			NULL,		NULL, dbgGpio)
+        DEBUG_MENU_CMD("cuff",			NULL,		NULL, dbgCuff)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 

@@ -35,6 +35,7 @@
 #include "wifi.h"
 #include "pump.h"
 #include "app.h"
+#include "adc.h"
 
 #define BUF_SIZE    1024
 
@@ -81,6 +82,7 @@ void app_main(void)
     SPI_init();
     CMD_init(NULL);
     PMP_init();
+    ADC_init();
     APP_init();
     
     register_wifi();
