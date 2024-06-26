@@ -116,8 +116,7 @@ static void example_adc_calibration_deinit(adc_cali_handle_t handle)
 }
 #endif
 
-
-bool    ADC_getPressure(void)
+bool    ADC_getPressure(int16_t* pPress)
 {
     int adcVal = 0;
     int v[4];
@@ -138,9 +137,12 @@ bool    ADC_getPressure(void)
 
     for (i=0; i<4; i++) {
        mmg[i]  = MV_TO_MMG(v[i] - 485);
+       if (pPress) { 
+           pPress[i] = mmg[i];
+       }
     }
 
-    INFO("voltage: %4d %4d %4d %4d     %3d %3d %3d %3d\n", v[0], v[1], v[2], v[3], mmg[0], mmg[1], mmg[2], mmg[3]);
+    //INFO("voltage: %4d %4d %4d %4d     %3d %3d %3d %3d\n", v[0], v[1], v[2], v[3], mmg[0], mmg[1], mmg[2], mmg[3]);
 
     return true;
 }
@@ -171,6 +173,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 {
     bool    ret;
     char    c;
+    int16_t press[4];
 
     int delay = 100;
     TickType_t  tick = 0;
@@ -182,7 +185,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
     do {
         if (xTaskGetTickCount() - tick > delay) {
             if (do_calibration1) {
-                ADC_getPressure();
+                ADC_getPressure(press);
             }
 
             tick = xTaskGetTickCount();

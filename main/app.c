@@ -61,6 +61,29 @@ bool _valveOn(uint8_t v, bool on)
     return true;
 }
 
+
+static void _pressurize(uint8_t ch, int dir)
+{
+    switch (dir) {
+        case 0: 
+            PMP_on(ch, 0);
+            _valveOn(ch, 0);
+            break;
+
+        case 1: 
+            PMP_on(ch, 1);
+            _valveOn(ch, 1);
+            break;
+
+        case -1: 
+            PMP_on(ch, 0);
+            _valveOn(ch, 1);
+            break;
+
+        default:
+    }
+}
+
 static bool dbgValve(uint8_t argc, char** argv)
 {
 
@@ -118,6 +141,7 @@ static bool dbgCuff(uint8_t argc, char** argv)
     uint8_t cuff;
     int8_t  op;
     char    c;
+    int16_t    press[4];
 
     if (argc < 3)  {
         return false;
@@ -126,19 +150,12 @@ static bool dbgCuff(uint8_t argc, char** argv)
     cuff = strtol(argv[1], NULL, 10);
     op = strtol(argv[2], NULL, 10);
 
-    if (op > 0) {
-        PMP_on(cuff, 1);
-        _valveOn(cuff, 1);
-    } else if (op < 0) {
-        PMP_on(cuff, 0);
-        _valveOn(cuff, 1);
-    } else {
-        PMP_on(cuff, 0);
-        _valveOn(cuff, 0);
-    }
+    _pressurize(cuff, op);
 
     do {
-        ADC_getPressure();
+        ADC_getPressure(press);
+        INFO("%3d %3d %3d %3d\n", press[0], press[1], press[2], press[3]);
+
         vTaskDelay(100);
         ret = CLI_getc(&c);
     } while (!ret);
