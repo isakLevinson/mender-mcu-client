@@ -41,6 +41,13 @@
 #define EXAMPLE_ADC1_CHAN2          ADC_CHANNEL_2   /* gpio 3*/
 #define EXAMPLE_ADC1_CHAN3          ADC_CHANNEL_3   /* gpio 4*/
 
+
+#define MV_TO_NPA500MV(mv)	((mv)*3/2)
+#define MV_TO_MMG(mv)		((mv) * 776 / 4000)
+#define ADC_MV_TO_MMG(mv)		MV_TO_MMG(MV_TO_NPA500MV((mv)))
+
+
+
 adc_oneshot_unit_handle_t adc1_handle;
 adc_oneshot_unit_handle_t adc2_handle;
 adc_cali_handle_t adc1_cali_handle = NULL;
@@ -113,21 +120,27 @@ static void example_adc_calibration_deinit(adc_cali_handle_t handle)
 bool    ADC_getPressure(void)
 {
     int adcVal = 0;
-    int v1, v2, v3, v4;
+    int v[4];
+    int mmg[4];
+    int i;
 
     adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN0, &adcVal);
-    adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v1);
+    adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v[0]);
 
     adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN1, &adcVal);
-    adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v2);
+    adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v[1]);
 
     adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN2, &adcVal);
-    adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v3);
+    adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v[2]);
 
     adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN3, &adcVal);
-    adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v4);
+    adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v[3]);
 
-    INFO("voltage: %d %d %d %d\n", v1, v2, v3, v4);
+    for (i=0; i<4; i++) {
+       mmg[i]  = MV_TO_MMG(v[i] - 485);
+    }
+
+    INFO("voltage: %4d %4d %4d %4d     %3d %3d %3d %3d\n", v[0], v[1], v[2], v[3], mmg[0], mmg[1], mmg[2], mmg[3]);
 
     return true;
 }
