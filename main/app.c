@@ -1,5 +1,5 @@
 
-#define DEF_DBG_MODULE	DBG_MODULE_PUMP
+#define DEF_DBG_MODULE	DBG_MODULE_APP
 
 #include <sys_def.h>
 #include "dbgMenus.h"
@@ -43,8 +43,10 @@ static const uint8_t g_valveGpios[] = {
 static struct {
     struct {
         uint16_t    pmpValveDelay;
-        uint8_t     histeresisHigh;
-        uint8_t     histeresisLow;
+        int8_t      histeresisH2;
+        int8_t      histeresisH1;
+        int8_t      histeresisL1;
+        int8_t      histeresisL2;
     } cfg;
 
     bool    loopActive;
@@ -54,8 +56,10 @@ static struct {
 } g_app = {
     .cfg = {
         .pmpValveDelay  = 100,
-        .histeresisHigh = 5,
-        .histeresisLow  = 5,
+        .histeresisH2 = 7,
+        .histeresisH1 = 5,
+        .histeresisL1 = 0,
+        .histeresisL2 = -5,
     },
     .loopActive = true,
 };
@@ -110,13 +114,34 @@ static void _task(void *arg)
         }
 
         ADC_getPressure(g_app.press);
+        TRACE("press: %3d %3d %3d %3d %2d %2d %2d %2d\n", 
+            g_app.press[0], g_app.press[1], g_app.press[2], g_app.press[3],
+            g_app.pressurizeState[0], g_app.pressurizeState[1], g_app.pressurizeState[2], g_app.pressurizeState[3]);
+
         for (i=0; i<1; i++) {
-            if (g_app.target[i] - g_app.press[i] > g_app.cfg.histeresisHigh) {
-                _pressurize(i, 1);
-            } else if (g_app.target[i] - g_app.press[i] < -g_app.cfg.histeresisLow) {
-                _pressurize(i, -1);
-            } else {
-                _pressurize(i, 0);
+            int delta = g_app.press[i] - g_app.target[i];
+
+            switch (g_app.pressurizeState[i]) {
+                case 1:
+                    if (delta > g_app.cfg.histeresisH1) {
+                        _pressurize(i, 0);
+                    }
+                    break;
+
+                case -1:
+                    if (delta < g_app.cfg.histeresisL1) {
+                        _pressurize(i, 0);
+                    }
+                    break;
+
+                case 0:
+                    if (delta > g_app.cfg.histeresisH2) {
+                        _pressurize(i, -1);
+                    }
+                    if (delta < g_app.cfg.histeresisL2) {
+                        _pressurize(i, 1);
+                    }
+                    break;
             }
         }
 
@@ -217,7 +242,6 @@ static bool dbgCuff(uint8_t argc, char** argv)
         ret = CLI_getc(&c);
     } while (!ret);
 
-
     return true;
 }
 
@@ -247,8 +271,10 @@ static bool dbgCfg(uint8_t argc, char** argv)
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
-		ARGS_ENTRY("hh",		ARGS_TYPE_UINT8,	0,	"histeresis high",	&g_app.cfg.histeresisHigh)
-		ARGS_ENTRY("hl",		ARGS_TYPE_UINT8,	0,	"histeresis low",	&g_app.cfg.histeresisLow)
+		ARGS_ENTRY("h2",		ARGS_TYPE_INT8,	    0,	"histeresis high2",	&g_app.cfg.histeresisH2)
+		ARGS_ENTRY("h1",		ARGS_TYPE_INT8,	    0, 	"histeresis high1",	&g_app.cfg.histeresisH1)
+		ARGS_ENTRY("l1",		ARGS_TYPE_INT8,	    0,	"histeresis low1",	&g_app.cfg.histeresisL1)
+		ARGS_ENTRY("l2",		ARGS_TYPE_INT8,	    0,	"histeresis low2",	&g_app.cfg.histeresisL2)
 		ARGS_ENTRY("pd",		ARGS_TYPE_UINT16,	0,	"pump delay",   	&g_app.cfg.pmpValveDelay)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
@@ -258,8 +284,10 @@ static bool dbgCfg(uint8_t argc, char** argv)
 		return false;
 	}
 
-    PRINT("hh: %d\n", g_app.cfg.histeresisHigh);
-    PRINT("hl: %d\n", g_app.cfg.histeresisLow);
+    PRINT("h2: %d\n", g_app.cfg.histeresisH2);
+    PRINT("h1: %d\n", g_app.cfg.histeresisH1);
+    PRINT("l1: %d\n", g_app.cfg.histeresisL1);
+    PRINT("l2: %d\n", g_app.cfg.histeresisL2);
     PRINT("pd: %d\n", g_app.cfg.pmpValveDelay);
 
     return true;
