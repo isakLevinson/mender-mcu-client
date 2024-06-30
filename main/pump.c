@@ -36,11 +36,14 @@ static const mcpwm_generator_config_t generator_bridge_config[CHANNEL_COUNT][2] 
     {{.gen_gpio_num = 35},  {.gen_gpio_num = 34, .flags.invert_pwm = true}},
 };
 
-mcpwm_timer_handle_t timer[CHANNEL_COUNT/2] = {0};
-mcpwm_oper_handle_t oper_bridge[CHANNEL_COUNT] = {0};
-mcpwm_cmpr_handle_t comparator_bridge[CHANNEL_COUNT] = {0};
-mcpwm_gen_handle_t generator[CHANNEL_COUNT][2] = {0};
+static struct {
+    bool    state[4];
 
+    mcpwm_timer_handle_t timer[CHANNEL_COUNT/2];
+    mcpwm_oper_handle_t oper_bridge[CHANNEL_COUNT];
+    mcpwm_cmpr_handle_t comparator_bridge[CHANNEL_COUNT];
+    mcpwm_gen_handle_t generator[CHANNEL_COUNT][2];
+} g_pmp = {0};
 
 static void _init(void)
 {
@@ -65,21 +68,21 @@ static void _init(void)
 
     for (i=0; i<CHANNEL_COUNT/2; i++) {
         timer_config.group_id       = i;
-        ESP_ERROR_CHECK(mcpwm_new_timer(&timer_config, &timer[i]));
+        ESP_ERROR_CHECK(mcpwm_new_timer(&timer_config, &g_pmp.timer[i]));
     }
 
     for (i=0; i<CHANNEL_COUNT; i++) {
         operator_config.group_id    = i/2;
 
-        ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &oper_bridge[i]));
-        ESP_ERROR_CHECK(mcpwm_operator_connect_timer(oper_bridge[i], timer[i/2]));
-        ESP_ERROR_CHECK(mcpwm_new_comparator(oper_bridge[i], &comparator_config, &comparator_bridge[i]));
-        ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(comparator_bridge[i], SERVO_TIMEBASE_PERIOD/2));
+        ESP_ERROR_CHECK(mcpwm_new_operator(&operator_config, &g_pmp.oper_bridge[i]));
+        ESP_ERROR_CHECK(mcpwm_operator_connect_timer(g_pmp.oper_bridge[i], g_pmp.timer[i/2]));
+        ESP_ERROR_CHECK(mcpwm_new_comparator(g_pmp.oper_bridge[i], &comparator_config, &g_pmp.comparator_bridge[i]));
+        ESP_ERROR_CHECK(mcpwm_comparator_set_compare_value(g_pmp.comparator_bridge[i], SERVO_TIMEBASE_PERIOD/2));
     }
 
     for (i=0; i<CHANNEL_COUNT/2; i++) {
-        ESP_ERROR_CHECK(mcpwm_timer_enable(timer[i]));
-        ESP_ERROR_CHECK(mcpwm_timer_start_stop(timer[i], MCPWM_TIMER_START_NO_STOP));
+        ESP_ERROR_CHECK(mcpwm_timer_enable(g_pmp.timer[i]));
+        ESP_ERROR_CHECK(mcpwm_timer_start_stop(g_pmp.timer[i], MCPWM_TIMER_START_NO_STOP));
     }
 }
 
@@ -88,9 +91,15 @@ bool PMP_on(uint8_t ch, uint32_t val)
     esp_err_t err;
     uint8_t i;
 
+    if (g_pmp.state[ch] == val){
+        return true;
+    }
+
+    g_pmp.state[ch] = val;
+
     if (!val) {
-        mcpwm_del_generator(generator[ch][0]);
-        mcpwm_del_generator(generator[ch][1]);
+        mcpwm_del_generator(g_pmp.generator[ch][0]);
+        mcpwm_del_generator(g_pmp.generator[ch][1]);
         gpio_set_direction(generator_bridge_config[ch][0].gen_gpio_num, GPIO_MODE_OUTPUT);
         gpio_set_direction(generator_bridge_config[ch][1].gen_gpio_num, GPIO_MODE_OUTPUT);
         gpio_set_level(generator_bridge_config[ch][0].gen_gpio_num, 0);
@@ -99,12 +108,12 @@ bool PMP_on(uint8_t ch, uint32_t val)
     }
 
     for (i=0; i<2; i++) {
-        err = mcpwm_new_generator(oper_bridge[ch], &generator_bridge_config[ch][i], &generator[ch][i]);
+        err = mcpwm_new_generator(g_pmp.oper_bridge[ch], &generator_bridge_config[ch][i], &g_pmp.generator[ch][i]);
         if (ESP_OK != err) {
             ERROR("mcpwm_new_generator %d\n", err);
         }
 
-        err = mcpwm_generator_set_actions_on_timer_event(generator[ch][i],
+        err = mcpwm_generator_set_actions_on_timer_event(g_pmp.generator[ch][i],
                         MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH),
                         MCPWM_GEN_TIMER_EVENT_ACTION_END());
         if (ESP_OK != err) {
@@ -112,8 +121,8 @@ bool PMP_on(uint8_t ch, uint32_t val)
         }
 
         // go low on compare threshold
-        err = mcpwm_generator_set_actions_on_compare_event(generator[ch][i],
-                        MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, comparator_bridge[ch], MCPWM_GEN_ACTION_LOW),
+        err = mcpwm_generator_set_actions_on_compare_event(g_pmp.generator[ch][i],
+                        MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, g_pmp.comparator_bridge[ch], MCPWM_GEN_ACTION_LOW),
                         MCPWM_GEN_COMPARE_EVENT_ACTION_END());
         if (ESP_OK != err) {
             ERROR("mcpwm_generator_set_actions_on_compare_event %d\n", err);
