@@ -567,7 +567,7 @@ static void _udp_time_server(void)
                 PRINT_FRAC_ARGS(dt, 1000, 1000),
                 (uint32_t)((time - lastUpdated)/1000));
 
-            CMD_sendTimeSyncAck(&cmdContext, dt);
+            //CMD_sendTimeSyncAck(&cmdContext, dt);
             close(txs);
         }
     }

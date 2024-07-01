@@ -33,23 +33,32 @@
 
 //		Opcode name					OPCODE	Parameters
 #define CMD(req, rsp)	\
-	req(VER,						0x01,	;)		\
-	rsp(VER,						0x01,	uint8_t		swMagor;	\
-											uint8_t		swMinor;	\
-											uint8_t		swPatch;    \
-											uint8_t		hwMagor;	\
-											uint8_t		hwMinor;	\
-											uint32_t	ip;			\
-											uint32_t	guid[3];)	\
-	req(SPI_SPEED,					0x53,	uint8_t		speed;)				\
-	rsp(SPI_SPEED,					0x53,	uint8_t		isOk;)				\
-	req(SYNC_START,					0x56,	;)							\
-	rsp(SYNC_START,					0x56,	uint8_t		dummy;)				\
-	req(TIME_SYNC,					0x57,	int64_t		time;)				\
-	rsp(TIME_SYNC,					0x57,	int64_t		requestTime;		\
-											int64_t		currentTime1;		\
-											int64_t		currentTime2;)		\
-	req(TIME_SYNC_ACK,				0x60,	int64_t		dt;)				\
+	req(NOP,						0x00,	;)							\
+	req(KEEPALIVE,					0x01,	;)							\
+	rsp(KEEPALIVE,					0x02,	uint8_t	batVoltage;			\
+											uint8_t	soc;)				\
+	req(VER,						0x03,	;)							\
+	rsp(VER,						0x04,	uint8_t		major;			\
+											uint8_t		minor;			\
+											uint8_t		hotfix;			\
+											uint8_t		build;)			\
+	req(STATUS,						0x05,	;)							\
+	rsp(STATUS,						0x06,	uint16_t	pressure[4];	\
+											uint8_t		valve[6];		\
+											uint8_t		pump[6];		\
+											uint8_t		voltage;		\
+											uint8_t		soc;)			\
+	req(SET_PRESSURE,				0x07,	uint16_t	pressure[4];)	\
+	rsp(SET_PRESSURE,				0x08,	uint8_t		ok;)			\
+	req(START_STREAM,				0x09,	;)							\
+	rsp(STREAM,						0x0a,	uint64_t	time;			\
+											uint16_t	pressure[4];)	\
+	req(STOP_STREAM,				0x0b,	;)							\
+	rsp(STOP_STREAM,				0x0c,	uint8_t		ok;)			\
+	req(CONTROL_ENABLE,				0x0d,	uint8_t		on;)			\
+	rsp(CONTROL_ENABLE,				0x0e,	uint8_t		ok;)			\
+
+
 
 
 // *INDENT-ON*
@@ -180,112 +189,83 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
     return true;
 }
 
-bool CMD_sendTimeSyncAck(CMD_CONTEXT* i_pContext, int64_t dt)
+static bool	_req_NOP_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_NOP* i_pReq, uint16_t size)
 {
-	CMD_CONTEXT* pContext = i_pContext;
-	CMD_REQBUF_TIME_SYNC_ACK	req;
+	return true;
+}
 
-	if (!i_pContext) {
-		pContext = &g_cmdDb.defaultContext;
-	}
+static bool	_req_KEEPALIVE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KEEPALIVE* i_pReq, uint16_t size)
+{
+    CMD_RSPBUF_KEEPALIVE	rsp;
+	
+	INFO("KEEPALIVE\n");
 
-	if (!pContext) {
-		ERROR("invalid context\n");
-		return false;
-	}
-
-	if (!pContext->p_cbSend) {
-		return false;
-	}
-
-	if (!pContext->socket) {
-		return false;
-	}
-
-	req.dt = dt;
-	//INFO("CMD_sendTimeSyncAck: " PRINT_FRAC_STR(3) "\n", PRINT_FRAC_ARGS(dt, 1000, 1000));
-
-	pContext->p_cbSend(pContext->socket, CMD_REQ_TIME_SYNC_ACK, &req, sizeof(req));
+	_sendResp(i_pContext, CMD_RSP_KEEPALIVE, &rsp, sizeof(rsp));
 
     return true;
 }
 
-
 static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint16_t size)
 {
-    //esp_err_t   ret;
 	CMD_RSPBUF_VER	rsp;
-    //esp_ip4_addr_t ip;
 
     INFO("VER\n");
-
-	rsp.swMagor	= SOFTWARE_MAJOR_VERSION;
-	rsp.swMinor	= SOFTWARE_MINOR_VERSION;
-	rsp.swPatch = SOFTWARE_PATCH_VERSION;
-	rsp.hwMagor	= HARDWARE_MAJOR_VERSION;
-	rsp.hwMinor	= HARDWARE_MINOR_VERSION;
-	
-	//ip = wifi_getSelfIp();
-    //rsp.ip = ip.addr;
-	rsp.ip = 0x23e1e448;
-	
-    // TODO:     use actual GUID
-    //esp_err_t esp_flash_init(&chip);
-    //ret = esp_flash_read_unique_chip_id(esp_flash_t *chip, uint64_t* out_uid)
-    rsp.guid[0]	= 0x12;
-	rsp.guid[1]	= 0x34;
-	rsp.guid[2]	= 0x56;
-
-	INFO("ver:(%x %x %x %x %x) addr=%x\n",
-		rsp.swMagor	= SOFTWARE_MAJOR_VERSION,
-		rsp.swMinor	= SOFTWARE_MINOR_VERSION,
-		rsp.swPatch = SOFTWARE_PATCH_VERSION,
-		rsp.hwMagor	= HARDWARE_MAJOR_VERSION,
-		rsp.hwMinor	= HARDWARE_MINOR_VERSION,
-		rsp.ip);
 
 	_sendResp(i_pContext, CMD_RSP_VER, &rsp, sizeof(rsp));
 
 	return true;
 }
 
-static bool	_req_SPI_SPEED_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SPI_SPEED* i_pReq, uint16_t size)
+static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq, uint16_t size)
 {
-    INFO("SPI_SPEED\n");
-    return true;
+	CMD_RSPBUF_STATUS	rsp;
+
+    INFO("STATUS\n");
+
+    _sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
+	
+	return true;
 }
 
-static bool	_req_SYNC_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SYNC_START* i_pReq, uint16_t size)
+static bool	_req_SET_PRESSURE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PRESSURE* i_pReq, uint16_t size)
 {
-    INFO("SYNC_START\n");
-	TIME_set64(0);
-    return true;
-}
+    INFO("SET_PRESSURE\n");
 
-static bool	_req_TIME_SYNC_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TIME_SYNC* i_pReq, uint16_t size)
-{
-    INFO("TIME_SYNC\n");
-	int64_t	t1, t2;
+	CMD_RSPBUF_SET_PRESSURE	rsp;
 
-	CMD_RSPBUF_TIME_SYNC	rsp = {0};
-
-	rsp.requestTime 	= i_pReq->time;
-	TIME_get64(&t1);
-	TIME_get64(&t2);
-
-	rsp.currentTime1 = t1;
-	rsp.currentTime2 = t2;
-
-	_sendResp(i_pContext, CMD_RSP_TIME_SYNC, &rsp, sizeof(rsp));
+	_sendResp(i_pContext, CMD_RSP_SET_PRESSURE, &rsp, sizeof(rsp));
 
     return true;
 }
 
-static bool	_req_TIME_SYNC_ACK_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_TIME_SYNC_ACK* i_pReq, uint16_t size)
+static bool	_req_START_STREAM_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START_STREAM* i_pReq, uint16_t size)
 {
-	INFO("TIME_SYNC_ACK dt:" PRINT_FRAC_STR(3) "\n", PRINT_FRAC_ARGS(i_pReq->dt, 1000, 1000));
+	INFO("START_STREAM\n");
     return true;
 }
+
+static bool	_req_STOP_STREAM_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STOP_STREAM* i_pReq, uint16_t size)
+{
+	INFO("STOP_STREAM\n");
+
+	CMD_RSPBUF_STOP_STREAM	rsp;
+
+	_sendResp(i_pContext, CMD_RSP_STOP_STREAM, &rsp, sizeof(rsp));
+
+    return true;
+}
+
+static bool	_req_CONTROL_ENABLE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_CONTROL_ENABLE* i_pReq, uint16_t size)
+{
+	INFO("CONTROL_ENABLE\n");
+
+	CMD_RSPBUF_CONTROL_ENABLE	rsp;
+
+	_sendResp(i_pContext, CMD_RSP_CONTROL_ENABLE, &rsp, sizeof(rsp));
+
+    return true;
+}
+
 
 static bool _isValidMsgType(uint8_t type)
 {

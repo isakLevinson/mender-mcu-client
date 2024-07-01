@@ -28,7 +28,6 @@ typedef struct {
 bool	CMD_init(CMD_CONTEXT* i_pDefaultContext);
 void	CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data);
 void	CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, uint16_t size);
-bool	CMD_sendTimeSyncAck(CMD_CONTEXT* i_pContext, int64_t dt);
 
 #ifdef __cplusplus
 }
