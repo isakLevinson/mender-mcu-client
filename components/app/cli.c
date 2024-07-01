@@ -48,7 +48,7 @@ static bool _puts(uint8_t devBitmap, char* i_pStr, uint16_t size)
 	uint16_t	decodedSize;
 	
 	if (devBitmap & DBG_OUT_STREAM_DEVICE_MASK_CLI) {
-		retVal = DBG_PRINT_decode(&g_cliDb.decoder, (uint8_t*)i_pStr, size, false, true, decodedBuf, &decodedSize, NULL);
+		retVal = DBG_PRINT_decode(&g_cliDb.decoder, (uint8_t*)i_pStr, size, decodedBuf, &decodedSize, NULL);
 		if (retVal) {
             uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, decodedBuf, decodedSize);
 		}
@@ -57,7 +57,7 @@ static bool _puts(uint8_t devBitmap, char* i_pStr, uint16_t size)
 	return true;
 }
 
-static void* _alloc(uint32_t size)
+static void* _alloc(void* ptr, uint32_t size)
 {
 	void*	pBuf;
 	pBuf = malloc(size);

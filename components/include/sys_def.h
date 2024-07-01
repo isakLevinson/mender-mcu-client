@@ -56,5 +56,6 @@
 #define DEFAULT_TERMINAL_WIDTH      128
 #define USE_ARGS_FLOAT
 
+#define FIFO_DEBUG
 
 #endif /* SYS_DEF_H_ */
