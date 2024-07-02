@@ -47,7 +47,6 @@ static struct {
 
 static void _init(void)
 {
-    esp_err_t   err;
     uint8_t     i;
 
     mcpwm_timer_config_t timer_config = {

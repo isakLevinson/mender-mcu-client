@@ -30,7 +30,6 @@
 #include "wifi.h"
 #include "main.h"
 #include "cli.h"
-#include "spi.h"
 #include "cmd.h"
 #include "wifi.h"
 #include "pump.h"
@@ -79,7 +78,6 @@ void app_main(void)
     initialise_wifi();
     initialise_ble();
 
-    SPI_init();
     CMD_init(NULL);
     PMP_init();
     ADC_init();

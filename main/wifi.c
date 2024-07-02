@@ -313,6 +313,7 @@ static bool _sockSend(int s, COMM_TYPE type, void* i_pBuf, uint8_t size)
 	return true;
 }
 
+#if 0
 static bool _sendUdpTo(int s, COMM_TYPE type, void* i_pBuf, uint8_t size)
 {
 	uint8_t	buf[300];
@@ -342,6 +343,7 @@ static bool _sendUdpTo(int s, COMM_TYPE type, void* i_pBuf, uint8_t size)
 
     return true;
 }
+#endif
 
 static void cmd_tcp_server(void)
 {
@@ -503,16 +505,16 @@ static void _udp_server(void)
 
 static void _udp_time_server(void)
 {
-    esp_netif_ip_info_t ip;
+    //esp_netif_ip_info_t ip;
     struct sockaddr_in listen_addr4 = { 0 };
-    struct sockaddr_storage listen_addr = { 0 };
+    //struct sockaddr_storage listen_addr = { 0 };
     int actual_recv = 0;
     uint8_t buf[64];
     socklen_t socklen = sizeof(struct sockaddr_in);
     int s;
 
     INFO("_udp_time_server\n");
-
+#if 0
     listen_addr4.sin_family = AF_INET;
     listen_addr4.sin_port = htons(UDP_TIME_SERVER_PORT);
 
@@ -527,7 +529,7 @@ static void _udp_time_server(void)
         ERROR("esp_netif_get_ip_info failed\n");
         return;
     }
-
+#endif
     s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     bind(s, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
 
@@ -542,16 +544,16 @@ static void _udp_time_server(void)
             int64_t lastUpdated;
             int     txs;
 
-            CMD_CONTEXT	cmdContext = {
-                .p_cbSend	= _sendUdpTo,
-            };
+            //CMD_CONTEXT	cmdContext = {
+            //    .p_cbSend	= _sendUdpTo,
+            //};
             
             txs = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
             if (!txs) {
                 ERROR("socket error\n");
             }
 
-            cmdContext.socket = txs;
+            //cmdContext.socket = txs;
 
             TIME_get64(&time);
             TIME_getUpdateTime(&lastUpdated);

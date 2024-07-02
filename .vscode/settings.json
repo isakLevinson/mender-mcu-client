@@ -5,7 +5,8 @@
     "files.associations": {
         "main.h": "c",
         "dbgprint.h": "c",
-        "dbgprintcustom.h": "c"
+        "dbgprintcustom.h": "c",
+        "sys_def.h": "c"
     },
     "idf.port": "/dev/ttyACM3",
     "idf.flashType": "JTAG"

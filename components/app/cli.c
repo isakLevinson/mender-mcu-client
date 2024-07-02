@@ -69,7 +69,7 @@ static void _free(void* i_pBuf)
 	free(i_pBuf);
 }
 
-int64_t _getTime(void)
+uint64_t _getTime(void)
 {
 	return esp_timer_get_time();
 }
