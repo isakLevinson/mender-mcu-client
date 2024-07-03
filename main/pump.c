@@ -30,10 +30,10 @@
 #define CHANNEL_COUNT   4
 
 static const mcpwm_generator_config_t generator_bridge_config[CHANNEL_COUNT][2] = {
-    {{.gen_gpio_num = 41},  {.gen_gpio_num = 40, .flags.invert_pwm = true}},
-    {{.gen_gpio_num = 39},  {.gen_gpio_num = 38, .flags.invert_pwm = true}},
-    {{.gen_gpio_num = 37},  {.gen_gpio_num = 36, .flags.invert_pwm = true}},
-    {{.gen_gpio_num = 35},  {.gen_gpio_num = 34, .flags.invert_pwm = true}},
+    {{.gen_gpio_num = GPIO_PWM_00},  {.gen_gpio_num = GPIO_PWM_01, .flags.invert_pwm = true}},
+    {{.gen_gpio_num = GPIO_PWM_10},  {.gen_gpio_num = GPIO_PWM_11, .flags.invert_pwm = true}},
+    {{.gen_gpio_num = GPIO_PWM_20},  {.gen_gpio_num = GPIO_PWM_21, .flags.invert_pwm = true}},
+    {{.gen_gpio_num = GPIO_PWM_30},  {.gen_gpio_num = GPIO_PWM_31, .flags.invert_pwm = true}},
 };
 
 static struct {

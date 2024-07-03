@@ -7,6 +7,7 @@ idf_component_register(SRCS	"main.c"
 				"time.c"
 				"pump.c"
 				"adc.c"
+				"uart.c"
 
 				INCLUDE_DIRS ".")
 

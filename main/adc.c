@@ -36,17 +36,9 @@
 #define SHUNT_RESISTOR_UOHM 200
 #define CURRENT_AMP_GAIN    100
 
-#define EXAMPLE_ADC1_CHAN0          ADC_CHANNEL_0   /* gpio 1*/
-#define EXAMPLE_ADC1_CHAN1          ADC_CHANNEL_1   /* gpio 2*/
-#define EXAMPLE_ADC1_CHAN2          ADC_CHANNEL_2   /* gpio 3*/
-#define EXAMPLE_ADC1_CHAN3          ADC_CHANNEL_3   /* gpio 4*/
-
-
 #define MV_TO_NPA500MV(mv)	((mv)*3/2)
 #define MV_TO_MMG(mv)		((mv) * 776 / 4000)
 #define ADC_MV_TO_MMG(mv)		MV_TO_MMG(MV_TO_NPA500MV((mv)))
-
-
 
 adc_oneshot_unit_handle_t adc1_handle;
 adc_oneshot_unit_handle_t adc2_handle;
@@ -123,16 +115,16 @@ bool    ADC_getPressure(int16_t* pPress)
     int mmg[4];
     int i;
 
-    adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN0, &adcVal);
+    adc_oneshot_read(adc1_handle, GPIO_ADC1_CHAN0, &adcVal);
     adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v[0]);
 
-    adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN1, &adcVal);
+    adc_oneshot_read(adc1_handle, GPIO_ADC1_CHAN1, &adcVal);
     adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v[1]);
 
-    adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN2, &adcVal);
+    adc_oneshot_read(adc1_handle, GPIO_ADC1_CHAN2, &adcVal);
     adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v[2]);
 
-    adc_oneshot_read(adc1_handle, EXAMPLE_ADC1_CHAN3, &adcVal);
+    adc_oneshot_read(adc1_handle, GPIO_ADC1_CHAN3, &adcVal);
     adc_cali_raw_to_voltage(adc1_cali_handle, adcVal, &v[3]);
 
     for (i=0; i<4; i++) {
@@ -161,10 +153,10 @@ static void _init(void)
         .atten = ADC_ATTEN_DB_11,
     };
 
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, EXAMPLE_ADC1_CHAN0, &config));
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, EXAMPLE_ADC1_CHAN1, &config));
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, EXAMPLE_ADC1_CHAN2, &config));
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, EXAMPLE_ADC1_CHAN3, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, GPIO_ADC1_CHAN0, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, GPIO_ADC1_CHAN1, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, GPIO_ADC1_CHAN2, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, GPIO_ADC1_CHAN3, &config));
 
     do_calibration1 = example_adc_calibration_init(ADC_UNIT_1, ADC_ATTEN_DB_11, &adc1_cali_handle);
 }

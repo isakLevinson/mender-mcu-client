@@ -29,13 +29,12 @@
 #include "adc.h"
 #include "cli.h"
 
-
 static const uint8_t g_valveGpios[] = {
-    9,//v0
-    10,
-    11,
-    12,
-    13,
+    GPIO_VALVE_0,
+    GPIO_VALVE_1,
+    GPIO_VALVE_2,
+    GPIO_VALVE_3,
+    GPIO_VALVE_4,
 };
 
 #define VALVE_COUNT     (sizeof(g_valveGpios)/sizeof(g_valveGpios[0]))

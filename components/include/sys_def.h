@@ -34,6 +34,34 @@
 #define CMD_OUT_MESSAGES_QUEUE_SIZE		40
 #define CMD_OUT_MESSAGE_MAX_LENGTH		50
 
+#define UART_PORT_NUM_CMD  (1)
+#define UART_BAUD_CMD      (115200)
+
+
+#define GPIO_ADC1_CHAN0          ADC_CHANNEL_0   /* gpio 1*/
+#define GPIO_ADC1_CHAN1          ADC_CHANNEL_1   /* gpio 2*/
+#define GPIO_ADC1_CHAN2          ADC_CHANNEL_2   /* gpio 3*/
+#define GPIO_ADC1_CHAN3          ADC_CHANNEL_3   /* gpio 4*/
+
+#define GPIO_UART_RXD       (5)
+#define GPIO_UART_TXD       (6)
+
+#define GPIO_VALVE_0    9
+#define GPIO_VALVE_1    10
+#define GPIO_VALVE_2    11
+#define GPIO_VALVE_3    12
+#define GPIO_VALVE_4    13
+
+#define GPIO_PWM_00 41
+#define GPIO_PWM_01 40
+#define GPIO_PWM_10 39
+#define GPIO_PWM_11 38
+#define GPIO_PWM_20 37
+#define GPIO_PWM_21 36
+#define GPIO_PWM_30 35
+#define GPIO_PWM_31 34
+
+
 
 #define MENU_LOC      
 #define DBG_MENU_STORAGE    
