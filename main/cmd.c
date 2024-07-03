@@ -28,6 +28,7 @@
 #include "cli.h"
 #include "time.h"
 #include "wifi.h"
+#include "app.h"
 
 // *INDENT-OFF*
 
@@ -118,45 +119,23 @@ typedef enum {
 CMD(CMD_DECLATE_FUNCS, CMD_NONE)
 
 
-
-
 typedef enum {
-	CMD_STATE_WAIT_FOR_START,
-	CMD_STATE_WAIT_FOR_TYPE,
-	CMD_STATE_WAIT_FOR_LENGTH,
+	CMD_STATE_WAIT_FOR_LENGTH0,
+	CMD_STATE_WAIT_FOR_LENGTH1,
 	CMD_STATE_WAIT_FOR_DATA,
 } CMD_STATE;
 
 static struct {
 	CMD_CONTEXT		defaultContext;
 	CMD_STATE	    state;
-	COMM_TYPE		In_Message_Type;
-	uint16_t		In_Message_Length;
-	uint16_t		Total_Byte_Recieved;
-	uint8_t			In_Message_Data[CMD_INCOMING_MESSAGE_MAX_SIZE];
-} g_cmdDb;
-
-static int imu_a = 1;
-static int imu_g =1;
-
-
-
-#if SIMULATION_MODE
-	static uint8_t			_regsShadow[4][8][32];
-	static const uint8_t	_regsDefault[32] = {0x3e, 0x96, 0xc0, 0x60, 0x00, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61, 0x61};
-#endif
+	uint16_t		expectedLength;
+	uint16_t		received;
+	uint8_t			rxBuf[CMD_INCOMING_MESSAGE_MAX_SIZE];
+} g_cmd;
 
 
 static bool _init(void)
 {
-#if SIMULATION_MODE
-	for (int i=0; i<4; i++) {
-		for (int j=0; j<8; j++) {
-			memcpy(&_regsShadow[i][j], _regsDefault, 32);
-		}
-	}
-#endif
-
     return true;
 }
 
@@ -166,7 +145,8 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 	CMD_CONTEXT* pContext = i_pContext;
 
 	if (NULL == i_pContext) {
-		pContext = &g_cmdDb.defaultContext;
+		INFO("context is NULL\n");
+		pContext = &g_cmd.defaultContext;
 	}
 
 	if (NULL == pContext) {
@@ -175,12 +155,13 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 	}
 
 	if (NULL == pContext->p_cbSend) {
+		ERROR("p_cbSend is NULL\n");
 		return false;
 	}
 
-	if (!pContext->socket) {
-		return false;
-	}
+//	if (!pContext->socket) {
+//		return false;
+//	}
 
 	INFO_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
@@ -233,6 +214,9 @@ static bool	_req_SET_PRESSURE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PRESS
 
 	CMD_RSPBUF_SET_PRESSURE	rsp;
 
+	APP_setTarget(i_pReq->pressure);
+
+	rsp.ok = 1;
 	_sendResp(i_pContext, CMD_RSP_SET_PRESSURE, &rsp, sizeof(rsp));
 
     return true;
@@ -278,10 +262,9 @@ static bool _isValidMsgType(uint8_t type)
 
 static void _parsingInit(void)
 {
-	g_cmdDb.state               = CMD_STATE_WAIT_FOR_START;
-	g_cmdDb.In_Message_Type     = CMD_REQ_INVALID;
-	g_cmdDb.In_Message_Length   = 0;
-	g_cmdDb.Total_Byte_Recieved = 0;
+	g_cmd.state             = CMD_STATE_WAIT_FOR_LENGTH0;
+	g_cmd.expectedLength  	= 0;
+	g_cmd.received			= 0;
 }
 
 void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, uint16_t size)
@@ -292,7 +275,7 @@ void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 	CMD_REQ	t = (CMD_REQ)type;
 
 	if (NULL == i_pContext) {
-		pContext = &g_cmdDb.defaultContext;
+		pContext = &g_cmd.defaultContext;
 	} else {
 		pContext = i_pContext;
 	}
@@ -319,50 +302,35 @@ void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 
 void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 {
-    switch (g_cmdDb.state) {
-        case CMD_STATE_WAIT_FOR_START:
-            if (data == START_MESSAGE_CHARACTER) {
-                _parsingInit();
-                g_cmdDb.state = CMD_STATE_WAIT_FOR_TYPE;
-            }
-        break;
+	TRACE("c:%02x state:%d expected:%04x, rec:%x\n", data, g_cmd.state, g_cmd.expectedLength, g_cmd.received);
 
-        case CMD_STATE_WAIT_FOR_TYPE:
-            if (_isValidMsgType(data)) {
-                TRACE("valid type %02x\n", data);
-                g_cmdDb.In_Message_Type = (COMM_TYPE)data;
-                g_cmdDb.state = CMD_STATE_WAIT_FOR_LENGTH;
-            }
-            else {
-                WARN("invalid msg type %02x\n", data);
-                _parsingInit();
-            }
-        break;
+    switch (g_cmd.state) {
+         case CMD_STATE_WAIT_FOR_LENGTH0:
+            TRACE("length0 %02x\n", data);
+			g_cmd.expectedLength = data;
+			g_cmd.state = CMD_STATE_WAIT_FOR_LENGTH1;
+			break;
 
-        case CMD_STATE_WAIT_FOR_LENGTH:
-            TRACE("length %02x\n", data);
-
-            if (data == 0) {
-                CMD_processMessage(i_pContext, g_cmdDb.In_Message_Type, g_cmdDb.In_Message_Data, g_cmdDb.In_Message_Length);
-                _parsingInit();
-            } else if (data < CMD_INCOMING_MESSAGE_MAX_SIZE) {
-                g_cmdDb.In_Message_Length   = data;
-                g_cmdDb.state       = CMD_STATE_WAIT_FOR_DATA;
-                g_cmdDb.Total_Byte_Recieved = 0;
-            } else {
-                _parsingInit();
-            }
-        break;
+         case CMD_STATE_WAIT_FOR_LENGTH1:
+            TRACE("length1 %02x\n", data);
+			g_cmd.expectedLength |= (uint16_t)data<<8;
+			g_cmd.received	= 0;
+			g_cmd.state = CMD_STATE_WAIT_FOR_DATA;
+	       	break;
 
         case CMD_STATE_WAIT_FOR_DATA:
-            TRACE("data %02x[%02x] of %02x\n", data, g_cmdDb.Total_Byte_Recieved, g_cmdDb.In_Message_Length);
+            g_cmd.rxBuf[g_cmd.received] = data;
+            g_cmd.received++;
 
-            g_cmdDb.In_Message_Data[g_cmdDb.Total_Byte_Recieved] = data;
-            g_cmdDb.Total_Byte_Recieved++;
+            TRACE("data:%02x len:%02x/%02x\n", data, g_cmd.received, g_cmd.expectedLength);
 
-            if (g_cmdDb.Total_Byte_Recieved >= g_cmdDb.In_Message_Length) {
-                TRACE("CMD_processMessage\n");
-                CMD_processMessage(i_pContext, g_cmdDb.In_Message_Type, g_cmdDb.In_Message_Data, g_cmdDb.In_Message_Length);
+            if (g_cmd.received > g_cmd.expectedLength) {
+				uint8_t	type = g_cmd.rxBuf[0];
+
+                TRACE("CMD_processMessage t:%x ", type);
+				TRACE_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, g_cmd.rxBuf+1, g_cmd.received-1);
+
+                CMD_processMessage(i_pContext, type, g_cmd.rxBuf+1, g_cmd.received-1);
                 _parsingInit();
             }
         break;
@@ -372,28 +340,22 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
     }
 }
 
+
+static bool dbgReset(uint8_t argc, char** argv)
+{
+	_parsingInit();
+    return true;
+}
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
     return true;
 }
 
-static bool dbgImuSim(uint8_t argc, char** argv)
-{
-	if (argc < 3) {
-		PRINT("g=%d, a=%d\n", imu_g, imu_a);
-		return true;
-	}
-
-    imu_g = strtoul(argv[1], NULL, 10);
-    imu_a = strtoul(argv[1], NULL, 10);
-
-    return true;
-}
-
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("cmd", NULL)
-	    DEBUG_MENU_CMD("status",		NULL,		NULL, dbgStatus)
-	    DEBUG_MENU_CMD("imuSim",		"<a> <g>",		NULL, dbgImuSim)
+	    DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
+	    DEBUG_MENU_CMD("reset",		NULL,		NULL, dbgReset)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
@@ -411,9 +373,9 @@ bool  CMD_init(CMD_CONTEXT* i_pDefaultContext)
 #endif
 
 	if (i_pDefaultContext) {
-		memcpy(&g_cmdDb.defaultContext, i_pDefaultContext, sizeof(g_cmdDb.defaultContext));
+		memcpy(&g_cmd.defaultContext, i_pDefaultContext, sizeof(g_cmd.defaultContext));
 	} else {
-		memset(&g_cmdDb.defaultContext, 0, sizeof(g_cmdDb.defaultContext));
+		memset(&g_cmd.defaultContext, 0, sizeof(g_cmd.defaultContext));
 	}
 
     _init();

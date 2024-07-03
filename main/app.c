@@ -117,7 +117,7 @@ static void _task(void *arg)
             g_app.press[0], g_app.press[1], g_app.press[2], g_app.press[3],
             g_app.pressurizeState[0], g_app.pressurizeState[1], g_app.pressurizeState[2], g_app.pressurizeState[3]);
 
-        for (i=0; i<1; i++) {
+        for (i=0; i<4; i++) {
             int delta = g_app.press[i] - g_app.target[i];
 
             switch (g_app.pressurizeState[i]) {
@@ -240,6 +240,19 @@ static bool dbgCuff(uint8_t argc, char** argv)
         vTaskDelay(100);
         ret = CLI_getc(&c);
     } while (!ret);
+
+    return true;
+}
+
+bool APP_setTarget(uint16_t* pPressure)
+{
+    uint8_t i;
+
+    INFO("APP_setTarget %d %d %d %d\n", pPressure[0], pPressure[1], pPressure[2], pPressure[3]);
+
+    for (i=0; i<4; i++) {
+        g_app.target[i] = pPressure[i];
+    }
 
     return true;
 }

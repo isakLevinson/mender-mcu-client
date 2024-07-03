@@ -11,27 +11,47 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "uart.h"
-
 #include "freertos/FreeRTOS.h"
 #include "argtable3/argtable3.h"
 #include "freertos/task.h"
 #include "driver/uart.h"
 
+#include "uart.h"
+#include "cmd.h"
+
+static bool _cbSend(int socket, COMM_TYPE type, void* i_pBuf, uint16_t size)
+{
+    TRACE("TX s:%d t:%d ", size, type);
+    TRACE_BUF("buf",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+    uart_write_bytes(UART_PORT_NUM_CMD, &size, 2);
+    uart_write_bytes(UART_PORT_NUM_CMD, &type, 1);
+    uart_write_bytes(UART_PORT_NUM_CMD, i_pBuf, size);
+    return true;
+}
+
+static CMD_CONTEXT g_cmdContext = {
+    .p_cbSend = _cbSend,
+};
+
 
 static void _task(void *arg)
 {
     uint8_t buf[256];
+    uint16_t    len = 0;
+    uint16_t    i;
 
     while (true) {
-#if 1
-        int len = uart_read_bytes(UART_PORT_NUM_CMD, buf, sizeof(buf)-1, 20 / portTICK_PERIOD_MS);
+        len = uart_read_bytes(UART_PORT_NUM_CMD, buf, sizeof(buf)-1, 20 / portTICK_PERIOD_MS);
 
         if (len) {
-            INFO_BUF("rx",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, len);
-            uart_write_bytes(UART_PORT_NUM_CMD, buf, len);
+            //TRACE_BUF("rx",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, len);
+            //uart_write_bytes(UART_PORT_NUM_CMD, buf, len);
+
+            for (i=0; i<len; i++) {
+                CMD_parseByte(&g_cmdContext, buf[i]);
+            }
         }
-#endif
+
          vTaskDelay(100);
     }
 }

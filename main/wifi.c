@@ -289,16 +289,14 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     _socket_close(&socket_listen_stream);
 }
 
-static bool _sockSend(int s, COMM_TYPE type, void* i_pBuf, uint8_t size)
+static bool _sockSend(int s, COMM_TYPE type, void* i_pBuf, uint16_t size)
 {
 	uint8_t	buf[300];
 	uint8_t*	pBuf = buf;
 
-	*pBuf	= START_MESSAGE_CHARACTER;
+	*pBuf	= size;
 	pBuf++;
 	*pBuf	= type;
-	pBuf++;
-	*pBuf	= size;
 	pBuf++;
 
 	memcpy(pBuf, i_pBuf, size);
