@@ -60,9 +60,6 @@
 	req(CONTROL_ENABLE,				0x0d,	uint8_t		on;)			\
 	rsp(CONTROL_ENABLE,				0x0e,	uint8_t		ok;)			\
 
-
-
-
 // *INDENT-ON*
 
 
@@ -133,12 +130,52 @@ static struct {
 	uint16_t			expectedLength;
 	uint16_t			received;
 	uint8_t				rxBuf[CMD_INCOMING_MESSAGE_MAX_SIZE];
+	uint32_t			streamPeriod;
+	int32_t				streamSentTime;
 } g_cmd;
 
 
+static void _taskStreamer(void *arg)
+{
+	int32_t	t;
+	int16_t	press[4];
+	CMD_RSPBUF_STREAM	rsp;
+	uint32_t	i;
+
+    while (true) {
+        vTaskDelay(10);
+		if (!g_cmd.streamPeriod) {
+			continue;
+		}		
+
+		t = TIME_get32();
+		if (t - g_cmd.streamSentTime < g_cmd.streamPeriod) {
+			continue;
+		}
+
+		g_cmd.streamSentTime += g_cmd.streamPeriod;
+		TRACE("stream %d\n", t);
+
+		APP_getPressure(press);
+		rsp.time = t;
+		for (i=0; i<4; i++) {
+			rsp.pressure[i] = press[i];
+		}
+    }
+}
+
 static bool _init(void)
 {
+	bool	ret;
+
 	g_cmd.semaphore = xSemaphoreCreateBinary();
+
+	ret = xTaskCreate(_taskStreamer, "streamer", 8192, NULL, 3, NULL);
+    if (ret != pdPASS) {
+        ERROR("create task %s failed\n", "streamer");
+        return false;
+    }
+
     return true;
 }
 
@@ -174,6 +211,12 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 	xSemaphoreGive(g_cmd.semaphore);
 
     return true;
+}
+
+static void _streamPeriod(uint32_t period)
+{
+	g_cmd.streamSentTime = TIME_get32();
+	g_cmd.streamPeriod = period;
 }
 
 static bool	_req_NOP_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_NOP* i_pReq, uint16_t size)
@@ -261,6 +304,8 @@ static bool	_req_SET_PRESSURE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PRESS
 static bool	_req_START_STREAM_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START_STREAM* i_pReq, uint16_t size)
 {
 	INFO("START_STREAM\n");
+
+	_streamPeriod(100);
     return true;
 }
 
@@ -269,6 +314,8 @@ static bool	_req_STOP_STREAM_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STOP_STREA
 	INFO("STOP_STREAM\n");
 
 	CMD_RSPBUF_STOP_STREAM	rsp;
+
+	_streamPeriod(0);
 
 	_sendResp(i_pContext, CMD_RSP_STOP_STREAM, &rsp, sizeof(rsp));
 
@@ -376,10 +423,22 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
     }
 }
 
-
 static bool dbgReset(uint8_t argc, char** argv)
 {
 	CMD_parseInit();
+    return true;
+}
+
+static bool dbgStream(uint8_t argc, char** argv)
+{
+	uint32_t	period;
+
+	if (argc < 2) {
+		return false;
+	}
+
+	period = strtoul(argv[1], NULL, 10);
+ 
     return true;
 }
 
@@ -392,6 +451,7 @@ DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("cmd", NULL)
 	    DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
 	    DEBUG_MENU_CMD("reset",		NULL,		NULL, dbgReset)
+	    DEBUG_MENU_CMD("stream",	NULL,		NULL, dbgStream)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
