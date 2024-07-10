@@ -260,7 +260,7 @@ static bool _isValidMsgType(uint8_t type)
 	return false;
 }
 
-static void _parsingInit(void)
+void CMD_parseInit(void)
 {
 	g_cmd.state             = CMD_STATE_WAIT_FOR_LENGTH0;
 	g_cmd.expectedLength  	= 0;
@@ -331,19 +331,19 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 				TRACE_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, g_cmd.rxBuf+1, g_cmd.received-1);
 
                 CMD_processMessage(i_pContext, type, g_cmd.rxBuf+1, g_cmd.received-1);
-                _parsingInit();
+                CMD_parseInit();
             }
         break;
 
         default:
-            _parsingInit();
+            CMD_parseInit();
     }
 }
 
 
 static bool dbgReset(uint8_t argc, char** argv)
 {
-	_parsingInit();
+	CMD_parseInit();
     return true;
 }
 

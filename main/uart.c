@@ -50,9 +50,9 @@ static void _task(void *arg)
             for (i=0; i<len; i++) {
                 CMD_parseByte(&g_cmdContext, buf[i]);
             }
+        } else {
+            CMD_parseInit();
         }
-
-         vTaskDelay(100);
     }
 }
 
