@@ -88,6 +88,30 @@ bool _pumpOn(uint8_t v, bool on)
     return true;
 }
 
+bool APP_setPump(uint8_t n, bool on)
+{
+    bool    ret;
+
+    if (g_app.loopActive) {
+        return false;
+    }
+
+    ret = _pumpOn(n, on);
+    return ret;
+}
+
+bool APP_setValve(uint8_t n, bool on)
+{
+    bool    ret;
+
+    if (g_app.loopActive) {
+        return false;
+    }
+
+    ret = _valveOn(n, on);
+    return ret;
+}
+
 static void _pressurize(uint8_t ch, int dir)
 {
     if (g_app.pressurizeState[ch] == dir) {

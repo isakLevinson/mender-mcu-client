@@ -59,6 +59,10 @@
 	rsp(STOP_STREAM,				0x0c,	uint8_t		ok;)			\
 	req(CONTROL_ENABLE,				0x0d,	uint8_t		on;)			\
 	rsp(CONTROL_ENABLE,				0x0e,	uint8_t		ok;)			\
+	req(SET_PUMPS,					0x0f,	int8_t		on[4];)			\
+	rsp(SET_PUMPS,					0x10,	uint8_t		ok;)			\
+	req(SET_VALVES,					0x11,	int8_t		on[4];)			\
+	rsp(SET_VALVES,					0x12,	uint8_t		ok;)			\
 
 // *INDENT-ON*
 
@@ -234,7 +238,7 @@ static bool	_req_KEEPALIVE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KEEPALIVE* i
 	INFO("KEEPALIVE\n");
 
 	// TODO: use real values
-	rsp.batVoltage	= 3700;
+	rsp.batVoltage	= 37;
 	rsp.soc			= 85;
 	_sendResp(i_pContext, CMD_RSP_KEEPALIVE, &rsp, sizeof(rsp));
 
@@ -282,7 +286,8 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 		rsp.pump[i] = pumps[i];
 	}
 
-	rsp.voltage = 3600;
+	// TODO: use real values
+	rsp.voltage = 36;
 	rsp.soc		= 90;
 
     _sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
@@ -293,10 +298,16 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 static bool	_req_SET_PRESSURE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PRESSURE* i_pReq, uint16_t size)
 {
     INFO("SET_PRESSURE\n");
+	uint16_t	press[4];
+	uint8_t i;
 
 	CMD_RSPBUF_SET_PRESSURE	rsp;
 
-	APP_setTarget(i_pReq->pressure);
+	for (i=0; i<4; i++) {
+		press[i] = i_pReq->pressure[i];
+	}
+
+	APP_setTarget(press);
 
 	rsp.ok = 1;
 	_sendResp(i_pContext, CMD_RSP_SET_PRESSURE, &rsp, sizeof(rsp));
@@ -320,6 +331,7 @@ static bool	_req_STOP_STREAM_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STOP_STREA
 
 	_streamPeriod(0);
 
+	rsp.ok = 1;
 	_sendResp(i_pContext, CMD_RSP_STOP_STREAM, &rsp, sizeof(rsp));
 
     return true;
@@ -333,11 +345,67 @@ static bool	_req_CONTROL_ENABLE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_CONTROL
 
 	APP_loopEnable(i_pReq->on);
 
+	rsp.ok = 1;
 	_sendResp(i_pContext, CMD_RSP_CONTROL_ENABLE, &rsp, sizeof(rsp));
 
     return true;
 }
 
+static bool	_req_SET_PUMPS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PUMPS* i_pReq, uint16_t size)
+{
+	INFO("SET_PUMPS\n");
+	bool	ret;
+	uint8_t	i;
+	uint8_t	ok = true;
+
+	CMD_RSPBUF_SET_PUMPS	rsp;
+
+	for (i=0; i<4; i++) {
+		switch (i_pReq->on[i]) {
+			case 0: ret = APP_setPump(i, false);	break;
+			case 1: ret = APP_setPump(i, true);		break;
+			default:
+				ret = true;
+		}
+		if (!ret) {
+			ok = false;
+		}
+	}
+
+	rsp.ok = ok;
+
+	_sendResp(i_pContext, CMD_RSP_SET_PUMPS, &rsp, sizeof(rsp));
+
+    return true;
+}
+
+static bool	_req_SET_VALVES_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_VALVES* i_pReq, uint16_t size)
+{
+	INFO("SET_VALVES\n");
+	bool	ret;
+	uint8_t	i;
+	uint8_t	ok = true;
+
+	CMD_RSPBUF_SET_VALVES	rsp;
+
+	for (i=0; i<4; i++) {
+		switch (i_pReq->on[i]) {
+			case 0: ret = APP_setValve(i, false);	break;
+			case 1: ret = APP_setValve(i, true);	break;
+			default:
+				ret = true;
+		}
+		if (!ret) {
+			ok = false;
+		}
+	}
+
+	rsp.ok = ok;
+
+	_sendResp(i_pContext, CMD_RSP_SET_VALVES, &rsp, sizeof(rsp));
+
+    return true;
+}
 
 static bool _isValidMsgType(uint8_t type)
 {
