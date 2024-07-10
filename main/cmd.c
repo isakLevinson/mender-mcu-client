@@ -40,10 +40,9 @@
 	rsp(KEEPALIVE,					0x02,	uint8_t	batVoltage;			\
 											uint8_t	soc;)				\
 	req(VER,						0x03,	;)							\
-	rsp(VER,						0x04,	uint8_t		major;			\
-											uint8_t		minor;			\
-											uint8_t		hotfix;			\
-											uint8_t		build;)			\
+	rsp(VER,						0x04,	uint8_t		hash[8];		\
+											uint8_t		sw[3];			\
+											uint8_t		hw[3];)			\
 	req(STATUS,						0x05,	;)							\
 	rsp(STATUS,						0x06,	uint16_t	pressure[4];	\
 											uint8_t		valve[4];		\
@@ -251,10 +250,14 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 
     INFO("VER\n");
 
-	rsp.major	= SOFTWARE_VERSION_MAJOR;
-	rsp.minor	= SOFTWARE_VERSION_MINOR;
-	rsp.build	= SOFTWARE_VERSION_BUILD;
-	rsp.hotfix	= SOFTWARE_VERSION_HOTFIX;
+	memset(rsp.hash, 0, sizeof(rsp.hash));
+	rsp.sw[0] = SW_VERSION_MAJOR;
+	rsp.sw[1] = SW_VERSION_MINOR;
+	rsp.sw[2] = SW_VERSION_BUILD;
+
+	rsp.hw[0] = HW_VERSION_MAJOR;
+	rsp.hw[1] = HW_VERSION_MINOR;
+	rsp.hw[2] = HW_VERSION_BUILD;
 
 	_sendResp(i_pContext, CMD_RSP_VER, &rsp, sizeof(rsp));
 

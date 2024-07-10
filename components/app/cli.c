@@ -103,11 +103,17 @@ bool CLI_getc(char* o_pChar)
 
 static bool dbgVer(uint8_t argc, char** argv)
 {
-    PRINT("%d %d %d %d \n",
-	SOFTWARE_VERSION_MAJOR,
-	SOFTWARE_VERSION_MINOR,
-	SOFTWARE_VERSION_BUILD,
-	SOFTWARE_VERSION_HOTFIX);
+    PRINT("sw:%d.%d.%d\n",
+		SW_VERSION_MAJOR,
+		SW_VERSION_MINOR,
+		SW_VERSION_BUILD);
+
+    PRINT("hw:%d.%d.%d\n",
+		HW_VERSION_MAJOR,
+		HW_VERSION_MINOR,
+		HW_VERSION_BUILD);
+
+	//PRINT_BUF("hash",	PRINT_BUF_STYLE_HEX_NL, i_pBuf, size);
 
     return true;
 }
