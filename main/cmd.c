@@ -22,6 +22,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 
 #include "main.h"
 #include "cmd.h"
@@ -126,35 +127,36 @@ typedef enum {
 } CMD_STATE;
 
 static struct {
-	CMD_CONTEXT		defaultContext;
-	CMD_STATE	    state;
-	uint16_t		expectedLength;
-	uint16_t		received;
-	uint8_t			rxBuf[CMD_INCOMING_MESSAGE_MAX_SIZE];
+	SemaphoreHandle_t	semaphore;
+	CMD_CONTEXT			defaultContext;
+	CMD_STATE	    	state;
+	uint16_t			expectedLength;
+	uint16_t			received;
+	uint8_t				rxBuf[CMD_INCOMING_MESSAGE_MAX_SIZE];
 } g_cmd;
 
 
 static bool _init(void)
 {
+	g_cmd.semaphore = xSemaphoreCreateBinary();
     return true;
 }
-
 
 bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t size)
 {
 	CMD_CONTEXT* pContext = i_pContext;
 
-	if (NULL == i_pContext) {
+	if (!i_pContext) {
 		INFO("context is NULL\n");
 		pContext = &g_cmd.defaultContext;
 	}
 
-	if (NULL == pContext) {
+	if (!pContext) {
 		ERROR("invalid context\n");
 		return false;
 	}
 
-	if (NULL == pContext->p_cbSend) {
+	if (!pContext->p_cbSend) {
 		ERROR("p_cbSend is NULL\n");
 		return false;
 	}
@@ -163,9 +165,13 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 //		return false;
 //	}
 
+	xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
+
 	INFO_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
 	pContext->p_cbSend(pContext->socket, msgType, i_pBuf, size);
+
+	xSemaphoreGive(g_cmd.semaphore);
 
     return true;
 }
