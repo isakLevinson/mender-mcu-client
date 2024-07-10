@@ -39,9 +39,10 @@ static void _task(void *arg)
     uint8_t buf[256];
     uint16_t    len = 0;
     uint16_t    i;
+    bool        resetDone = false;
 
     while (true) {
-        len = uart_read_bytes(UART_PORT_NUM_CMD, buf, sizeof(buf)-1, 20 / portTICK_PERIOD_MS);
+        len = uart_read_bytes(UART_PORT_NUM_CMD, buf, sizeof(buf)-1, 100 / portTICK_PERIOD_MS);
 
         if (len) {
             //TRACE_BUF("rx",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, len);
@@ -50,8 +51,12 @@ static void _task(void *arg)
             for (i=0; i<len; i++) {
                 CMD_parseByte(&g_cmdContext, buf[i]);
             }
+            resetDone = false;
         } else {
-            CMD_parseInit();
+            if (!resetDone) {
+                CMD_parseInit();
+                resetDone = true;
+            }
         }
     }
 }

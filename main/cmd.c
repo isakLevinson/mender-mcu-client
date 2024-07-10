@@ -46,8 +46,8 @@
 											uint8_t		build;)			\
 	req(STATUS,						0x05,	;)							\
 	rsp(STATUS,						0x06,	uint16_t	pressure[4];	\
-											uint8_t		valve[6];		\
-											uint8_t		pump[6];		\
+											uint8_t		valve[4];		\
+											uint8_t		pump[4];		\
 											uint8_t		voltage;		\
 											uint8_t		soc;)			\
 	req(SET_PRESSURE,				0x07,	uint16_t	pressure[4];)	\
@@ -125,7 +125,7 @@ typedef enum {
 
 static struct {
 	SemaphoreHandle_t	semaphore;
-	CMD_CONTEXT			defaultContext;
+	CMD_CONTEXT*		pContext;
 	CMD_STATE	    	state;
 	uint16_t			expectedLength;
 	uint16_t			received;
@@ -135,57 +135,13 @@ static struct {
 } g_cmd;
 
 
-static void _taskStreamer(void *arg)
-{
-	int32_t	t;
-	int16_t	press[4];
-	CMD_RSPBUF_STREAM	rsp;
-	uint32_t	i;
-
-    while (true) {
-        vTaskDelay(10);
-		if (!g_cmd.streamPeriod) {
-			continue;
-		}		
-
-		t = TIME_get32();
-		if (t - g_cmd.streamSentTime < g_cmd.streamPeriod) {
-			continue;
-		}
-
-		g_cmd.streamSentTime += g_cmd.streamPeriod;
-		TRACE("stream %d\n", t);
-
-		APP_getPressure(press);
-		rsp.time = t;
-		for (i=0; i<4; i++) {
-			rsp.pressure[i] = press[i];
-		}
-    }
-}
-
-static bool _init(void)
-{
-	bool	ret;
-
-	g_cmd.semaphore = xSemaphoreCreateBinary();
-
-	ret = xTaskCreate(_taskStreamer, "streamer", 8192, NULL, 3, NULL);
-    if (ret != pdPASS) {
-        ERROR("create task %s failed\n", "streamer");
-        return false;
-    }
-
-    return true;
-}
-
 bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t size)
 {
 	CMD_CONTEXT* pContext = i_pContext;
 
 	if (!i_pContext) {
 		INFO("context is NULL\n");
-		pContext = &g_cmd.defaultContext;
+		pContext = g_cmd.pContext;
 	}
 
 	if (!pContext) {
@@ -209,6 +165,53 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 	pContext->p_cbSend(pContext->socket, msgType, i_pBuf, size);
 
 	xSemaphoreGive(g_cmd.semaphore);
+
+    return true;
+}
+
+static void _taskStreamer(void *arg)
+{
+	int32_t	t;
+	int16_t	press[4];
+	CMD_RSPBUF_STREAM	rsp;
+	uint32_t	i;
+
+    while (true) {
+        vTaskDelay(10);
+		if (!g_cmd.streamPeriod) {
+			continue;
+		}		
+
+		t = TIME_get32();
+		if (t - g_cmd.streamSentTime < g_cmd.streamPeriod) {
+			continue;
+		}
+
+		g_cmd.streamSentTime += g_cmd.streamPeriod;
+
+		APP_getPressure(press);
+		TRACE("stream %d: %3d %3d %3d %3d\n", t, press[0], press[1],press[2], press[3]);
+
+		rsp.time = t;
+		for (i=0; i<4; i++) {
+			rsp.pressure[i] = press[i];
+		}
+		_sendResp(g_cmd.pContext, CMD_RSP_STREAM, &rsp, sizeof(rsp));
+    }
+}
+
+static bool _init(void)
+{
+	bool	ret;
+
+	g_cmd.semaphore = xSemaphoreCreateBinary();
+	xSemaphoreGive(g_cmd.semaphore);
+
+	ret = xTaskCreate(_taskStreamer, "streamer", 8192, NULL, 3, NULL);
+    if (ret != pdPASS) {
+        ERROR("create task %s failed\n", "streamer");
+        return false;
+    }
 
     return true;
 }
@@ -328,6 +331,8 @@ static bool	_req_CONTROL_ENABLE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_CONTROL
 
 	CMD_RSPBUF_CONTROL_ENABLE	rsp;
 
+	APP_loopEnable(i_pReq->on);
+
 	_sendResp(i_pContext, CMD_RSP_CONTROL_ENABLE, &rsp, sizeof(rsp));
 
     return true;
@@ -345,6 +350,7 @@ static bool _isValidMsgType(uint8_t type)
 
 void CMD_parseInit(void)
 {
+	TRACE("CMD_parseInit\n");
 	g_cmd.state             = CMD_STATE_WAIT_FOR_LENGTH0;
 	g_cmd.expectedLength  	= 0;
 	g_cmd.received			= 0;
@@ -357,11 +363,12 @@ void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 	CMD_CONTEXT* pContext;
 	CMD_REQ	t = (CMD_REQ)type;
 
-	if (NULL == i_pContext) {
-		pContext = &g_cmd.defaultContext;
-	} else {
-		pContext = i_pContext;
+	if (!i_pContext) {
+		return;
 	}
+		
+	pContext = i_pContext;
+	g_cmd.pContext = i_pContext;
 
 	if (!pContext) {
 		ERROR("invalid context\n");
@@ -439,6 +446,8 @@ static bool dbgStream(uint8_t argc, char** argv)
 
 	period = strtoul(argv[1], NULL, 10);
  
+	_streamPeriod(period);
+
     return true;
 }
 
@@ -468,11 +477,7 @@ bool  CMD_init(CMD_CONTEXT* i_pDefaultContext)
 //	}
 #endif
 
-	if (i_pDefaultContext) {
-		memcpy(&g_cmd.defaultContext, i_pDefaultContext, sizeof(g_cmd.defaultContext));
-	} else {
-		memset(&g_cmd.defaultContext, 0, sizeof(g_cmd.defaultContext));
-	}
+	g_cmd.pContext = i_pDefaultContext;
 
     _init();
 

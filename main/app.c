@@ -121,11 +121,12 @@ static void _task(void *arg)
     uint8_t i;
 
     while (true) {
+        ADC_getPressure(g_app.press);
+
         if (!g_app.loopActive) {
             continue;
         }
 
-        ADC_getPressure(g_app.press);
         TRACE("press: %3d %3d %3d %3d %2d %2d %2d %2d\n", 
             g_app.press[0], g_app.press[1], g_app.press[2], g_app.press[3],
             g_app.pressurizeState[0], g_app.pressurizeState[1], g_app.pressurizeState[2], g_app.pressurizeState[3]);
@@ -176,6 +177,12 @@ static void _init(void)
         ERROR("create task %s failed\n", "app");
         return;
     }
+}
+
+bool APP_loopEnable(bool on)
+{
+    g_app.loopActive = on;
+    return true;
 }
 
 bool APP_setTarget(uint16_t* pPressure)
@@ -317,6 +324,21 @@ static bool dbgTarget(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgLoopEnable(uint8_t argc, char** argv)
+{
+    bool    on;
+
+    if (argc < 2) {
+        APP_loopEnable(true);
+        return true;
+    }
+
+    on = strtol(argv[1], NULL, 10);
+    APP_loopEnable(on);
+
+    return true;
+}
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
     PRINT("press: %3d %3d %3d %3d\n", g_app.press[0], g_app.press[1], g_app.press[2], g_app.press[3]);
@@ -353,12 +375,13 @@ static bool dbgCfg(uint8_t argc, char** argv)
 
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("app", NULL)
-	    DEBUG_MENU_CMD("status",		NULL,		NULL, dbgStatus)
-	    DEBUG_MENU_CMD("cfg",   		NULL,		NULL, dbgCfg)
-	    DEBUG_MENU_CMD("valve",			NULL,		NULL, dbgValve)
-	    DEBUG_MENU_CMD("gpio",			NULL,		NULL, dbgGpio)
-        DEBUG_MENU_CMD("cuff",			NULL,		NULL, dbgCuff)
-        DEBUG_MENU_CMD("target",    	NULL,		NULL, dbgTarget)
+	    DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
+	    DEBUG_MENU_CMD("cfg",   	NULL,		NULL, dbgCfg)
+	    DEBUG_MENU_CMD("valve",		NULL,		NULL, dbgValve)
+	    DEBUG_MENU_CMD("gpio",		NULL,		NULL, dbgGpio)
+        DEBUG_MENU_CMD("cuff",		NULL,		NULL, dbgCuff)
+        DEBUG_MENU_CMD("target",    NULL,		NULL, dbgTarget)
+        DEBUG_MENU_CMD("loop",    	NULL,		NULL, dbgLoopEnable)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
