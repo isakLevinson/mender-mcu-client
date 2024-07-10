@@ -181,6 +181,9 @@ static bool	_req_KEEPALIVE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KEEPALIVE* i
 	
 	INFO("KEEPALIVE\n");
 
+	// TODO: use real values
+	rsp.batVoltage	= 3700;
+	rsp.soc			= 85;
 	_sendResp(i_pContext, CMD_RSP_KEEPALIVE, &rsp, sizeof(rsp));
 
     return true;
@@ -205,8 +208,30 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq, uint16_t size)
 {
 	CMD_RSPBUF_STATUS	rsp;
+	int16_t	press[4];
+	bool	valves[5];
+	bool	pumps[4];
+	int		i;
 
     INFO("STATUS\n");
+
+	APP_getPressure(press);
+	for (i=0; i<4; i++) {
+		rsp.pressure[i] = press[i];
+	}
+
+	APP_getValves(valves);
+	for (i=0; i<4; i++) {
+		rsp.valve[i] = valves[i];
+	}
+
+	APP_getPump(pumps);
+	for (i=0; i<4; i++) {
+		rsp.pump[i] = pumps[i];
+	}
+
+	rsp.voltage = 3600;
+	rsp.soc		= 90;
 
     _sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
 	

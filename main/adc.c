@@ -130,7 +130,7 @@ bool    ADC_getPressure(int16_t* pPress)
     for (i=0; i<4; i++) {
        mmg[i]  = MV_TO_MMG(v[i] - 485);
        if (pPress) { 
-           pPress[i] = mmg[i];
+           pPress[i] = MAX(0, mmg[i]);
        }
     }
 

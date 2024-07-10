@@ -52,6 +52,8 @@ static struct {
     int16_t press[4];
     int16_t target[4];
     int8_t  pressurizeState[4];
+    bool    valveStatus[5];
+    bool    pumpStatus[4];
 } g_app = {
     .cfg = {
         .pmpValveDelay  = 100,
@@ -70,10 +72,21 @@ bool _valveOn(uint8_t v, bool on)
     }
 
     gpio_set_level(g_valveGpios[v], on);
+    g_app.valveStatus[v] = on;
 
     return true;
 }
 
+bool _pumpOn(uint8_t v, bool on)
+{
+    if (v >= 4) {
+        return false;
+    }
+    PMP_on(v, on);
+    g_app.pumpStatus[v] = on;
+
+    return true;
+}
 
 static void _pressurize(uint8_t ch, int dir)
 {
@@ -83,18 +96,18 @@ static void _pressurize(uint8_t ch, int dir)
 
     switch (dir) {
         case 0: 
-            PMP_on(ch, 0);
+            _pumpOn(ch, 0);
             _valveOn(ch, 0);
             break;
 
         case 1: 
-            PMP_on(ch, 1);
+            _pumpOn(ch, 1);
             vTaskDelay(g_app.cfg.pmpValveDelay);
             _valveOn(ch, 1);
             break;
 
         case -1: 
-            PMP_on(ch, 0);
+            _pumpOn(ch, 0);
             _valveOn(ch, 1);
             break;
 
@@ -163,6 +176,52 @@ static void _init(void)
         ERROR("create task %s failed\n", "app");
         return;
     }
+}
+
+bool APP_setTarget(uint16_t* pPressure)
+{
+    uint8_t i;
+
+    INFO("APP_setTarget %d %d %d %d\n", pPressure[0], pPressure[1], pPressure[2], pPressure[3]);
+
+    for (i=0; i<4; i++) {
+        g_app.target[i] = pPressure[i];
+    }
+
+    return true;
+}
+
+bool APP_getPressure(int16_t* pPressure)
+{
+    int i;
+
+    for (i=0; i<4; i++) {
+        pPressure[i] = g_app.press[i];
+    }
+
+    return true;
+}
+
+bool APP_getValves(bool* pValves)
+{
+    int i;
+
+    for (i=0; i<4; i++) {
+        pValves[i] = g_app.valveStatus[i];
+    }
+
+    return true;
+}
+
+bool APP_getPump(bool* pPumpsOn)
+{
+    int i;
+
+    for (i=0; i<4; i++) {
+            pPumpsOn[i] = g_app.pumpStatus[i];
+    }
+
+    return true;
 }
 
 static bool dbgValve(uint8_t argc, char** argv)
@@ -240,19 +299,6 @@ static bool dbgCuff(uint8_t argc, char** argv)
         vTaskDelay(100);
         ret = CLI_getc(&c);
     } while (!ret);
-
-    return true;
-}
-
-bool APP_setTarget(uint16_t* pPressure)
-{
-    uint8_t i;
-
-    INFO("APP_setTarget %d %d %d %d\n", pPressure[0], pPressure[1], pPressure[2], pPressure[3]);
-
-    for (i=0; i<4; i++) {
-        g_app.target[i] = pPressure[i];
-    }
 
     return true;
 }
