@@ -192,6 +192,11 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 
     INFO("VER\n");
 
+	rsp.major	= SOFTWARE_VERSION_MAJOR;
+	rsp.minor	= SOFTWARE_VERSION_MINOR;
+	rsp.build	= SOFTWARE_VERSION_BUILD;
+	rsp.hotfix	= SOFTWARE_VERSION_HOTFIX;
+
 	_sendResp(i_pContext, CMD_RSP_VER, &rsp, sizeof(rsp));
 
 	return true;

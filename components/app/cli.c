@@ -103,12 +103,11 @@ bool CLI_getc(char* o_pChar)
 
 static bool dbgVer(uint8_t argc, char** argv)
 {
-    PRINT("ver %d %d %d %d %d \n",
-		SOFTWARE_MAJOR_VERSION,
-		SOFTWARE_MINOR_VERSION,
-		SOFTWARE_PATCH_VERSION,
-		HARDWARE_MAJOR_VERSION,
-		HARDWARE_MINOR_VERSION);
+    PRINT("%d %d %d %d \n",
+	SOFTWARE_VERSION_MAJOR,
+	SOFTWARE_VERSION_MINOR,
+	SOFTWARE_VERSION_BUILD,
+	SOFTWARE_VERSION_HOTFIX);
 
     return true;
 }

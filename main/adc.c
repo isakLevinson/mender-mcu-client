@@ -161,7 +161,7 @@ static void _init(void)
     do_calibration1 = example_adc_calibration_init(ADC_UNIT_1, ADC_ATTEN_DB_11, &adc1_cali_handle);
 }
 
-static bool dbglsStatus(uint8_t argc, char** argv)
+static bool dbgStatus(uint8_t argc, char** argv)
 {
     bool    ret;
     char    c;
