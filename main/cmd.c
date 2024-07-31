@@ -84,7 +84,7 @@
 
 #define CMD_SWITCH(cmd, op, fields)											\
 	case CMD_REQ_ ## cmd:													\
-	TRACE_BUF(#cmd,	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);			\
+	TRACE1_BUF(#cmd,	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);			\
 	retVal = _req_ ## cmd ## _func(pContext, (CMD_REQBUF_ ## cmd *)i_pBuf, size);	\
 	break;
 
@@ -163,7 +163,7 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 
 	xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
 
-	INFO_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+	TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
 	pContext->p_cbSend(pContext->socket, msgType, i_pBuf, size);
 
@@ -421,7 +421,7 @@ static bool _isValidMsgType(uint8_t type)
 
 void CMD_parseInit(void)
 {
-	TRACE("CMD_parseInit\n");
+	TRACE1("CMD_parseInit\n");
 	g_cmd.state             = CMD_STATE_WAIT_FOR_LENGTH0;
 	g_cmd.expectedLength  	= 0;
 	g_cmd.received			= 0;
@@ -463,17 +463,17 @@ void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 
 void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 {
-	TRACE("c:%02x state:%d expected:%04x, rec:%x\n", data, g_cmd.state, g_cmd.expectedLength, g_cmd.received);
+	TRACE1("c:%02x state:%d expected:%04x, rec:%x\n", data, g_cmd.state, g_cmd.expectedLength, g_cmd.received);
 
     switch (g_cmd.state) {
          case CMD_STATE_WAIT_FOR_LENGTH0:
-            TRACE("length0 %02x\n", data);
+            TRACE1("length0 %02x\n", data);
 			g_cmd.expectedLength = data;
 			g_cmd.state = CMD_STATE_WAIT_FOR_LENGTH1;
 			break;
 
          case CMD_STATE_WAIT_FOR_LENGTH1:
-            TRACE("length1 %02x\n", data);
+            TRACE1("length1 %02x\n", data);
 			g_cmd.expectedLength |= (uint16_t)data<<8;
 			g_cmd.received	= 0;
 			g_cmd.state = CMD_STATE_WAIT_FOR_DATA;
@@ -483,13 +483,13 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
             g_cmd.rxBuf[g_cmd.received] = data;
             g_cmd.received++;
 
-            TRACE("data:%02x len:%02x/%02x\n", data, g_cmd.received, g_cmd.expectedLength);
+            TRACE1("data:%02x len:%02x/%02x\n", data, g_cmd.received, g_cmd.expectedLength);
 
             if (g_cmd.received > g_cmd.expectedLength) {
 				uint8_t	type = g_cmd.rxBuf[0];
 
-                TRACE("CMD_processMessage t:%x ", type);
-				TRACE_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, g_cmd.rxBuf+1, g_cmd.received-1);
+                TRACE1("CMD_processMessage t:%x ", type);
+				TRACE1_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, g_cmd.rxBuf+1, g_cmd.received-1);
 
                 CMD_processMessage(i_pContext, type, g_cmd.rxBuf+1, g_cmd.received-1);
                 CMD_parseInit();

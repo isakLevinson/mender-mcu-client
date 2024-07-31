@@ -123,23 +123,29 @@ bool APP_setValve(uint8_t n, bool on)
 
 static void _pressurize(uint8_t ch, int dir)
 {
+    uint32_t    valveDelay;
+
     if (g_app.channels[ch].pressurizeState == dir) {
         return;
     }
 
     switch (dir) {
         case 0: 
+            g_app.channels[ch].valveDelay = false;
             _pumpOn(ch, 0);
             _valveOn(ch, 0);
             break;
 
         case 1: 
             _pumpOn(ch, 1);
-            vTaskDelay(g_app.cfg.pmpValveDelay);
-            _valveOn(ch, 1);
+            g_app.channels[ch].valveDelay = true;
+            valveDelay = g_app.cfg.pmpValveDelay + g_app.cfg.pmpValveDelayGainPercent * g_app.channels[ch].press / 100;
+            INFO("valveDelay[%d]=%d\n", ch, valveDelay);
+            g_app.channels[ch].valveTime  = TIME_get32() + valveDelay;
             break;
 
         case -1: 
+            g_app.channels[ch].valveDelay = false;
             _pumpOn(ch, 0);
             _valveOn(ch, 1);
             break;
@@ -153,17 +159,29 @@ static void _task(void *arg)
 {
     uint8_t i;
     int32_t t;
-
+    int32_t timeTrace = TIME_get32();
+  
     while (true) {
         int16_t     pressure[4];
    		t = TIME_get32();
-
         ADC_getPressure(pressure);
 
-        if (!g_app.loopActive) {
+        for (i=0; i<4; i++) {
+            g_app.channels[i].press = pressure[i];
+
+            if (g_app.channels[i].valveDelay) {
+                if (t >= g_app.channels[i].valveTime) {
+                    g_app.channels[i].valveDelay = false;
+                    _valveOn(i, 1);
+                }
+            }
+        }
+
+        if (t - timeTrace < 100) {
             continue;
         }
 
+        timeTrace += 100;
         TRACE("press: %3d %3d %3d %3d %2d %2d %2d %2d\n", 
             g_app.channels[0].press, g_app.channels[1].press, g_app.channels[2].press, g_app.channels[3].press,
             g_app.channels[0].pressurizeState, g_app.channels[1].pressurizeState, g_app.channels[2].pressurizeState, g_app.channels[3].pressurizeState);
@@ -176,17 +194,17 @@ static void _task(void *arg)
             switch (g_app.channels[i].pressurizeState) {
                 case 1:
                     if (delta >= g_app.cfg.histeresisH1) {
-
                         _pressurize(i, 0);
+                        g_app.channels[i].deflateDone = true;
                     }
                     break;
 
                 case -1:
                     if ((delta <= g_app.cfg.histeresisL1) || (g_app.channels[i].press <= g_app.cfg.minTurnOff)) {
                         _pressurize(i, 0);
-                        if (!g_app.channels[i].target) {
+//                        if (!g_app.channels[i].target) {
                             g_app.channels[i].deflateDone = true;
-                        }
+//                        }
                     }
                     break;
 
@@ -237,6 +255,9 @@ bool APP_setTarget(uint16_t* pPressure)
     INFO("APP_setTarget %d %d %d %d\n", pPressure[0], pPressure[1], pPressure[2], pPressure[3]);
 
     for (i=0; i<4; i++) {
+        if (pPressure[i] == g_app.channels[i].target) {
+            continue;
+        }
         g_app.channels[i].target = pPressure[i];
         g_app.channels[i].deflateDone = false;
     }
