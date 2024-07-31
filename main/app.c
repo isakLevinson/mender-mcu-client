@@ -50,12 +50,17 @@ static struct {
     } cfg;
 
     bool    loopActive;
-    int16_t press[4];
-    int16_t target[4];
-    bool    deflateDone[4];
-    int8_t  pressurizeState[4];
-    bool    valveStatus[5];
-    bool    pumpStatus[4];
+
+    struct {
+        int16_t press;
+        int16_t target;
+        bool    deflateDone;
+        int8_t  pressurizeState;
+        bool    valveStatus;
+        bool    pumpStatus;
+        bool    valveDelay;
+        int32_t valveTime;
+    } channels[4];
 } g_app = {
     .cfg = {
         .pmpValveDelay  = 100,
@@ -76,7 +81,7 @@ bool _valveOn(uint8_t v, bool on)
     }
 
     gpio_set_level(g_valveGpios[v], on);
-    g_app.valveStatus[v] = on;
+    g_app.channels[v].valveStatus = on;
 
     return true;
 }
@@ -87,7 +92,7 @@ bool _pumpOn(uint8_t v, bool on)
         return false;
     }
     PMP_on(v, on);
-    g_app.pumpStatus[v] = on;
+    g_app.channels[v].pumpStatus = on;
 
     return true;
 }
@@ -118,7 +123,7 @@ bool APP_setValve(uint8_t n, bool on)
 
 static void _pressurize(uint8_t ch, int dir)
 {
-    if (g_app.pressurizeState[ch] == dir) {
+    if (g_app.channels[ch].pressurizeState == dir) {
         return;
     }
 
@@ -141,28 +146,34 @@ static void _pressurize(uint8_t ch, int dir)
 
         default:
     }
-    g_app.pressurizeState[ch] = dir;
+    g_app.channels[ch].pressurizeState = dir;
 }
 
 static void _task(void *arg)
 {
     uint8_t i;
+    int32_t t;
 
     while (true) {
-        ADC_getPressure(g_app.press);
+        int16_t     pressure[4];
+   		t = TIME_get32();
+
+        ADC_getPressure(pressure);
 
         if (!g_app.loopActive) {
             continue;
         }
 
         TRACE("press: %3d %3d %3d %3d %2d %2d %2d %2d\n", 
-            g_app.press[0], g_app.press[1], g_app.press[2], g_app.press[3],
-            g_app.pressurizeState[0], g_app.pressurizeState[1], g_app.pressurizeState[2], g_app.pressurizeState[3]);
+            g_app.channels[0].press, g_app.channels[1].press, g_app.channels[2].press, g_app.channels[3].press,
+            g_app.channels[0].pressurizeState, g_app.channels[1].pressurizeState, g_app.channels[2].pressurizeState, g_app.channels[3].pressurizeState);
 
         for (i=0; i<4; i++) {
-            int delta = g_app.press[i] - g_app.target[i];
+            g_app.channels[i].press = pressure[i];
 
-            switch (g_app.pressurizeState[i]) {
+            int delta = g_app.channels[i].press - g_app.channels[i].target;
+
+            switch (g_app.channels[i].pressurizeState) {
                 case 1:
                     if (delta >= g_app.cfg.histeresisH1) {
 
@@ -171,17 +182,17 @@ static void _task(void *arg)
                     break;
 
                 case -1:
-                    if ((delta <= g_app.cfg.histeresisL1) || (g_app.press[i] <= g_app.cfg.minTurnOff)) {
+                    if ((delta <= g_app.cfg.histeresisL1) || (g_app.channels[i].press <= g_app.cfg.minTurnOff)) {
                         _pressurize(i, 0);
-                        if (!g_app.target[i]) {
-                            g_app.deflateDone[i] = true;
+                        if (!g_app.channels[i].target) {
+                            g_app.channels[i].deflateDone = true;
                         }
                     }
                     break;
 
                 case 0:
                     if ((delta > g_app.cfg.histeresisH2) ) {
-                        if (!g_app.deflateDone[i]) {
+                        if (!g_app.channels[i].deflateDone) {
                             _pressurize(i, -1);
                         }
                     }
@@ -192,7 +203,7 @@ static void _task(void *arg)
             }
         }
 
-        vTaskDelay(100);
+        vTaskDelay(10);
     }
 }
 
@@ -216,8 +227,7 @@ static void _init(void)
 bool APP_loopEnable(bool on)
 {
     g_app.loopActive = on;
-    return        APP_setTarget(target);
- true;
+    return true;
 }
 
 bool APP_setTarget(uint16_t* pPressure)
@@ -227,8 +237,8 @@ bool APP_setTarget(uint16_t* pPressure)
     INFO("APP_setTarget %d %d %d %d\n", pPressure[0], pPressure[1], pPressure[2], pPressure[3]);
 
     for (i=0; i<4; i++) {
-        g_app.target[i] = pPressure[i];
-        g_app.deflateDone[i] = false;
+        g_app.channels[i].target = pPressure[i];
+        g_app.channels[i].deflateDone = false;
     }
 
     return true;
@@ -239,7 +249,7 @@ bool APP_getPressure(int16_t* pPressure)
     int i;
 
     for (i=0; i<4; i++) {
-        pPressure[i] = g_app.press[i];
+        pPressure[i] = g_app.channels[i].press;
     }
 
     return true;
@@ -250,7 +260,7 @@ bool APP_getValves(bool* pValves)
     int i;
 
     for (i=0; i<4; i++) {
-        pValves[i] = g_app.valveStatus[i];
+        pValves[i] = g_app.channels[i].valveStatus;
     }
 
     return true;
@@ -261,7 +271,7 @@ bool APP_getPump(bool* pPumpsOn)
     int i;
 
     for (i=0; i<4; i++) {
-            pPumpsOn[i] = g_app.pumpStatus[i];
+            pPumpsOn[i] = g_app.channels[i].pumpStatus;
     }
 
     return true;
@@ -389,10 +399,10 @@ static bool dbgLoopEnable(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-    PRINT("press: %3d %3d %3d %3d\n", g_app.press[0], g_app.press[1], g_app.press[2], g_app.press[3]);
-    PRINT("pump:  %3d %3d %3d %3d\n", g_app.pumpStatus[0], g_app.pumpStatus[1], g_app.pumpStatus[2], g_app.pumpStatus[3]);
-    PRINT("valve: %3d %3d %3d %3d\n", g_app.valveStatus[0], g_app.valveStatus[1], g_app.valveStatus[2], g_app.valveStatus[3]);
-    PRINT("done:  %3d %3d %3d %3d\n", g_app.deflateDone[0], g_app.deflateDone[1], g_app.deflateDone[2], g_app.deflateDone[3]);
+    PRINT("press: %3d %3d %3d %3d\n", g_app.channels[0].press, g_app.channels[1].press, g_app.channels[2].press, g_app.channels[3].press);
+    PRINT("pump:  %3d %3d %3d %3d\n", g_app.channels[0].pumpStatus, g_app.channels[1].pumpStatus, g_app.channels[2].pumpStatus, g_app.channels[3].pumpStatus);
+    PRINT("valve: %3d %3d %3d %3d\n", g_app.channels[0].valveStatus, g_app.channels[1].valveStatus, g_app.channels[2].valveStatus, g_app.channels[3].valveStatus);
+    PRINT("done:  %3d %3d %3d %3d\n", g_app.channels[0].deflateDone, g_app.channels[0].deflateDone, g_app.channels[2].deflateDone, g_app.channels[3].deflateDone);
 
     return true;
 }
