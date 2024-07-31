@@ -273,7 +273,7 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
 {
     if (reconnect) {
-        INFO("sta disconnect, reconnect...\n");
+        TRACE("sta disconnect, reconnect...\n");
         esp_wifi_connect();
     } else {
         INFO("sta disconnect\n");
@@ -587,7 +587,7 @@ static void task_tcp_server(void *arg)
 
     while(true) {
         if (!ip.addr) {
-            INFO("waiting for FLAG_GOT_IP\n");
+            TRACE("waiting for FLAG_GOT_IP\n");
             int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_TCP, 1, 1, 1000);
 
             if (bits & FLAG_GOT_IP_TCP) {
@@ -614,7 +614,7 @@ static void task_udp_server(void *arg)
 
     while(true) {
         if (!ip.addr) {
-            INFO("UDP waiting for FLAG_GOT_IP\n");
+            TRACE("UDP waiting for FLAG_GOT_IP\n");
             int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_UDP, 1, 1, 1000);
 
             if (bits & FLAG_GOT_IP_UDP) {
@@ -642,7 +642,7 @@ static void task_udp_time_server(void *arg)
 
     while(true) {
         if (!ip.addr) {
-            INFO("UDP waiting for FLAG_GOT_IP\n");
+            TRACE("UDP waiting for FLAG_GOT_IP\n");
             int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC, 1, 1, 1000);
 
             if (bits & FLAG_GOT_IP_UDP_TIME_SYNC) {

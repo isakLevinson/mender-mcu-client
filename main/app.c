@@ -6,7 +6,6 @@
 #include "dbgPrint.h"
 #include "parseArgs.h"
 
-
 #include "esp_event.h"
 #include "esp_check.h"
 #include "esp_log.h"
@@ -42,25 +41,30 @@ static const uint8_t g_valveGpios[] = {
 static struct {
     struct {
         uint16_t    pmpValveDelay;
+        uint16_t    pmpValveDelayGainPercent;
         int8_t      histeresisH2;
         int8_t      histeresisH1;
         int8_t      histeresisL1;
         int8_t      histeresisL2;
+        int8_t      minTurnOff;
     } cfg;
 
     bool    loopActive;
     int16_t press[4];
     int16_t target[4];
+    bool    deflateDone[4];
     int8_t  pressurizeState[4];
     bool    valveStatus[5];
     bool    pumpStatus[4];
 } g_app = {
     .cfg = {
         .pmpValveDelay  = 100,
-        .histeresisH2 = 7,
+        .pmpValveDelayGainPercent  = 100,
+        .histeresisH2 = 10,
         .histeresisH1 = 5,
         .histeresisL1 = 0,
         .histeresisL2 = -5,
+        .minTurnOff   = 10,
     },
     .loopActive = true,
 };
@@ -160,20 +164,26 @@ static void _task(void *arg)
 
             switch (g_app.pressurizeState[i]) {
                 case 1:
-                    if (delta > g_app.cfg.histeresisH1) {
+                    if (delta >= g_app.cfg.histeresisH1) {
+
                         _pressurize(i, 0);
                     }
                     break;
 
                 case -1:
-                    if (delta < g_app.cfg.histeresisL1) {
+                    if ((delta <= g_app.cfg.histeresisL1) || (g_app.press[i] <= g_app.cfg.minTurnOff)) {
                         _pressurize(i, 0);
+                        if (!g_app.target[i]) {
+                            g_app.deflateDone[i] = true;
+                        }
                     }
                     break;
 
                 case 0:
-                    if (delta > g_app.cfg.histeresisH2) {
-                        _pressurize(i, -1);
+                    if ((delta > g_app.cfg.histeresisH2) ) {
+                        if (!g_app.deflateDone[i]) {
+                            _pressurize(i, -1);
+                        }
                     }
                     if (delta < g_app.cfg.histeresisL2) {
                         _pressurize(i, 1);
@@ -206,7 +216,8 @@ static void _init(void)
 bool APP_loopEnable(bool on)
 {
     g_app.loopActive = on;
-    return true;
+    return        APP_setTarget(target);
+ true;
 }
 
 bool APP_setTarget(uint16_t* pPressure)
@@ -217,6 +228,7 @@ bool APP_setTarget(uint16_t* pPressure)
 
     for (i=0; i<4; i++) {
         g_app.target[i] = pPressure[i];
+        g_app.deflateDone[i] = false;
     }
 
     return true;
@@ -336,14 +348,26 @@ static bool dbgCuff(uint8_t argc, char** argv)
 
 static bool dbgTarget(uint8_t argc, char** argv)
 {
+    uint16_t   target[4];
+    if (argc == 2) {
+        target[0] = strtol(argv[1], NULL, 10);
+        target[1] = strtol(argv[1], NULL, 10);
+        target[2] = strtol(argv[1], NULL, 10);
+        target[3] = strtol(argv[1], NULL, 10);
+        APP_setTarget(target);
+
+        return true;
+    }
+
     if (argc < 5) {
         return false;
     }
 
-    g_app.target[0] = strtol(argv[1], NULL, 10);
-    g_app.target[1] = strtol(argv[2], NULL, 10);
-    g_app.target[2] = strtol(argv[3], NULL, 10);
-    g_app.target[3] = strtol(argv[4], NULL, 10);
+    target[0] = strtol(argv[1], NULL, 10);
+    target[1] = strtol(argv[2], NULL, 10);
+    target[2] = strtol(argv[3], NULL, 10);
+    target[3] = strtol(argv[4], NULL, 10);
+    APP_setTarget(target);
 
     return true;
 }
@@ -366,6 +390,10 @@ static bool dbgLoopEnable(uint8_t argc, char** argv)
 static bool dbgStatus(uint8_t argc, char** argv)
 {
     PRINT("press: %3d %3d %3d %3d\n", g_app.press[0], g_app.press[1], g_app.press[2], g_app.press[3]);
+    PRINT("pump:  %3d %3d %3d %3d\n", g_app.pumpStatus[0], g_app.pumpStatus[1], g_app.pumpStatus[2], g_app.pumpStatus[3]);
+    PRINT("valve: %3d %3d %3d %3d\n", g_app.valveStatus[0], g_app.valveStatus[1], g_app.valveStatus[2], g_app.valveStatus[3]);
+    PRINT("done:  %3d %3d %3d %3d\n", g_app.deflateDone[0], g_app.deflateDone[1], g_app.deflateDone[2], g_app.deflateDone[3]);
+
     return true;
 }
 
@@ -379,7 +407,9 @@ static bool dbgCfg(uint8_t argc, char** argv)
 		ARGS_ENTRY("h1",		ARGS_TYPE_INT8,	    0, 	"histeresis high1",	&g_app.cfg.histeresisH1)
 		ARGS_ENTRY("l1",		ARGS_TYPE_INT8,	    0,	"histeresis low1",	&g_app.cfg.histeresisL1)
 		ARGS_ENTRY("l2",		ARGS_TYPE_INT8,	    0,	"histeresis low2",	&g_app.cfg.histeresisL2)
+		ARGS_ENTRY("mt",		ARGS_TYPE_INT8,	    0,	"min turn off",     &g_app.cfg.minTurnOff)
 		ARGS_ENTRY("pd",		ARGS_TYPE_UINT16,	0,	"pump delay",   	&g_app.cfg.pmpValveDelay)
+		ARGS_ENTRY("pdg",		ARGS_TYPE_UINT16,	0,	"pump delay",   	&g_app.cfg.pmpValveDelayGainPercent)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
@@ -392,7 +422,9 @@ static bool dbgCfg(uint8_t argc, char** argv)
     PRINT("h1: %d\n", g_app.cfg.histeresisH1);
     PRINT("l1: %d\n", g_app.cfg.histeresisL1);
     PRINT("l2: %d\n", g_app.cfg.histeresisL2);
+    PRINT("mt: %d\n", g_app.cfg.minTurnOff);
     PRINT("pd: %d\n", g_app.cfg.pmpValveDelay);
+    PRINT("pdg:%d\n", g_app.cfg.pmpValveDelayGainPercent);
 
     return true;
 }
