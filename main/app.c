@@ -163,6 +163,9 @@ static void _task(void *arg)
   
     while (true) {
         int16_t     pressure[4];
+
+        vTaskDelay(10);
+
    		t = TIME_get32();
         ADC_getPressure(pressure);
 
@@ -175,6 +178,10 @@ static void _task(void *arg)
                     _valveOn(i, 1);
                 }
             }
+        }
+
+        if (!g_app.loopActive) {
+            continue;
         }
 
         if (t - timeTrace < 100) {
@@ -220,8 +227,6 @@ static void _task(void *arg)
                     break;
             }
         }
-
-        vTaskDelay(10);
     }
 }
 
@@ -244,6 +249,13 @@ static void _init(void)
 
 bool APP_loopEnable(bool on)
 {
+    uint32_t    i;
+
+    for (i=0; i<4; i++) {
+        g_app.channels[i].deflateDone       = false;
+        g_app.channels[ch].pressurizeState  = 0;
+        g_app.channels[ch].valveDelay       = false;
+
     g_app.loopActive = on;
     return true;
 }
