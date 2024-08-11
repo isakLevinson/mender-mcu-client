@@ -252,9 +252,10 @@ bool APP_loopEnable(bool on)
     uint32_t    i;
 
     for (i=0; i<4; i++) {
-        g_app.channels[i].deflateDone       = false;
-        g_app.channels[ch].pressurizeState  = 0;
-        g_app.channels[ch].valveDelay       = false;
+        g_app.channels[i].deflateDone      = false;
+        g_app.channels[i].pressurizeState  = 0;
+        g_app.channels[i].valveDelay       = false;
+    }
 
     g_app.loopActive = on;
     return true;
