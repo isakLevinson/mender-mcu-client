@@ -39,6 +39,7 @@
 #include "wifi.h"
 #include "cmd.h"
 #include "time.h"
+#include "wss.h"
 
 #define   WIFI_MAX_SSID_LENGTH    32
 #define   WIFI_MAX_PASSWD_LENGTH  32
@@ -601,7 +602,8 @@ static void task_tcp_server(void *arg)
             continue;
         }
 
-        cmd_tcp_server();
+        wss_start_server();
+//        cmd_tcp_server();
         ip = wifi_getSelfIp();
     }
 }

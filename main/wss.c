@@ -12,7 +12,6 @@
 #include "esp_netif.h"
 #include "esp_eth.h"
 #include "esp_wifi.h"
-//#include "protocol_examples_common.h"
 #include "lwip/sockets.h"
 #include <esp_https_server.h>
 #include "wss_keepalive.h"
@@ -199,7 +198,7 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
     return false;
 }
 
-static httpd_handle_t start_wss_echo_server(void)
+httpd_handle_t wss_start_server(void)
 {
     // Start the httpd server
     httpd_handle_t server = NULL;
@@ -270,6 +269,7 @@ static void disconnect_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
+#if 0
 static void connect_handler(void* arg, esp_event_base_t event_base,
                             int32_t event_id, void* event_data)
 {
@@ -279,6 +279,7 @@ static void connect_handler(void* arg, esp_event_base_t event_base,
         *server = start_wss_echo_server();
     }
 }
+#endif
 
 // Get all clients and send async message
 static void wss_server_send_messages(httpd_handle_t* server)
