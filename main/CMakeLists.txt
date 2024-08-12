@@ -8,6 +8,8 @@ idf_component_register(SRCS	"main.c"
 				"pump.c"
 				"adc.c"
 				"uart.c"
+				"wss.c"
+				"wss_keepalive.c"
 
 				INCLUDE_DIRS ".")
 
