@@ -583,6 +583,7 @@ static void _udp_time_server(void)
 static void task_tcp_server(void *arg)
 {
     esp_ip4_addr_t  ip  = {0};
+    httpd_handle_t  wssHandle = NULL;
 
     INFO("TCP started\n");
 
@@ -602,7 +603,16 @@ static void task_tcp_server(void *arg)
             continue;
         }
 
-        wss_start_server();
+        if (!wssHandle) {
+            wssHandle = wss_start_server();
+
+            if (wssHandle) {
+                INFO("WSS server started!\n");
+            }
+
+        }
+        vTaskDelay(1000);
+
 //        cmd_tcp_server();
         ip = wifi_getSelfIp();
     }

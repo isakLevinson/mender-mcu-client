@@ -35,7 +35,7 @@ static const size_t max_clients = 4;
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {
-        INFO("Handshake done, the new connection was opened");
+        INFO("Handshake done, the new connection was opened\n");
         return ESP_OK;
     }
     httpd_ws_frame_t ws_pkt;
@@ -45,34 +45,34 @@ static esp_err_t ws_handler(httpd_req_t *req)
     // First receive the full ws message
     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
     if (ret != ESP_OK) {
-        ERROR("httpd_ws_recv_frame failed to get frame len with %d", ret);
+        ERROR("httpd_ws_recv_frame failed to get frame len with %d\n", ret);
         return ret;
     }
-    INFO("frame len is %d", ws_pkt.len);
+    INFO("frame len is %d\n", ws_pkt.len);
     if (ws_pkt.len) {
         buf = calloc(1, ws_pkt.len + 1);
         if (buf == NULL) {
-            ERROR("Failed to calloc memory for buf");
+            ERROR("Failed to calloc memory for buf\n");
             return ESP_ERR_NO_MEM;
         }
         ws_pkt.payload = buf;
         ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
         if (ret != ESP_OK) {
-            ERROR("httpd_ws_recv_frame failed with %d", ret);
+            ERROR("httpd_ws_recv_frame failed with %d\n", ret);
             free(buf);
             return ret;
         }
     }
     if (ws_pkt.type == HTTPD_WS_TYPE_PONG) {
-        INFO("Received PONG message");
+        INFO("Received PONG message\n");
         free(buf);
-        //return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle),
-        //        httpd_req_to_sockfd(req));
+        return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle),
+                httpd_req_to_sockfd(req));
         return 0;
 
     } else if (ws_pkt.type == HTTPD_WS_TYPE_TEXT || ws_pkt.type == HTTPD_WS_TYPE_PING || ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
         if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
-            INFO("Received packet with message: %s", ws_pkt.payload);
+            INFO("Received packet with message: <%s>\n", ws_pkt.payload);
             // Prepare response message
             static const char * response_data = "Hello from server-12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234";
             httpd_ws_frame_t response_pkt;
@@ -86,7 +86,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
             TickType_t startTime = xTaskGetTickCount();
             int sent_count = 0;
             // Loop for 10 seconds
-            INFO("start sending data at %lu:", startTime);
+            INFO("start sending data at %lu:\n", startTime);
             while ((xTaskGetTickCount() - startTime) < (10 * configTICK_RATE_HZ)) {
         // Create a response structure
                 ret = httpd_ws_send_frame(req, &response_pkt);
@@ -96,13 +96,13 @@ static esp_err_t ws_handler(httpd_req_t *req)
                 sent_count += response_pkt.len;
                 // INFO("sent data at %lu:", xTaskGetTickCount());
             }
-            INFO("end sending data at %lu:", xTaskGetTickCount());
-            INFO("sent %d bytes", sent_count);
+            INFO("end sending data at %lu:\n", xTaskGetTickCount());
+            INFO("sent %d bytes\n", sent_count);
             // static httpd_handle_t server = NULL;
             // wss_server_send_messages(&server);
 
         } else if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
-            INFO("Got a WS PING frame, Replying PONG");
+            INFO("Got a WS PING frame, Replying PONG\n");
             ws_pkt.type = HTTPD_WS_TYPE_PONG;
         } else if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
             ws_pkt.len = 0;
@@ -110,9 +110,9 @@ static esp_err_t ws_handler(httpd_req_t *req)
         }
         ret = httpd_ws_send_frame(req, &ws_pkt);
         if (ret != ESP_OK) {
-            ERROR("httpd_ws_send_frame failed with %d", ret);
+            ERROR("httpd_ws_send_frame failed with %d\n", ret);
         }
-        INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d", req->handle,
+        INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d\n", req->handle,
                  httpd_req_to_sockfd(req), httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
         free(buf);
         return ret;
@@ -123,7 +123,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
 esp_err_t wss_open_fd(httpd_handle_t hd, int sockfd)
 {
-    INFO("New client connected %d", sockfd);
+    INFO("New client connected %d\n", sockfd);
     wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
     return wss_keep_alive_add_client(h, sockfd);
 }
@@ -234,7 +234,7 @@ httpd_handle_t wss_start_server(void)
     // Start the HTTP server with SSL
     esp_err_t ret = httpd_ssl_start(&server, &conf);
     if (ESP_OK != ret) {
-        INFO("Error starting server!");
+        ERROR("Error starting server!\n");
         return NULL;
     }
 

@@ -85,7 +85,7 @@ void app_main(void)
     ADC_init();
     APP_init();
     
-    //register_wifi();
+    register_wifi();
 
    esp_log_level_set("*", ESP_LOG_ERROR);
 
