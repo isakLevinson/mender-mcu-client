@@ -865,6 +865,20 @@ static bool dbgScan(uint8_t argc, char **argv)
     return true;
 }
 
+static bool dbgWssSend(uint8_t argc, char **argv)
+{
+    size_t  len;
+    if (argc < 2) {
+        return false;
+    }
+
+    len = strlen(argv[1]);
+
+    wss_send(argv[1], len);
+
+    return true;
+}
+
 static bool dbgStatus(uint8_t argc, char **argv)
 {
     wifi_config_t cfg;
@@ -1040,6 +1054,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("status",	        NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("apn",	            NULL,		NULL, dbgConnect)
 		DEBUG_MENU_CMD("scan",	            NULL,		NULL, dbgScan)
+		DEBUG_MENU_CMD("wssSend",           NULL,		NULL, dbgWssSend)
 		DEBUG_MENU_CMD("nvs",	            NULL,		NULL, dbgNvs)
 		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
 	DEBUG_MENU_DIR_END

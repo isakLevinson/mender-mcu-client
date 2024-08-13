@@ -23,8 +23,6 @@
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
 #endif
 
-static void wss_server_send_messages(httpd_handle_t* server);
-
 struct async_resp_arg {
     httpd_handle_t hd;
     int fd;
@@ -32,10 +30,51 @@ struct async_resp_arg {
 
 static const size_t max_clients = 4;
 
+
+httpd_req_t *g_req;
+
+esp_err_t wss_send(void* pBuf, size_t len)
+{
+    esp_err_t        ret;
+    httpd_ws_frame_t pkt;
+
+    INFO("wss_send\n");
+
+    memset(&pkt, 0, sizeof(httpd_ws_frame_t));
+    pkt.payload = (uint8_t*)pBuf;
+    pkt.len = len;
+    pkt.type = HTTPD_WS_TYPE_TEXT;
+
+    // Send response message
+        // Get the current time
+    TickType_t startTime = xTaskGetTickCount();
+    int sent_count = 0;
+    // Loop for 10 seconds
+    INFO("start sending data at %lu:\n", startTime);
+    while ((xTaskGetTickCount() - startTime) < (10 * configTICK_RATE_HZ)) {
+// Create a response structure
+        ret = httpd_ws_send_frame(g_req, &pkt);
+        if (ret != ESP_OK) {
+            ERROR("httpd_ws_send_frame failed with %d\n", ret);
+        }
+        sent_count += pkt.len;
+        // INFO("sent data at %lu:", xTaskGetTickCount());
+    }
+    INFO("end sending data at %lu:\n", xTaskGetTickCount());
+    INFO("sent %d bytes\n", sent_count);
+
+    return 0;
+}
+
+
 static esp_err_t ws_handler(httpd_req_t *req)
 {
+    INFO("ws_handler method=%d\n", req->method);
+
+    g_req = req;
+
     if (req->method == HTTP_GET) {
-        INFO("Handshake done, the new connection was opened\n");
+        INFO("HTTP_GET Handshake done, the new connection was opened\n");
         return ESP_OK;
     }
     httpd_ws_frame_t ws_pkt;
@@ -72,35 +111,16 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
     } else if (ws_pkt.type == HTTPD_WS_TYPE_TEXT || ws_pkt.type == HTTPD_WS_TYPE_PING || ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
         if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
+            static uint8_t count;
+            static char rsp[256];
             INFO("Received packet with message: <%s>\n", ws_pkt.payload);
             // Prepare response message
-            static const char * response_data = "Hello from server-12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234";
-            httpd_ws_frame_t response_pkt;
-            memset(&response_pkt, 0, sizeof(httpd_ws_frame_t));
-            response_pkt.payload = (uint8_t*)response_data;
-            response_pkt.len = strlen(response_data);
-            response_pkt.type = HTTPD_WS_TYPE_TEXT;
+            //static const char * response_data = "Hello from server-12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234";
+            //static const char * response_data = "Hello from server-1234567890";
+            sprintf(rsp, "Hello from server %d", count);
+            count++;
 
-            // Send response message
-               // Get the current time
-            TickType_t startTime = xTaskGetTickCount();
-            int sent_count = 0;
-            // Loop for 10 seconds
-            INFO("start sending data at %lu:\n", startTime);
-            while ((xTaskGetTickCount() - startTime) < (10 * configTICK_RATE_HZ)) {
-        // Create a response structure
-                ret = httpd_ws_send_frame(req, &response_pkt);
-                if (ret != ESP_OK) {
-                    ERROR("httpd_ws_send_frame failed with %d", ret);
-                }
-                sent_count += response_pkt.len;
-                // INFO("sent data at %lu:", xTaskGetTickCount());
-            }
-            INFO("end sending data at %lu:\n", xTaskGetTickCount());
-            INFO("sent %d bytes\n", sent_count);
-            // static httpd_handle_t server = NULL;
-            // wss_server_send_messages(&server);
-
+            //wss_send(rsp, strlen(rsp));
         } else if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
             INFO("Got a WS PING frame, Replying PONG\n");
             ws_pkt.type = HTTPD_WS_TYPE_PONG;
@@ -123,43 +143,17 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
 esp_err_t wss_open_fd(httpd_handle_t hd, int sockfd)
 {
-    INFO("New client connected %d\n", sockfd);
+    INFO("wss_open_fd %d\n", sockfd);
     wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
     return wss_keep_alive_add_client(h, sockfd);
 }
 
 void wss_close_fd(httpd_handle_t hd, int sockfd)
 {
-    INFO("Client disconnected %d", sockfd);
+    INFO("wss_close_fd %d\n", sockfd);
     wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
     wss_keep_alive_remove_client(h, sockfd);
     close(sockfd);
-}
-
-static const httpd_uri_t ws = {
-        // .uri        = "/ws",
-        .uri = "/",
-        .method     = HTTP_GET,
-        .handler    = ws_handler,
-        .user_ctx   = NULL,
-        .is_websocket = true,
-        .handle_ws_control_frames = true
-};
-
-static void send_hello(void *arg)
-{
-    static const char * data = "Hello client";
-    struct async_resp_arg *resp_arg = arg;
-    httpd_handle_t hd = resp_arg->hd;
-    int fd = resp_arg->fd;
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = (uint8_t*)data;
-    ws_pkt.len = strlen(data);
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-    httpd_ws_send_frame_async(hd, fd, &ws_pkt);
-    free(resp_arg);
 }
 
 static void send_ping(void *arg)
@@ -179,16 +173,15 @@ static void send_ping(void *arg)
 
 bool client_not_alive_cb(wss_keep_alive_t h, int fd)
 {
-    ERROR("Client not alive, closing fd %d", fd);
+    ERROR("client_not_alive_cb() closing fd %d\n", fd);
     httpd_sess_trigger_close(wss_keep_alive_get_user_ctx(h), fd);
     return true;
 }
 
 bool check_client_alive_cb(wss_keep_alive_t h, int fd)
 {
-    TRACE("Checking if client (fd=%d) is alive", fd);
-    struct async_resp_arg *resp_arg = malloc
-(sizeof(struct async_resp_arg));
+    TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
+    struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
     resp_arg->hd = wss_keep_alive_get_user_ctx(h);
     resp_arg->fd = fd;
 
@@ -197,6 +190,17 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
     }
     return false;
 }
+
+static const httpd_uri_t ws = {
+        // .uri        = "/ws",
+        .uri = "/",
+        .method     = HTTP_GET,
+        .handler    = ws_handler,
+        .user_ctx   = NULL,
+        .is_websocket = true,
+        .handle_ws_control_frames = true
+};
+
 
 httpd_handle_t wss_start_server(void)
 {
@@ -278,109 +282,5 @@ static void connect_handler(void* arg, esp_event_base_t event_base,
         // Start the server if it is not running
         *server = start_wss_echo_server();
     }
-}
-#endif
-
-// Get all clients and send async message
-static void wss_server_send_messages(httpd_handle_t* server)
-{
-    const char *data = "X"; // Use a single character to generate 1024-byte message
-    char *message = malloc(1025); // Allocate memory for the message
-    if (message == NULL) {
-        ERROR("Failed to allocate memory for message");
-        return;
-    }
-    memset(message, 0, 1025);
-    for (int i = 0; i < 1024; i++) {
-        message[i] = *data; // Fill the message with the character
-    }
-
-    // Get the current time
-    TickType_t startTime = xTaskGetTickCount();
-
-    // Loop for 10 seconds
-    while ((xTaskGetTickCount() - startTime) < (10 * configTICK_RATE_HZ)) {
-        // Create a response structure
-        struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
-        if (resp_arg == NULL) {
-            ERROR("Failed to allocate memory for response argument");
-            free(message);
-            return;
-        }
-        resp_arg->hd = *server;
-
-        // Send 1024 bytes message to the connected client
-        httpd_ws_frame_t ws_pkt;
-        memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-        ws_pkt.payload = (uint8_t*)message; // Set the message payload
-        ws_pkt.len = 1024; // Set the message length
-        ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-        // Send the message to each connected client
-        size_t clients = max_clients;
-        int    client_fds[max_clients];
-        if (httpd_get_client_list(*server, &clients, client_fds) == ESP_OK) {
-            for (size_t i = 0; i < clients; ++i) {
-                int sockfd = client_fds[i];
-                if (httpd_ws_get_fd_info(*server, sockfd) == HTTPD_WS_CLIENT_WEBSOCKET) {
-                    INFO("Sending 1024 bytes message to connected client (fd=%d)", sockfd);
-                    resp_arg->fd = sockfd;
-                    if (httpd_queue_work(*server, send_hello, resp_arg) != ESP_OK) {
-                        ERROR("httpd_queue_work failed!");
-                        free(resp_arg);
-                        free(message);
-                        return;
-                    }
-                }
-            }
-        } else {
-            ERROR("httpd_get_client_list failed!");
-        }
-
-        // Free allocated memory
-        free(resp_arg);
-
-        // Delay for a short period before sending the next message
-        vTaskDelay(1000 / portTICK_PERIOD_MS); // 1 second delay
-    }
-
-    // Free allocated memory
-    free(message);
-}
-
-#if 0
-void app_main(void)
-{
-    static httpd_handle_t server = NULL;
-
-    // Initialize NVS
-    ESP_ERROR_CHECK(nvs_flash_init());
-
-    // Initialize TCP/IP network stack
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-
-    /* Register event handlers to start server when Wi-Fi or Ethernet is connected,
-     * and stop server when disconnection happens.
-     */
-#ifdef CONFIG_EXAMPLE_CONNECT_WIFI
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &connect_handler, &server));
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &disconnect_handler, &server));
-#endif // CONFIG_EXAMPLE_CONNECT_WIFI
-#ifdef CONFIG_EXAMPLE_CONNECT_ETHERNET
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &connect_handler, &server));
-    ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ETHERNET_EVENT_DISCONNECTED, &disconnect_handler, &server));
-#endif // CONFIG_EXAMPLE_CONNECT_ETHERNET
-
-    /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
-     * Read "Establishing Wi-Fi or Ethernet Connection" section in
-     * examples/protocols/README.md for more information about this function.
-     */
-    ESP_ERROR_CHECK(example_connect());
-
-    /* This function demonstrates periodic sending Websocket messages
-     * to all connected clients to this server
-     */
-    // wss_server_send_messages(&server);
 }
 #endif

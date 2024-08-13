@@ -16,4 +16,5 @@
 
 
 httpd_handle_t wss_start_server(void);
+esp_err_t wss_send(void* pBuf, size_t len);
 
