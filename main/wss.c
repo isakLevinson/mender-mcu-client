@@ -35,7 +35,7 @@ esp_err_t wss_send(httpd_req_t* pReq, void* pBuf, size_t len)
     esp_err_t        ret;
     httpd_ws_frame_t pkt;
 
-    INFO("wss_send\n");
+    INFO_BUF("wss_send packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, pBuf, len);
 
     memset(&pkt, 0, sizeof(httpd_ws_frame_t));
     pkt.payload = (uint8_t*)pBuf;
@@ -47,8 +47,8 @@ esp_err_t wss_send(httpd_req_t* pReq, void* pBuf, size_t len)
     TickType_t startTime = xTaskGetTickCount();
     int sent_count = 0;
     // Loop for 10 seconds
-    INFO("start sending data at %lu:\n", startTime);
-    while ((xTaskGetTickCount() - startTime) < (10 * configTICK_RATE_HZ)) {
+    //INFO("start sending data at %lu:\n", startTime);
+//    while ((xTaskGetTickCount() - startTime) < (10 * configTICK_RATE_HZ)) {
 // Create a response structure
         ret = httpd_ws_send_frame(pReq, &pkt);
         if (ret != ESP_OK) {
@@ -56,20 +56,33 @@ esp_err_t wss_send(httpd_req_t* pReq, void* pBuf, size_t len)
         }
         sent_count += pkt.len;
         // INFO("sent data at %lu:", xTaskGetTickCount());
-    }
-    INFO("end sending data at %lu:\n", xTaskGetTickCount());
+//    }
+    //INFO("end sending data at %lu:\n", xTaskGetTickCount());
     INFO("sent %d bytes\n", sent_count);
 
     return 0;
 }
 
-bool _cmdSendResp(void* pArg, COMM_TYPE Message_Type, void* i_pBuf, uint16_t size)
+bool _cmdSendResp(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
 {
     httpd_req_t *req = (httpd_req_t*)pArg;
 
-    INFO("_cmdSendResp\n");
+	uint8_t	buf[300];
+	uint8_t*	pBuf = buf;
 
-    wss_send(req, i_pBuf, size);
+    int s = *(int*)pArg;
+
+	*pBuf	= size;
+	pBuf++;
+	*pBuf	= type;
+	pBuf++;
+
+	memcpy(pBuf, i_pBuf, size);
+	pBuf += size;
+
+	TRACE_BUF("wss_cmdSendResp", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf - buf);
+
+    wss_send(req, buf, pBuf - buf);
 
     return true;
 }
@@ -118,7 +131,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
             static uint8_t count;
             static char rsp[256];
-            //INFO("Received packet with message: <%s>\n", ws_pkt.payload);
+            INFO("Received packet with message: req=%x\n", req);
             INFO_BUF("Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
 
             if (ws_pkt.len >= 2) {
@@ -146,11 +159,11 @@ static esp_err_t ws_handler(httpd_req_t *req)
             ws_pkt.payload = NULL;
         }
 
-        INFO_BUF("sending frame",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
-        ret = httpd_ws_send_frame(req, &ws_pkt);
-        if (ret != ESP_OK) {
-            ERROR("httpd_ws_send_frame failed with %d\n", ret);
-        }
+//        INFO_BUF("sending frame",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
+//       ret = httpd_ws_send_frame(req, &ws_pkt);
+//      if (ret != ESP_OK) {
+//         ERROR("httpd_ws_send_frame failed with %d\n", ret);
+//        }
         INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d\n", req->handle,
                  httpd_req_to_sockfd(req), httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
         free(buf);

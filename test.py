@@ -17,6 +17,14 @@ def binary_array_to_string(binary_array):
     # Convert the list of hex values to a bytes object and then to a string
     return bytes(binary_array).decode('latin-1')
 
+def string_to_binary_array(input_string):
+    # Convert string to bytes
+    byte_array = input_string.encode('latin-1')  # Use 'latin-1' to preserve binary data
+    # Convert bytes to binary array (hex representation)
+    binary_array = [f'0x{byte:02x}' for byte in byte_array]
+    return binary_array
+
+
 
 async def test_wss():
     uri = "wss://192.168.1.98"  # Replace with your WSS server URL
@@ -48,12 +56,12 @@ async def test_wss():
                     break
 
                 binary_array = ascii_hex_to_binary_array(message)
-                print(binary_array)
+                #print(binary_array)
                 message = binary_array_to_string(binary_array)
                 await websocket.send(message)
 
                 response = await websocket.recv()
-                print(f"Received: {response}")
+                print(string_to_binary_array(response))
 
        #await asyncio.gather(send_data(), receive_data())
         await asyncio.gather(send_data())
