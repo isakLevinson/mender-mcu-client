@@ -30,9 +30,7 @@ struct async_resp_arg {
 static const size_t max_clients = 4;
 
 
-httpd_req_t *g_req;
-
-esp_err_t wss_send(void* pBuf, size_t len)
+esp_err_t wss_send(httpd_req_t* pReq, void* pBuf, size_t len)
 {
     esp_err_t        ret;
     httpd_ws_frame_t pkt;
@@ -52,7 +50,7 @@ esp_err_t wss_send(void* pBuf, size_t len)
     INFO("start sending data at %lu:\n", startTime);
     while ((xTaskGetTickCount() - startTime) < (10 * configTICK_RATE_HZ)) {
 // Create a response structure
-        ret = httpd_ws_send_frame(g_req, &pkt);
+        ret = httpd_ws_send_frame(pReq, &pkt);
         if (ret != ESP_OK) {
             ERROR("httpd_ws_send_frame failed with %d\n", ret);
         }
@@ -71,14 +69,14 @@ bool _cmdSendResp(void* pArg, COMM_TYPE Message_Type, void* i_pBuf, uint16_t siz
 
     INFO("_cmdSendResp\n");
 
+    wss_send(req, i_pBuf, size);
+
     return true;
 }
 
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     INFO("ws_handler method=%d\n", req->method);
-
-    g_req = req;
 
     if (req->method == HTTP_GET) {
         INFO("HTTP_GET Handshake done, the new connection was opened\n");
@@ -120,7 +118,8 @@ static esp_err_t ws_handler(httpd_req_t *req)
         if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
             static uint8_t count;
             static char rsp[256];
-            INFO("Received packet with message: <%s>\n", ws_pkt.payload);
+            //INFO("Received packet with message: <%s>\n", ws_pkt.payload);
+            INFO_BUF("Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
 
             if (ws_pkt.len >= 2) {
                 CMD_CONTEXT context = {
@@ -137,10 +136,8 @@ static esp_err_t ws_handler(httpd_req_t *req)
             // Prepare response message
             //static const char * response_data = "Hello from server-12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234";
             //static const char * response_data = "Hello from server-1234567890";
-            sprintf(rsp, "Hello from server %d", count);
-            count++;
-
-            //wss_send(rsp, strlen(rsp));
+            //sprintf(rsp, "Hello from server %d", count);
+            //count++;
         } else if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
             INFO("Got a WS PING frame, Replying PONG\n");
             ws_pkt.type = HTTPD_WS_TYPE_PONG;
@@ -148,6 +145,8 @@ static esp_err_t ws_handler(httpd_req_t *req)
             ws_pkt.len = 0;
             ws_pkt.payload = NULL;
         }
+
+        INFO_BUF("sending frame",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
         ret = httpd_ws_send_frame(req, &ws_pkt);
         if (ret != ESP_OK) {
             ERROR("httpd_ws_send_frame failed with %d\n", ret);

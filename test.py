@@ -51,22 +51,12 @@ async def test_wss():
                 print(binary_array)
                 message = binary_array_to_string(binary_array)
                 await websocket.send(message)
-        
-        async def receive_data():
-            print(f"receive_data")
-            try:
-                while not stop_event.is_set():  # Check if we should stop
-                #while True:
-                    response = await websocket.recv()
-                    print(f"Received: {response}")
-                    await asyncio.sleep(0.1)
-            except websockets.exceptions.ConnectionClosed:
-                print("Connection closed.")
-        
-        # Run both send and receive concurrently
-        #await asyncio.gather(send_data(), receive_data())
-        await asyncio.gather(receive_data(), send_data())
 
+                response = await websocket.recv()
+                print(f"Received: {response}")
+
+       #await asyncio.gather(send_data(), receive_data())
+        await asyncio.gather(send_data())
 
 # Run the WebSocket test
 asyncio.get_event_loop().run_until_complete(test_wss())
