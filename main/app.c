@@ -38,6 +38,12 @@ static const uint8_t g_valveGpios[] = {
 
 #define VALVE_COUNT     (sizeof(g_valveGpios)/sizeof(g_valveGpios[0]))
 
+typedef enum {
+    PRESS_STATE_IDLE        = 0,
+    PRESS_STATE_INFLATE     = 1,
+    PRESS_STATE_DEFLATE     = -1,
+} PRESS_STATE;
+
 static struct {
     struct {
         uint16_t    pmpValveDelay;
@@ -57,7 +63,7 @@ static struct {
         int16_t press;
         int16_t target;
         bool    deflateDone;
-        int8_t  pressurizeState;
+        PRESS_STATE  pressurizeState;
         bool    valveStatus;
         bool    pumpStatus;
         bool    valveDelay;
@@ -126,7 +132,7 @@ bool APP_setValve(uint8_t n, bool on)
     return ret;
 }
 
-static void _pressurize(uint8_t ch, int dir)
+static void _pressurize(uint8_t ch, PRESS_STATE dir)
 {
     uint32_t    valveDelay;
 
@@ -135,13 +141,13 @@ static void _pressurize(uint8_t ch, int dir)
     }
 
     switch (dir) {
-        case 0: 
+        case PRESS_STATE_IDLE: 
             g_app.channels[ch].valveDelay = false;
             _pumpOn(ch, 0);
             _valveOn(ch, 0);
             break;
 
-        case 1: 
+        case PRESS_STATE_INFLATE: 
             _pumpOn(ch, 1);
             g_app.channels[ch].valveDelay = true;
             valveDelay = g_app.cfg.pmpValveDelay + g_app.cfg.pmpValveDelayGainPercent * g_app.channels[ch].press / 100;
@@ -149,7 +155,7 @@ static void _pressurize(uint8_t ch, int dir)
             g_app.channels[ch].valveTime  = TIME_get32() + valveDelay;
             break;
 
-        case -1: 
+        case PRESS_STATE_DEFLATE: 
             g_app.channels[ch].valveDelay = false;
             _pumpOn(ch, 0);
             _valveOn(ch, 1);
@@ -188,7 +194,7 @@ static void _task(void *arg)
                 if (t >= g_app.channels[i].valveZeroTime) {
                     g_app.channels[i].valveZeroDelay = false;
                     g_app.channels[i].deflateDone = true;
-                    _pressurize(i, 0);
+                    _pressurize(i, PRESS_STATE_IDLE);
                 }
             }
         }
@@ -212,16 +218,16 @@ static void _task(void *arg)
             int delta = g_app.channels[i].press - g_app.channels[i].target;
 
             switch (g_app.channels[i].pressurizeState) {
-                case 1:
+                case PRESS_STATE_INFLATE:
                     if (delta >= g_app.cfg.histeresisH1) {
-                        _pressurize(i, 0);
+                        _pressurize(i, PRESS_STATE_IDLE);
                         g_app.channels[i].deflateDone = true;
                     }
                     break;
 
-                case -1:
+                case PRESS_STATE_DEFLATE:
                     if (delta <= g_app.cfg.histeresisL1) {
-                        _pressurize(i, 0);
+                        _pressurize(i, PRESS_STATE_IDLE);
 //                        if (!g_app.channels[i].target) {
                             g_app.channels[i].deflateDone = true;
 //                        }
@@ -235,14 +241,14 @@ static void _task(void *arg)
                     }
                     break;
 
-                case 0:
+                case PRESS_STATE_IDLE:
                     if ((delta > g_app.cfg.histeresisH2) ) {
                         if (!g_app.channels[i].deflateDone) {
-                            _pressurize(i, -1);
+                            _pressurize(i, PRESS_STATE_DEFLATE);
                         }
                     }
                     if (delta < g_app.cfg.histeresisL2) {
-                        _pressurize(i, 1);
+                        _pressurize(i, PRESS_STATE_INFLATE);
                     }
                     break;
             }
@@ -270,7 +276,7 @@ static void _init(void)
 static void _clearFsm(uint8_t ch)
 {
     g_app.channels[ch].deflateDone      = false;
-    g_app.channels[ch].pressurizeState  = 0;
+    g_app.channels[ch].pressurizeState  = PRESS_STATE_IDLE;
     g_app.channels[ch].valveDelay       = false;
     g_app.channels[ch].valveZeroDelay   = false;
 }
