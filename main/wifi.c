@@ -290,10 +290,12 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     _socket_close(&socket_listen_stream);
 }
 
-static bool _sockSend(int s, COMM_TYPE type, void* i_pBuf, uint16_t size)
+static bool _sockSend(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
 {
 	uint8_t	buf[300];
 	uint8_t*	pBuf = buf;
+
+    int s = *(int*)pArg;
 
 	*pBuf	= size;
 	pBuf++;
@@ -410,7 +412,7 @@ static void cmd_tcp_server(void)
 
         CMD_CONTEXT	cmdContext = {
             .p_cbSend	= _sockSend,
-            .socket		= g_server.tcpSocket,
+            .pArg       = &g_server.tcpSocket,
         };
 
         actual_recv = recvfrom(g_server.tcpSocket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
@@ -473,7 +475,7 @@ static void _udp_server(void)
     while (true) {
         CMD_CONTEXT	cmdContext = {
             .p_cbSend	= _sockSend,
-            .socket		= g_server.udpSocket,
+            .pArg		= &g_server.udpSocket,
         };
 
         //actual_recv = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&listen_addr, &socklen);

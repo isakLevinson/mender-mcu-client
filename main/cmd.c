@@ -157,15 +157,11 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 		return false;
 	}
 
-//	if (!pContext->socket) {
-//		return false;
-//	}
-
 	xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
 
 	TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
-	pContext->p_cbSend(pContext->socket, msgType, i_pBuf, size);
+	pContext->p_cbSend(pContext->pArg, msgType, i_pBuf, size);
 
 	xSemaphoreGive(g_cmd.semaphore);
 
