@@ -2,8 +2,24 @@ import asyncio
 import websockets
 import ssl
 
+def ascii_hex_to_binary_array(ascii_hex_string):
+    # Ensure the string length is even
+    if len(ascii_hex_string) % 2 != 0:
+        raise ValueError("Hex string length should be even.")
+    
+    # Convert the string to binary array
+    binary_array = [int(ascii_hex_string[i:i+2], 16) for i in range(0, len(ascii_hex_string), 2)]
+    
+    return binary_array
+
+
+def binary_array_to_string(binary_array):
+    # Convert the list of hex values to a bytes object and then to a string
+    return bytes(binary_array).decode('latin-1')
+
+
 async def test_wss():
-    uri = "wss://192.168.1.186"  # Replace with your WSS server URL
+    uri = "wss://192.168.1.98"  # Replace with your WSS server URL
 
     cert_path = "main/certs/servercert.pem"
 
@@ -30,6 +46,10 @@ async def test_wss():
                     stop_event.set()  # Signal to stop receiving
                     await websocket.close()
                     break
+
+                binary_array = ascii_hex_to_binary_array(message)
+                print(binary_array)
+                message = binary_array_to_string(binary_array)
                 await websocket.send(message)
         
         async def receive_data():
