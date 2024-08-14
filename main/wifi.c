@@ -900,8 +900,8 @@ static bool dbgStatus(uint8_t argc, char **argv)
             INFO("sta mode, disconnected\n");
         }
     } else {
-        INFO("NULL mode\n");
-        return 0;
+        INFO("NULL mode %d\n", mode);
+        return true;
     }
 
     memset(&ip, 0, sizeof(esp_netif_ip_info_t));

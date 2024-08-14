@@ -127,31 +127,27 @@ static esp_err_t ws_handler(httpd_req_t *req)
                 httpd_req_to_sockfd(req));
         return 0;
 
-    } else if (ws_pkt.type == HTTPD_WS_TYPE_TEXT || ws_pkt.type == HTTPD_WS_TYPE_PING || ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
-        if (ws_pkt.type == HTTPD_WS_TYPE_TEXT) {
+    } else {
+        if ((ws_pkt.type == HTTPD_WS_TYPE_TEXT) || (ws_pkt.type == HTTPD_WS_TYPE_BINARY)) {
             static uint8_t count;
             static char rsp[256];
-            INFO("Received packet with message: req=%x\n", req);
+            INFO("Received packet with message: type=%d\n", ws_pkt.type);
             INFO_BUF("Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
 
-            if (ws_pkt.len >= 2) {
+            if (ws_pkt.len >= 3) {
                 CMD_CONTEXT context = {
                     .p_cbSend   = _cmdSendResp,
                     .pArg       = req,
                 };
 
                 uint8_t len = ws_pkt.payload[0];
-                uint8_t type = ws_pkt.payload[1];
+                uint8_t type = ws_pkt.payload[2];
 
-                CMD_processMessage(&context, type, ws_pkt.payload+2, ws_pkt.len-2);
+                CMD_processMessage(&context, type, ws_pkt.payload+3, ws_pkt.len-3);
             }
+        }
 
-            // Prepare response message
-            //static const char * response_data = "Hello from server-12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234";
-            //static const char * response_data = "Hello from server-1234567890";
-            //sprintf(rsp, "Hello from server %d", count);
-            //count++;
-        } else if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
+        if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
             INFO("Got a WS PING frame, Replying PONG\n");
             ws_pkt.type = HTTPD_WS_TYPE_PONG;
         } else if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
@@ -159,11 +155,6 @@ static esp_err_t ws_handler(httpd_req_t *req)
             ws_pkt.payload = NULL;
         }
 
-//        INFO_BUF("sending frame",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
-//       ret = httpd_ws_send_frame(req, &ws_pkt);
-//      if (ret != ESP_OK) {
-//         ERROR("httpd_ws_send_frame failed with %d\n", ret);
-//        }
         INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d\n", req->handle,
                  httpd_req_to_sockfd(req), httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
         free(buf);
