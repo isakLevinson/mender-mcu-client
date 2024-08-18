@@ -67,13 +67,13 @@ bool _cmdSendResp(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
 {
     httpd_req_t *req = (httpd_req_t*)pArg;
 
-	uint8_t	buf[300];
+	uint8_t 	buf[300];
 	uint8_t*	pBuf = buf;
 
     int s = *(int*)pArg;
 
-	*pBuf	= size;
-	pBuf++;
+	*(uint16_t*)pBuf	= size;
+	pBuf += 2;
 	*pBuf	= type;
 	pBuf++;
 

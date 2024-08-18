@@ -297,8 +297,8 @@ static bool _sockSend(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
 
     int s = *(int*)pArg;
 
-	*pBuf	= size;
-	pBuf++;
+	*(uint16_t*)pBuf	= size;
+	pBuf += 2;
 	*pBuf	= type;
 	pBuf++;
 
