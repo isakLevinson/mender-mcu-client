@@ -16,5 +16,6 @@
 
 
 httpd_handle_t wss_start_server(void);
-esp_err_t wss_send(void* pBuf, size_t len);
+bool wss_send(struct async_resp_arg *i_pAsync, void* pBuf, size_t len);
+
 

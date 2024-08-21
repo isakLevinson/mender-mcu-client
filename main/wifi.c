@@ -876,7 +876,7 @@ static bool dbgWssSend(uint8_t argc, char **argv)
 
     len = strlen(argv[1]);
 
-    wss_send(argv[1], len);
+    wss_send(NULL, argv[1], len);
 
     return true;
 }

@@ -27,6 +27,8 @@ typedef struct async_resp_arg {
     int fd;
 };
 
+struct async_resp_arg events_async_resp;
+
 static const size_t max_clients = 4;
 
 
@@ -37,6 +39,10 @@ bool wss_send(struct async_resp_arg *i_pAsync, void* pBuf, size_t len)
     struct async_resp_arg*  pAsync = i_pAsync;
 
     INFO_BUF("wss_send packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, pBuf, len);
+
+    if (!pAsync) {
+        pAsync = &events_async_resp;
+    }
 
     memset(&pkt, 0, sizeof(httpd_ws_frame_t));
     pkt.payload = (uint8_t*)pBuf;
@@ -158,6 +164,27 @@ static esp_err_t ws_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t events_handler(httpd_req_t *req)
+{
+    INFO("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
+
+    httpd_resp_set_type(req, "text/event-stream");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
+
+    if (req->method == HTTP_GET) {
+        INFO("HTTP_GET Handshake done, the new connection was opened\n");
+        events_async_resp.hd  = req->handle;
+        events_async_resp.fd  = httpd_req_to_sockfd(req);
+
+        wss_send(NULL, "ok", 2);
+
+        return ESP_OK;
+    }
+
+    return ESP_OK;
+}
+
 esp_err_t wss_open_fd(httpd_handle_t hd, int sockfd)
 {
     INFO("wss_open_hd:0x%x fd:0x%x\n", hd, sockfd);
@@ -208,7 +235,7 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
     return false;
 }
 
-static const httpd_uri_t ws = {
+static const httpd_uri_t uri_ws = {
         .uri        = "/ws",
         .method     = HTTP_GET,
         .handler    = ws_handler,
@@ -217,6 +244,12 @@ static const httpd_uri_t ws = {
         .handle_ws_control_frames = true
 };
 
+static const httpd_uri_t uri_events = {
+        .uri        = "/events",
+        .method     = HTTP_GET,
+        .handler    = events_handler,
+        .user_ctx   = NULL,
+};
 
 httpd_handle_t wss_start_server(void)
 {
@@ -260,7 +293,8 @@ httpd_handle_t wss_start_server(void)
 
     // Set URI handlers
     INFO("Registering URI handlers");
-    httpd_register_uri_handler(server, &ws);
+    httpd_register_uri_handler(server, &uri_ws);
+    httpd_register_uri_handler(server, &uri_events);
     wss_keep_alive_set_user_ctx(keep_alive, server);
 
     return server;
