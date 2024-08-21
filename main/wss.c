@@ -90,6 +90,8 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
     if (req->method == HTTP_GET) {
         INFO("HTTP_GET Handshake done, the new connection was opened\n");
+        events_async_resp.hd  = req->handle;
+        events_async_resp.fd  = httpd_req_to_sockfd(req);
         return ESP_OK;
     }
     httpd_ws_frame_t ws_pkt;

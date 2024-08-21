@@ -128,7 +128,7 @@ typedef enum {
 
 static struct {
 	SemaphoreHandle_t	semaphore;
-	CMD_CONTEXT*		pContext;
+	CMD_CONTEXT			streamContext;
 	CMD_STATE	    	state;
 	uint16_t			expectedLength;
 	uint16_t			received;
@@ -144,7 +144,7 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 
 	if (!i_pContext) {
 		INFO("context is NULL\n");
-		pContext = g_cmd.pContext;
+		pContext = &g_cmd.streamContext;
 	}
 
 	if (!pContext) {
@@ -195,7 +195,7 @@ static void _taskStreamer(void *arg)
 		for (i=0; i<4; i++) {
 			rsp.pressure[i] = press[i];
 		}
-		_sendResp(g_cmd.pContext, CMD_RSP_STREAM, &rsp, sizeof(rsp));
+		_sendResp(&g_cmd.streamContext, CMD_RSP_STREAM, &rsp, sizeof(rsp));
     }
 }
 
@@ -318,6 +318,9 @@ static bool	_req_START_STREAM_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START_STR
 {
 	INFO("START_STREAM\n");
 
+	g_cmd.streamContext.p_cbSend	= i_pContext->p_cbSend;
+	g_cmd.streamContext.pArg		= NULL;
+
 	_streamPeriod(100);
     return true;
 }
@@ -435,7 +438,6 @@ void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 	}
 		
 	pContext = i_pContext;
-	g_cmd.pContext = i_pContext;
 
 	if (!pContext) {
 		ERROR("invalid context\n");
@@ -543,8 +545,6 @@ bool  CMD_init(CMD_CONTEXT* i_pDefaultContext)
 //		}
 //	}
 #endif
-
-	g_cmd.pContext = i_pDefaultContext;
 
     _init();
 
