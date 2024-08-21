@@ -27,7 +27,7 @@ def string_to_binary_array(input_string):
 
 
 async def test_wss():
-    uri = "wss://192.168.1.98"  # Replace with your WSS server URL
+    uri = "wss://192.168.1.178/ws"  # Replace with your WSS server URL
 
     cert_path = "main/certs/servercert.pem"
 
@@ -38,7 +38,8 @@ async def test_wss():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    async with websockets.connect(uri, ssl=ssl_context) as websocket:
+    async with websockets.connect(uri, ssl=ssl_context, ping_timeout=60000) as websocket:
+#    async with websockets.connect(uri) as websocket:
         print("connected")
 
       # Shared event to signal exit
@@ -60,11 +61,18 @@ async def test_wss():
                 message = binary_array_to_string(binary_array)
                 await websocket.send(message)
 
+
+        async def recv_data():
+            print(f"recv_data")
+            while True:
                 response = await websocket.recv()
-                print(string_to_binary_array(response))
+#                print("recv:", string_to_binary_array(response))
+                print("recv:", response)
+
+		
 
        #await asyncio.gather(send_data(), receive_data())
-        await asyncio.gather(send_data())
+        await asyncio.gather(recv_data(), send_data())
 
 # Run the WebSocket test
 asyncio.get_event_loop().run_until_complete(test_wss())

@@ -22,7 +22,7 @@
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
 #endif
 
-struct async_resp_arg {
+typedef struct async_resp_arg {
     httpd_handle_t hd;
     int fd;
 };
@@ -30,42 +30,31 @@ struct async_resp_arg {
 static const size_t max_clients = 4;
 
 
-esp_err_t wss_send(httpd_req_t* pReq, void* pBuf, size_t len)
+bool wss_send(struct async_resp_arg *i_pAsync, void* pBuf, size_t len)
 {
     esp_err_t        ret;
     httpd_ws_frame_t pkt;
+    struct async_resp_arg*  pAsync = i_pAsync;
 
     INFO_BUF("wss_send packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, pBuf, len);
 
     memset(&pkt, 0, sizeof(httpd_ws_frame_t));
     pkt.payload = (uint8_t*)pBuf;
     pkt.len = len;
-    pkt.type = HTTPD_WS_TYPE_TEXT;
+    pkt.type = HTTPD_WS_TYPE_BINARY;
 
-    // Send response message
-        // Get the current time
-    TickType_t startTime = xTaskGetTickCount();
-    int sent_count = 0;
-    // Loop for 10 seconds
-    //INFO("start sending data at %lu:\n", startTime);
-//    while ((xTaskGetTickCount() - startTime) < (10 * configTICK_RATE_HZ)) {
-// Create a response structure
-        ret = httpd_ws_send_frame(pReq, &pkt);
-        if (ret != ESP_OK) {
-            ERROR("httpd_ws_send_frame failed with %d\n", ret);
-        }
-        sent_count += pkt.len;
-        // INFO("sent data at %lu:", xTaskGetTickCount());
-//    }
-    //INFO("end sending data at %lu:\n", xTaskGetTickCount());
-    INFO("sent %d bytes\n", sent_count);
+    ret = httpd_ws_send_frame_async(pAsync->hd, pAsync->fd, &pkt);
+    if (ret != ESP_OK) {
+        ERROR("httpd_ws_send_frame failed with %d\n", ret);
+        return false;
+    }
 
-    return 0;
+    return true;
 }
 
 bool _cmdSendResp(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
 {
-    httpd_req_t *req = (httpd_req_t*)pArg;
+    struct async_resp_arg *pAsync = (struct async_resp_arg*)pArg;
 
 	uint8_t 	buf[300];
 	uint8_t*	pBuf = buf;
@@ -82,14 +71,14 @@ bool _cmdSendResp(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
 
 	TRACE_BUF("wss_cmdSendResp", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf - buf);
 
-    wss_send(req, buf, pBuf - buf);
+    wss_send(pAsync, buf, pBuf - buf);
 
     return true;
 }
 
 static esp_err_t ws_handler(httpd_req_t *req)
 {
-    INFO("ws_handler method=%d\n", req->method);
+    INFO("ws_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
     if (req->method == HTTP_GET) {
         INFO("HTTP_GET Handshake done, the new connection was opened\n");
@@ -135,9 +124,14 @@ static esp_err_t ws_handler(httpd_req_t *req)
             INFO_BUF("Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
 
             if (ws_pkt.len >= 3) {
+                struct async_resp_arg async = {
+                    .hd = req->handle,
+                    .fd = httpd_req_to_sockfd(req),
+                };
+
                 CMD_CONTEXT context = {
                     .p_cbSend   = _cmdSendResp,
-                    .pArg       = req,
+                    .pArg       = &async,
                 };
 
                 uint8_t len = ws_pkt.payload[0];
@@ -166,14 +160,14 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
 esp_err_t wss_open_fd(httpd_handle_t hd, int sockfd)
 {
-    INFO("wss_open_fd %d\n", sockfd);
+    INFO("wss_open_hd:0x%x fd:0x%x\n", hd, sockfd);
     wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
     return wss_keep_alive_add_client(h, sockfd);
 }
 
 void wss_close_fd(httpd_handle_t hd, int sockfd)
 {
-    INFO("wss_close_fd %d\n", sockfd);
+    INFO("wss_close_fd hd:0x%x fd:0x%x\n", hd, sockfd);
     wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
     wss_keep_alive_remove_client(h, sockfd);
     close(sockfd);
@@ -215,8 +209,7 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
 }
 
 static const httpd_uri_t ws = {
-        // .uri        = "/ws",
-        .uri = "/",
+        .uri        = "/ws",
         .method     = HTTP_GET,
         .handler    = ws_handler,
         .user_ctx   = NULL,

@@ -14,7 +14,7 @@
     .task_stack_size = 2048,                \
     .task_prio = tskIDLE_PRIORITY+1,        \
     .keep_alive_period_ms = 5000,           \
-    .not_alive_after_ms = 10000,            \
+    .not_alive_after_ms = 60000,            \
 }
 
 struct wss_keep_alive_storage;
