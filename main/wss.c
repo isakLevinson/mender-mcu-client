@@ -164,13 +164,17 @@ static esp_err_t ws_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+#if 0
 static esp_err_t events_handler(httpd_req_t *req)
 {
+    char msg[4];
     INFO("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
-
+    
     httpd_resp_set_type(req, "text/event-stream");
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
     httpd_resp_set_hdr(req, "Connection", "keep-alive");
+
+    httpd_resp_send_chunk(req, msg, 2);
 
     if (req->method == HTTP_GET) {
         INFO("HTTP_GET Handshake done, the new connection was opened\n");
@@ -184,6 +188,28 @@ static esp_err_t events_handler(httpd_req_t *req)
 
     return ESP_OK;
 }
+#else
+static esp_err_t events_handler(httpd_req_t *req)
+{
+    char buffer[64];
+    static int counter = 0;
+
+    INFO("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
+
+    httpd_resp_set_type(req, "text/event-stream");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_set_hdr(req, "Connection", "keep-alive");
+
+    while (1) {
+        INFO("httpd_resp_send_chunk %d\n", counter);
+        snprintf(buffer, sizeof(buffer), "data: Current count: %d\n", counter);
+        httpd_resp_send_chunk(req, buffer, HTTPD_RESP_USE_STRLEN);
+        vTaskDelay(pdMS_TO_TICKS(1000)); // Send data every 1 second
+        counter++;
+    }
+    return ESP_OK; // Not actually reached, loop runs indefinitely
+}
+#endif
 
 esp_err_t wss_open_fd(httpd_handle_t hd, int sockfd)
 {
@@ -266,8 +292,9 @@ httpd_handle_t wss_start_server(void)
     // Start the keep-alive engine
     wss_keep_alive_t keep_alive = wss_keep_alive_start(&keep_alive_config);
 
-    // Configure the SSL parameters
+#if USE_SSL
     httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
+
     conf.httpd.max_open_sockets = max_clients;
     conf.httpd.global_user_ctx = keep_alive;
     conf.httpd.open_fn = wss_open_fd;
@@ -284,12 +311,21 @@ httpd_handle_t wss_start_server(void)
     conf.prvtkey_pem = prvtkey_pem_start;
     conf.prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
 
-    // Start the HTTP server with SSL
     esp_err_t ret = httpd_ssl_start(&server, &conf);
     if (ESP_OK != ret) {
         ERROR("Error starting server!\n");
         return NULL;
     }
+
+#else
+    httpd_config_t conf = HTTPD_DEFAULT_CONFIG();
+
+    esp_err_t ret = httpd_start(&server, &conf);
+    if (ESP_OK != ret) {
+        ERROR("Error starting server!\n");
+        return NULL;
+    }
+#endif
 
     // Set URI handlers
     INFO("Registering URI handlers");
