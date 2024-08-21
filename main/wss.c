@@ -202,7 +202,7 @@ static esp_err_t events_handler(httpd_req_t *req)
 
     while (1) {
         INFO("httpd_resp_send_chunk %d\n", counter);
-        snprintf(buffer, sizeof(buffer), "data: Current count: %d\n", counter);
+        snprintf(buffer, sizeof(buffer), "data: Current count: %d\n\n", counter);
         httpd_resp_send_chunk(req, buffer, HTTPD_RESP_USE_STRLEN);
         vTaskDelay(pdMS_TO_TICKS(1000)); // Send data every 1 second
         counter++;
