@@ -18,6 +18,8 @@
 #include "sdkconfig.h"
 #include "cmd.h"
 
+#define USE_SSL 1
+
 #if !CONFIG_HTTPD_WS_SUPPORT
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
 #endif
@@ -191,8 +193,9 @@ static esp_err_t events_handler(httpd_req_t *req)
 #else
 static esp_err_t events_handler(httpd_req_t *req)
 {
-    char buffer[64];
-    static int counter = 0;
+    esp_err_t   ret;
+    char        buffer[64];
+    static int  counter = 0;
 
     INFO("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
@@ -203,7 +206,11 @@ static esp_err_t events_handler(httpd_req_t *req)
     while (1) {
         INFO("httpd_resp_send_chunk %d\n", counter);
         snprintf(buffer, sizeof(buffer), "data: Current count: %d\n\n", counter);
-        httpd_resp_send_chunk(req, buffer, HTTPD_RESP_USE_STRLEN);
+        ret = httpd_resp_send_chunk(req, buffer, HTTPD_RESP_USE_STRLEN);
+        if (ret != ESP_OK) {
+            break;
+        }
+
         vTaskDelay(pdMS_TO_TICKS(1000)); // Send data every 1 second
         counter++;
     }
