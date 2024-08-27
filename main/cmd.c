@@ -318,9 +318,6 @@ static bool	_req_START_STREAM_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START_STR
 {
 	INFO("START_STREAM\n");
 
-	g_cmd.streamContext.p_cbSend	= i_pContext->p_cbSend;
-	g_cmd.streamContext.pArg		= NULL;
-
 	_streamPeriod(100);
     return true;
 }
@@ -497,6 +494,22 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
         default:
             CMD_parseInit();
     }
+}
+
+bool CMD_setStreamContext(CMD_CONTEXT* i_pContext)
+{
+	if (!i_pContext) {
+		return false;
+	}
+
+	if (!i_pContext->p_cbSend) {
+		return false;
+	}
+
+	g_cmd.streamContext.p_cbSend	= i_pContext->p_cbSend;
+	g_cmd.streamContext.pArg		= i_pContext->pArg;
+
+	return true;
 }
 
 static bool dbgReset(uint8_t argc, char** argv)

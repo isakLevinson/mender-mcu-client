@@ -27,8 +27,8 @@ def string_to_binary_array(input_string):
 
 
 async def test_wss():
-    uri = "wss://192.168.1.148/ws"  # Replace with your WSS server URL
-#    uri = "wss://192.168.1.178/events"  # Replace with your WSS server URL
+#    uri = "wss://192.168.1.148/ws"  # Replace with your WSS server URL
+    uri = "wss://192.168.1.148/events"  # Replace with your WSS server URL
 
     cert_path = "main/certs/servercert.pem"
 

@@ -4,7 +4,7 @@ from sseclient import SSEClient
 
 def subscribe_to_sse_events(timeout=60):
         try:
-            url = f"https://192.168.1.148/events"
+            url = f"https://192.168.1.148/stream"
             cert_path = "main/certs/servercert.pem"
             # Create a custom session
 #            session = requests.Session()

@@ -614,8 +614,6 @@ static void task_tcp_server(void *arg)
 
         }
         vTaskDelay(1000);
-
-//        cmd_tcp_server();
         ip = wifi_getSelfIp();
     }
 }
