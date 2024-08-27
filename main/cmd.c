@@ -52,8 +52,7 @@
 	req(SET_PRESSURE,				0x07,	uint16_t	pressure[4];)	\
 	rsp(SET_PRESSURE,				0x08,	uint8_t		ok;)			\
 	req(START_STREAM,				0x09,	;)							\
-	rsp(STREAM,						0x0a,	uint64_t	time;			\
-											uint16_t	pressure[4];)	\
+	rsp(START_STREAM,				0x0a,	uint8_t		ok;)			\
 	req(STOP_STREAM,				0x0b,	;)							\
 	rsp(STOP_STREAM,				0x0c,	uint8_t		ok;)			\
 	req(CONTROL_ENABLE,				0x0d,	uint8_t		on;)			\
@@ -62,6 +61,8 @@
 	rsp(SET_PUMPS,					0x10,	uint8_t		ok;)			\
 	req(SET_VALVES,					0x11,	int8_t		on[4];)			\
 	rsp(SET_VALVES,					0x12,	uint8_t		ok;)			\
+	rsp(STREAM,						0x13,	uint64_t	time;			\
+											uint16_t	pressure[4];)	\
 
 // *INDENT-ON*
 
@@ -317,8 +318,25 @@ static bool	_req_SET_PRESSURE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PRESS
 static bool	_req_START_STREAM_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START_STREAM* i_pReq, uint16_t size)
 {
 	INFO("START_STREAM\n");
+	bool	okToStream = true;
 
-	_streamPeriod(100);
+	CMD_RSPBUF_SET_PRESSURE	rsp;
+
+	if (!g_cmd.streamContext.p_cbSend) {
+		WARN("p_cbSend is NULL\n");
+		okToStream = false;
+	}
+	if (!g_cmd.streamContext.pArg) {
+		WARN("pArg is NULL\n");
+		okToStream = false;
+	}
+
+	rsp.ok = okToStream? 1:0;
+	_sendResp(i_pContext, CMD_RSP_STOP_STREAM, &rsp, sizeof(rsp));
+
+	if (okToStream) {
+		_streamPeriod(100);
+	}
     return true;
 }
 
