@@ -16,7 +16,7 @@
 
 #define SW_VERSION_MAJOR		0
 #define SW_VERSION_MINOR		1
-#define SW_VERSION_BUILD		0
+#define SW_VERSION_BUILD		1
 
 #define HW_VERSION_MAJOR		1
 #define HW_VERSION_MINOR		0

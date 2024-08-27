@@ -86,7 +86,7 @@ bool _cmdSendResp(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
 
 static esp_err_t ws_handler(httpd_req_t *req)
 {
-    INFO("ws_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
+    TRACE("ws_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
     if (req->method == HTTP_GET) {
         INFO("HTTP_GET Handshake done, the new connection was opened\n");
@@ -102,8 +102,8 @@ static esp_err_t ws_handler(httpd_req_t *req)
         ERROR("httpd_ws_recv_frame failed to get frame len with %d\n", ret);
         return ret;
     }
-    INFO("frame len is %d\n", ws_pkt.len);
     if (ws_pkt.len) {
+        INFO("ws frame len is %d\n", ws_pkt.len);
         buf = calloc(1, ws_pkt.len + 1);
         if (buf == NULL) {
             ERROR("Failed to calloc memory for buf\n");
@@ -118,7 +118,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         }
     }
     if (ws_pkt.type == HTTPD_WS_TYPE_PONG) {
-        INFO("Received PONG message\n");
+        INFO("WS PONG message\n");
         free(buf);
         return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle),
                 httpd_req_to_sockfd(req));
@@ -150,7 +150,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
         }
 
         if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
-            INFO("Got a WS PING frame, Replying PONG\n");
+            INFO("WS PING frame, Replying PONG\n");
             ws_pkt.type = HTTPD_WS_TYPE_PONG;
         } else if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
             ws_pkt.len = 0;
@@ -168,7 +168,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
 static esp_err_t events_handler(httpd_req_t *req)
 {
-    INFO("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
+    TRACE("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
     if (req->method == HTTP_GET) {
         INFO("HTTP_GET Handshake done, the new connection was opened\n");
@@ -195,8 +195,8 @@ static esp_err_t events_handler(httpd_req_t *req)
         ERROR("httpd_ws_recv_frame failed to get frame len with %d\n", ret);
         return ret;
     }
-    INFO("frame len is %d\n", ws_pkt.len);
     if (ws_pkt.len) {
+        INFO("events frame len is %d\n", ws_pkt.len);
         buf = calloc(1, ws_pkt.len + 1);
         if (buf == NULL) {
             ERROR("Failed to calloc memory for buf\n");
@@ -212,79 +212,14 @@ static esp_err_t events_handler(httpd_req_t *req)
     }
 
     if (ws_pkt.type == HTTPD_WS_TYPE_PONG) {
-        INFO("Received PONG message\n");
+        INFO("Events PONG message\n");
         free(buf);
-        return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle),
-                httpd_req_to_sockfd(req));
-        return 0;
+        return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), httpd_req_to_sockfd(req));
 
-    } else {
-#if 0
-        if ((ws_pkt.type == HTTPD_WS_TYPE_TEXT) || (ws_pkt.type == HTTPD_WS_TYPE_BINARY)) {
-            static uint8_t count;
-            static char rsp[256];
-            INFO("Received packet with message: type=%d\n", ws_pkt.type);
-            INFO_BUF("Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
-
-            if (ws_pkt.len >= 3) {
-                struct async_resp_arg async = {
-                    .hd = req->handle,
-                    .fd = httpd_req_to_sockfd(req),
-                };
-
-                CMD_CONTEXT context = {
-                    .p_cbSend   = _cmdSendResp,
-                    .pArg       = &async,
-                };
-
-                uint8_t len = ws_pkt.payload[0];
-                uint8_t type = ws_pkt.payload[2];
-
-                CMD_processMessage(&context, type, ws_pkt.payload+3, ws_pkt.len-3);
-            }
-        }
-#endif
-        if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
-            INFO("Got a WS PING frame, Replying PONG\n");
-            ws_pkt.type = HTTPD_WS_TYPE_PONG;
-        } else if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
-            ws_pkt.len = 0;
-            ws_pkt.payload = NULL;
-        }
-
-        INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d\n", req->handle,
-                 httpd_req_to_sockfd(req), httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
-        free(buf);
-        return ret;
     }
     free(buf);
     return ESP_OK;
 }
-
-#if 0
-static esp_err_t events_handler(httpd_req_t *req)
-{
-    char msg[4];
-    INFO("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
-
-    if (req->method == HTTP_GET) {
-        INFO("HTTP_GET Handshake done, the new connection was opened\n");
-        events_async_resp.hd  = req->handle;
-        events_async_resp.fd  = httpd_req_to_sockfd(req);
-
-        CMD_CONTEXT context = {
-            .p_cbSend   = _cmdSendResp,
-            .pArg       = &events_async_resp,
-        };
-
-        CMD_setStreamContext(&context);
-
-        return ESP_OK;
-    }
-
-    return ESP_OK;
-}
-#endif
 
 esp_err_t wss_open_fd(httpd_handle_t hd, int sockfd)
 {
