@@ -145,13 +145,15 @@ static void keep_alive_task(void* arg)
                 for (int i=0; i<keep_alive_storage->max_clients; ++i) {
                     if (keep_alive_storage->clients[i].type == CLIENT_ACTIVE) {
                         if (keep_alive_storage->clients[i].last_seen + keep_alive_storage->keep_alive_period_ms <= _tick_get_ms()) {
+#if 0
                             TRACE("Haven't seen the client (fd=%d) for a while", keep_alive_storage->clients[i].fd);
                             if (keep_alive_storage->clients[i].last_seen + keep_alive_storage->not_alive_after_ms <= _tick_get_ms()) {
-                                ERROR("Client (fd=%d) not alive!",  keep_alive_storage->clients[i].fd);
-                                keep_alive_storage->client_not_alive_cb(keep_alive_storage, keep_alive_storage->clients[i].fd);
+                                //ERROR("Client (fd=%d) not alive!",  keep_alive_storage->clients[i].fd);
+                                //keep_alive_storage->client_not_alive_cb(keep_alive_storage, keep_alive_storage->clients[i].fd);
                             } else {
                                 keep_alive_storage->check_client_alive_cb(keep_alive_storage, keep_alive_storage->clients[i].fd);
                             }
+#endif
                         }
                     }
                 }

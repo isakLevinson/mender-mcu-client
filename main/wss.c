@@ -169,6 +169,8 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
 static esp_err_t events_handler(httpd_req_t *req)
 {
+    esp_err_t ret;
+
     TRACE("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
     if (req->method == HTTP_GET) {
@@ -191,7 +193,7 @@ static esp_err_t events_handler(httpd_req_t *req)
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
 
     // First receive the full ws message
-    esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
+    ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
     if (ret != ESP_OK) {
         ERROR("httpd_ws_recv_frame failed to get frame len with %d\n", ret);
         return ret;
@@ -206,7 +208,7 @@ static esp_err_t events_handler(httpd_req_t *req)
         ws_pkt.payload = buf;
         ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
         if (ret != ESP_OK) {
-            ERROR("httpd_ws_recv_frame failed with %d\n", ret);
+            ERROR("events httpd_ws_recv_frame %d\n", ret);
             free(buf);
             return ret;
         }
@@ -276,7 +278,7 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
     if (httpd_queue_work(resp_arg->hd, send_ping, resp_arg) == ESP_OK) {
         return true;
     }
-    return false;
+    return true;
 }
 
 static const httpd_uri_t uri_ws = {
@@ -330,6 +332,8 @@ httpd_handle_t wss_start_server(void)
     extern const unsigned char prvtkey_pem_end[]   asm("_binary_prvtkey_pem_end");
     conf.prvtkey_pem = prvtkey_pem_start;
     conf.prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
+
+    conf.httpd.keep_alive_enable = false;
 
     esp_err_t ret = httpd_ssl_start(&server, &conf);
     if (ESP_OK != ret) {
