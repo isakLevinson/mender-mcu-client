@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import asyncio
 import websockets
 import ssl
@@ -24,13 +26,11 @@ def string_to_binary_array(input_string):
     binary_array = [f'0x{byte:02x}' for byte in byte_array]
     return binary_array
 
-
+cert_path = "main/certs/servercert.pem"
 
 async def test_wss():
-#    uri = "wss://192.168.1.148/ws"  # Replace with your WSS server URL
-    uri = "wss://192.168.1.148/events"  # Replace with your WSS server URL
+    uri = "wss://192.168.1.178/ws"  # Replace with your WSS server URL
 
-    cert_path = "main/certs/servercert.pem"
 
 #    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 #    ssl_context.load_verify_locations(cert_path)
@@ -40,8 +40,7 @@ async def test_wss():
     ssl_context.verify_mode = ssl.CERT_NONE
 
     async with websockets.connect(uri, ssl=ssl_context, ping_timeout=60000) as websocket:
-#    async with websockets.connect(uri) as websocket:
-        print("connected")
+        print("ws connected")
 
       # Shared event to signal exit
         stop_event = asyncio.Event()
@@ -75,7 +74,29 @@ async def test_wss():
        #await asyncio.gather(send_data(), receive_data())
         await asyncio.gather(recv_data(), send_data())
 
+async def events():
+    uri = "wss://192.168.1.178/events"  # Replace with your WSS server URL
+
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+
+    async with websockets.connect(uri, ssl=ssl_context, ping_timeout=60000) as websocket:
+        print("events connected")
+
+        async def recv_data():
+            print(f"evt recv_data")
+            while True:
+                response = await websocket.recv()
+                print("evt:", response)
+
+        await asyncio.gather(recv_data())
+
+
+async def main():
+    await asyncio.gather(test_wss(), events())
+
 # Run the WebSocket test
-asyncio.get_event_loop().run_until_complete(test_wss())
+asyncio.get_event_loop().run_until_complete(main())
 
 
