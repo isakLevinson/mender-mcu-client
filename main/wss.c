@@ -261,6 +261,27 @@ static void send_ping(void *arg)
     free(resp_arg);
 }
 
+struct send_arg_t {
+    struct async_resp_arg   async;
+    void*   pBuf;
+    size_t  size;
+};
+
+static void send_binary(void *arg)
+{
+    struct send_arg_t* resp_arg = arg;
+
+    httpd_ws_frame_t ws_pkt;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.payload = resp_arg->pBuf;
+    ws_pkt.len = resp_arg->size;
+    ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+
+    httpd_ws_send_frame_async(resp_arg->async.hd, resp_arg->async.fd, &ws_pkt);
+    free(resp_arg);
+}
+
+
 bool client_not_alive_cb(wss_keep_alive_t h, int fd)
 {
     ERROR("client_not_alive_cb() closing fd %d\n", fd);
