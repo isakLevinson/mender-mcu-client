@@ -29,7 +29,7 @@ typedef struct async_resp_arg {
     int fd;
 };
 
-struct async_resp_arg events_async_resp;
+struct async_resp_arg events_async_resp = {0};
 
 static const size_t max_clients = 4;
 
@@ -62,6 +62,7 @@ bool wss_send(struct async_resp_arg *i_pAsync, void* pBuf, size_t len)
 
 bool _cmdSendResp(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
 {
+    bool    ret;
     struct async_resp_arg *pAsync = (struct async_resp_arg*)pArg;
 
 	uint8_t 	buf[300];
@@ -79,9 +80,9 @@ bool _cmdSendResp(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
 
 	TRACE_BUF("wss_cmdSendResp", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf - buf);
 
-    wss_send(pAsync, buf, pBuf - buf);
+    ret = wss_send(pAsync, buf, pBuf - buf);
 
-    return true;
+    return ret;
 }
 
 static esp_err_t ws_handler(httpd_req_t *req)
@@ -89,7 +90,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
     TRACE("ws_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
     if (req->method == HTTP_GET) {
-        INFO("HTTP_GET Handshake done, the new connection was opened\n");
+        INFO("WS HTTP_GET Handshake done, the new connection was opened\n");
         return ESP_OK;
     }
     httpd_ws_frame_t ws_pkt;
@@ -128,8 +129,8 @@ static esp_err_t ws_handler(httpd_req_t *req)
         if ((ws_pkt.type == HTTPD_WS_TYPE_TEXT) || (ws_pkt.type == HTTPD_WS_TYPE_BINARY)) {
             static uint8_t count;
             static char rsp[256];
-            INFO("Received packet with message: type=%d\n", ws_pkt.type);
-            INFO_BUF("Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
+            INFO("WS Received packet with message: type=%d\n", ws_pkt.type);
+            INFO_BUF("WS Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
 
             if (ws_pkt.len >= 3) {
                 struct async_resp_arg async = {
@@ -171,7 +172,7 @@ static esp_err_t events_handler(httpd_req_t *req)
     TRACE("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
     if (req->method == HTTP_GET) {
-        INFO("HTTP_GET Handshake done, the new connection was opened\n");
+        INFO("EVENTS HTTP_GET Handshake done, the new connection was opened\n");
         events_async_resp.hd  = req->handle;
         events_async_resp.fd  = httpd_req_to_sockfd(req);
 
@@ -196,7 +197,7 @@ static esp_err_t events_handler(httpd_req_t *req)
         return ret;
     }
     if (ws_pkt.len) {
-        INFO("events frame len is %d\n", ws_pkt.len);
+        INFO("ev events frame len is %d\n", ws_pkt.len);
         buf = calloc(1, ws_pkt.len + 1);
         if (buf == NULL) {
             ERROR("Failed to calloc memory for buf\n");
@@ -223,14 +224,21 @@ static esp_err_t events_handler(httpd_req_t *req)
 
 esp_err_t wss_open_fd(httpd_handle_t hd, int sockfd)
 {
-    INFO("wss_open_hd:0x%x fd:0x%x\n", hd, sockfd);
+    INFO("wss_open hd:0x%x fd:0x%x\n", hd, sockfd);
     wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
     return wss_keep_alive_add_client(h, sockfd);
 }
 
 void wss_close_fd(httpd_handle_t hd, int sockfd)
 {
-    INFO("wss_close_fd hd:0x%x fd:0x%x\n", hd, sockfd);
+    if ((events_async_resp.hd == hd) && (events_async_resp.fd == sockfd)) {
+        INFO("events_close_fd hd:0x%x fd:0x%x\n", hd, sockfd);
+        memset(&events_async_resp, 0, sizeof(events_async_resp));
+    } else {
+        INFO("wss_close_fd hd:0x%x fd:0x%x\n", hd, sockfd);
+    }
+
+
     wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
     wss_keep_alive_remove_client(h, sockfd);
     close(sockfd);

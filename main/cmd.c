@@ -141,6 +141,7 @@ static struct {
 
 bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t size)
 {
+	bool	ret;
 	CMD_CONTEXT* pContext = i_pContext;
 
 	if (!i_pContext) {
@@ -162,15 +163,22 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 
 	TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
-	pContext->p_cbSend(pContext->pArg, msgType, i_pBuf, size);
+	ret = pContext->p_cbSend(pContext->pArg, msgType, i_pBuf, size);
 
 	xSemaphoreGive(g_cmd.semaphore);
 
-    return true;
+    return ret;
+}
+
+static void _streamPeriod(uint32_t period)
+{
+	g_cmd.streamSentTime = TIME_get32();
+	g_cmd.streamPeriod = period;
 }
 
 static void _taskStreamer(void *arg)
 {
+	bool	ret;
 	int32_t	t;
 	int16_t	press[4];
 	CMD_RSPBUF_STREAM	rsp;
@@ -196,7 +204,11 @@ static void _taskStreamer(void *arg)
 		for (i=0; i<4; i++) {
 			rsp.pressure[i] = press[i];
 		}
-		_sendResp(&g_cmd.streamContext, CMD_RSP_STREAM, &rsp, sizeof(rsp));
+		ret = _sendResp(&g_cmd.streamContext, CMD_RSP_STREAM, &rsp, sizeof(rsp));
+		if (!ret) {
+			ERROR("failed to send. stopping streaming\n");
+			_streamPeriod(0);
+		}
     }
 }
 
@@ -214,12 +226,6 @@ static bool _init(void)
     }
 
     return true;
-}
-
-static void _streamPeriod(uint32_t period)
-{
-	g_cmd.streamSentTime = TIME_get32();
-	g_cmd.streamPeriod = period;
 }
 
 static bool	_req_NOP_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_NOP* i_pReq, uint16_t size)
@@ -320,19 +326,20 @@ static bool	_req_START_STREAM_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START_STR
 	INFO("START_STREAM\n");
 	bool	okToStream = true;
 
-	CMD_RSPBUF_SET_PRESSURE	rsp;
+	CMD_RSPBUF_START_STREAM	rsp;
 
 	if (!g_cmd.streamContext.p_cbSend) {
 		WARN("p_cbSend is NULL\n");
 		okToStream = false;
 	}
+
 	if (!g_cmd.streamContext.pArg) {
 		WARN("pArg is NULL\n");
 		okToStream = false;
 	}
 
 	rsp.ok = okToStream? 1:0;
-	_sendResp(i_pContext, CMD_RSP_STOP_STREAM, &rsp, sizeof(rsp));
+	_sendResp(i_pContext, CMD_RSP_START_STREAM, &rsp, sizeof(rsp));
 
 	if (okToStream) {
 		_streamPeriod(100);
