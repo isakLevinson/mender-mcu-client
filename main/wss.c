@@ -29,15 +29,70 @@ typedef struct async_resp_arg {
     int fd;
 };
 
+struct send_arg_t {
+    httpd_handle_t  hd;
+    int             fd;
+    size_t          size;
+    uint8_t         buf[];
+};
+
 struct async_resp_arg events_async_resp = {0};
 
 static const size_t max_clients = 4;
 
+static void send_ping(void *arg)
+{
+    struct async_resp_arg *resp_arg = arg;
+    httpd_handle_t hd = resp_arg->hd;
+    int fd = resp_arg->fd;
+    httpd_ws_frame_t ws_pkt;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.payload = NULL;
+    ws_pkt.len = 0;
+    ws_pkt.type = HTTPD_WS_TYPE_PING;
+
+    httpd_ws_send_frame_async(hd, fd, &ws_pkt);
+    free(resp_arg);
+}
+
+static void send_binary_frame(void *arg)
+{
+    struct send_arg_t* resp_arg = arg;
+
+    httpd_ws_frame_t ws_pkt;
+    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+    ws_pkt.payload = resp_arg->buf;
+    ws_pkt.len = resp_arg->size;
+    ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+
+    httpd_ws_send_frame_async(resp_arg->hd, resp_arg->fd, &ws_pkt);
+    free(resp_arg);
+}
+
+bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
+{
+    TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
+    struct send_arg_t *arg = malloc(sizeof(struct send_arg_t) + size);
+
+    if (!arg) {
+        ERROR("send_binary: failed to allocate %d\n", sizeof(struct send_arg_t) + size);
+        return false;
+    }
+
+    arg->hd     = hd;
+    arg->fd     = fd;
+    arg->size   = size;
+    memcpy(arg->buf, pBuf, size);
+
+    if (httpd_queue_work(hd, send_binary_frame, arg) == ESP_OK) {
+        return true;
+    }
+    return true;
+}
 
 bool wss_send(struct async_resp_arg *i_pAsync, void* pBuf, size_t len)
 {
     esp_err_t        ret;
-    httpd_ws_frame_t pkt;
     struct async_resp_arg*  pAsync = i_pAsync;
 
     INFO_BUF("wss_send packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, pBuf, len);
@@ -46,14 +101,10 @@ bool wss_send(struct async_resp_arg *i_pAsync, void* pBuf, size_t len)
         pAsync = &events_async_resp;
     }
 
-    memset(&pkt, 0, sizeof(httpd_ws_frame_t));
-    pkt.payload = (uint8_t*)pBuf;
-    pkt.len = len;
-    pkt.type = HTTPD_WS_TYPE_BINARY;
+    ret = send_binary(pAsync->hd, pAsync->fd, pBuf, len);
 
-    ret = httpd_ws_send_frame_async(pAsync->hd, pAsync->fd, &pkt);
-    if (ret != ESP_OK) {
-        ERROR("httpd_ws_send_frame failed with %d\n", ret);
+    if (!ret) {
+        ERROR("httpd_ws_send_frame\n");
         return false;
     }
 
@@ -245,42 +296,6 @@ void wss_close_fd(httpd_handle_t hd, int sockfd)
     wss_keep_alive_remove_client(h, sockfd);
     close(sockfd);
 }
-
-static void send_ping(void *arg)
-{
-    struct async_resp_arg *resp_arg = arg;
-    httpd_handle_t hd = resp_arg->hd;
-    int fd = resp_arg->fd;
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = NULL;
-    ws_pkt.len = 0;
-    ws_pkt.type = HTTPD_WS_TYPE_PING;
-
-    httpd_ws_send_frame_async(hd, fd, &ws_pkt);
-    free(resp_arg);
-}
-
-struct send_arg_t {
-    struct async_resp_arg   async;
-    void*   pBuf;
-    size_t  size;
-};
-
-static void send_binary(void *arg)
-{
-    struct send_arg_t* resp_arg = arg;
-
-    httpd_ws_frame_t ws_pkt;
-    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = resp_arg->pBuf;
-    ws_pkt.len = resp_arg->size;
-    ws_pkt.type = HTTPD_WS_TYPE_BINARY;
-
-    httpd_ws_send_frame_async(resp_arg->async.hd, resp_arg->async.fd, &ws_pkt);
-    free(resp_arg);
-}
-
 
 bool client_not_alive_cb(wss_keep_alive_t h, int fd)
 {

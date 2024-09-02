@@ -5,6 +5,11 @@ import websockets
 import ssl
 import binascii
 
+cert_path = "main/certs/servercert.pem"
+uri = "wss://192.168.1.148"
+uri_ws = "/ws"
+uri_events = "/events"
+
 def ascii_hex_to_binary_array(ascii_hex_string):
     # Ensure the string length is even
     if len(ascii_hex_string) % 2 != 0:
@@ -27,10 +32,6 @@ def string_to_binary_array(input_string):
     binary_array = [f'0x{byte:02x}' for byte in byte_array]
     return binary_array
 
-cert_path = "main/certs/servercert.pem"
-uri = "wss://192.168.1.178"
-uri_ws = "/ws"
-uri_events = "/events"
 
 async def test_wss():
 #    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
