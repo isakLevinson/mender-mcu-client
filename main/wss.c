@@ -55,6 +55,23 @@ static void send_ping(void *arg)
     free(resp_arg);
 }
 
+bool check_client_alive_cb(wss_keep_alive_t h, int fd)
+{
+    int status;
+    TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
+    struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
+    resp_arg->hd = wss_keep_alive_get_user_ctx(h);
+    resp_arg->fd = fd;
+
+    status = httpd_queue_work(resp_arg->hd, send_ping, resp_arg);
+    if (ESP_OK != status) {
+        ERROR("send_binary: failed to send ping\n");
+        free(resp_arg);
+        return false;
+    }
+    return true;
+}
+
 static void send_binary_frame(void *arg)
 {
     struct send_arg_t* resp_arg = arg;
@@ -71,6 +88,7 @@ static void send_binary_frame(void *arg)
 
 bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
 {
+    int status;
     TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
     struct send_arg_t *arg = malloc(sizeof(struct send_arg_t) + size);
 
@@ -84,7 +102,10 @@ bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
     arg->size   = size;
     memcpy(arg->buf, pBuf, size);
 
-    if (httpd_queue_work(hd, send_binary_frame, arg) == ESP_OK) {
+    status = httpd_queue_work(hd, send_binary_frame, arg);
+    if (ESP_OK != status) {
+        ERROR("send_binary: failed to queue packet %d\n", status);
+        free(arg);
         return true;
     }
     return true;
@@ -301,19 +322,6 @@ bool client_not_alive_cb(wss_keep_alive_t h, int fd)
 {
     ERROR("client_not_alive_cb() closing fd %d\n", fd);
     httpd_sess_trigger_close(wss_keep_alive_get_user_ctx(h), fd);
-    return true;
-}
-
-bool check_client_alive_cb(wss_keep_alive_t h, int fd)
-{
-    TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
-    struct async_resp_arg *resp_arg = malloc(sizeof(struct async_resp_arg));
-    resp_arg->hd = wss_keep_alive_get_user_ctx(h);
-    resp_arg->fd = fd;
-
-    if (httpd_queue_work(resp_arg->hd, send_ping, resp_arg) == ESP_OK) {
-        return true;
-    }
     return true;
 }
 
