@@ -40,6 +40,10 @@ struct async_resp_arg events_async_resp = {0};
 
 static const size_t max_clients = 4;
 
+static struct {
+    int mallocCount;
+} g_dbg;
+
 static void send_ping(void *arg)
 {
     struct async_resp_arg *resp_arg = arg;
@@ -65,7 +69,7 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
 
     status = httpd_queue_work(resp_arg->hd, send_ping, resp_arg);
     if (ESP_OK != status) {
-        ERROR("send_binary: failed to send ping\n");
+        ERROR("check_client_alive_cb: failed to send ping\n");
         free(resp_arg);
         return false;
     }
@@ -84,6 +88,7 @@ static void send_binary_frame(void *arg)
 
     httpd_ws_send_frame_async(resp_arg->hd, resp_arg->fd, &ws_pkt);
     free(resp_arg);
+    g_dbg.mallocCount--;
 }
 
 bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
@@ -92,10 +97,15 @@ bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
     TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
     struct send_arg_t *arg = malloc(sizeof(struct send_arg_t) + size);
 
+    if (g_dbg.mallocCount) {
+        INFO("count: %d\n", g_dbg.mallocCount);
+    }
+
     if (!arg) {
         ERROR("send_binary: failed to allocate %d\n", sizeof(struct send_arg_t) + size);
         return false;
     }
+    g_dbg.mallocCount++;
 
     arg->hd     = hd;
     arg->fd     = fd;
@@ -106,14 +116,15 @@ bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
     if (ESP_OK != status) {
         ERROR("send_binary: failed to queue packet %d\n", status);
         free(arg);
-        return true;
+        g_dbg.mallocCount--;
+        return false;
     }
     return true;
 }
 
 bool wss_send(struct async_resp_arg *i_pAsync, void* pBuf, size_t len)
 {
-    esp_err_t        ret;
+    bool        ret;
     struct async_resp_arg*  pAsync = i_pAsync;
 
     INFO_BUF("wss_send packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, pBuf, len);
