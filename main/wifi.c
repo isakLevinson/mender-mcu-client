@@ -26,6 +26,7 @@
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "esp_coexist.h"
+#include "mdns.h"
 
 #include "argtable3/argtable3.h"
 #include "freertos/FreeRTOS.h"
@@ -1048,6 +1049,22 @@ static bool dbgBroadcastTime(uint8_t argc, char **argv)
     return true;
 }
 
+static bool dbgMdns(uint8_t argc, char **argv)
+{
+    esp_err_t err = mdns_init();
+    if (err) {
+        ERROR("MDNS Init failed: %d\n", err);
+        return true;
+    }
+
+    //set hostname
+    mdns_hostname_set("my-esp32");
+    //set default instance
+    mdns_instance_name_set("Jhon's ESP32 Thing");
+
+    return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("wifi", NULL)
@@ -1057,6 +1074,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("wssSend",           NULL,		NULL, dbgWssSend)
 		DEBUG_MENU_CMD("nvs",	            NULL,		NULL, dbgNvs)
 		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
+		DEBUG_MENU_CMD("mdns",          	NULL,		NULL, dbgMdns)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
