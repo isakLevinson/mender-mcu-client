@@ -24,6 +24,7 @@ static struct {
 	//osThreadId			taskHandle;
 	DBG_DECODE_INST		decoder;
 	SemaphoreHandle_t	mutex;
+	TaskStatus_t 		taskStatusArray[32];
 } g_cliDb;
 
 
@@ -121,7 +122,9 @@ static bool dbgVer(uint8_t argc, char** argv)
 static bool dbgPs(uint8_t argc, char** argv)
 {
 	UBaseType_t	uxArraySize;
-	TaskStatus_t pxTaskStatusArray[32];
+	TaskStatus_t taskStatusArray[32] = {0};
+	bool		 valid[32] = {0};
+	bool		 stackReduced[32] = {0};
 	uint8_t		i;
 	unsigned long pulTotalRunTime;
 
@@ -132,13 +135,31 @@ static bool dbgPs(uint8_t argc, char** argv)
 		return true;
 	}
 
-	uxTaskGetSystemState(pxTaskStatusArray, uxArraySize, &pulTotalRunTime);
+	uxTaskGetSystemState(taskStatusArray, uxArraySize, &pulTotalRunTime);
+
+	for (i=0; i<uxArraySize; i++) {
+		TaskStatus_t* pTask = &taskStatusArray[i];
+		valid[pTask->xTaskNumber] = true;
+
+		if (pTask->usStackHighWaterMark < g_cliDb.taskStatusArray[pTask->xTaskNumber].usStackHighWaterMark) {
+			stackReduced[pTask->xTaskNumber] = true;
+		}
+		memcpy(&g_cliDb.taskStatusArray[pTask->xTaskNumber], pTask, sizeof(g_cliDb.taskStatusArray[0]));
+	}
 
 	PRINT("id name             S B  P  counter   Stk base stack remaining\n");
 	PRINT("-- ---------------- - -- -- --------- -------- ---------------\n");
 
-	for (i=0; i<uxArraySize; i++) {
-		TaskStatus_t* pTask = &pxTaskStatusArray[i];
+	for (i=0; i<32; i++) {
+		if (!valid[i]) {
+			memset(&g_cliDb.taskStatusArray[i], 0, sizeof(g_cliDb.taskStatusArray[0]));
+		}
+		if (!g_cliDb.taskStatusArray[i].xTaskNumber) {
+			continue;
+		}
+
+		TaskStatus_t* pTask = &g_cliDb.taskStatusArray[i];
+
 		char	cState = ' ';
 		switch (pTask->eCurrentState) {
 			case eRunning:		cState = 'x';	break;
@@ -149,13 +170,16 @@ static bool dbgPs(uint8_t argc, char** argv)
 			case eInvalid:		cState = 'n';	break;
 			default:
 				cState = ' ';	break;
-
 		}
 
 		PRINT("%2d %-16s ", pTask->xTaskNumber, pTask->pcTaskName);
 		PRINT("%c %2d %2d %9d ", cState, pTask->uxCurrentPriority, pTask->uxBasePriority, (uint32_t)pTask->ulRunTimeCounter);
 		PRINT("%08x ", pTask->pxStackBase);
-    	PRINT("%d\n", pTask->usStackHighWaterMark);
+    	PRINT("%d", pTask->usStackHighWaterMark);
+		if (stackReduced[i]) {
+			PRINT("*");
+		}
+		PRINT("\n");
 	}
 
 	return true;
