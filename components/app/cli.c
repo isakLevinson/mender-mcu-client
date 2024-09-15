@@ -126,7 +126,7 @@ static bool dbgPs(uint8_t argc, char** argv)
 	unsigned long pulTotalRunTime;
 
 	uxArraySize = uxTaskGetNumberOfTasks();
-	PRINT("%d tasks\n", uxArraySize);
+//	PRINT("%d tasks\n", uxArraySize);
 	if (uxArraySize > 32) {
 		PRINT("too many tasks to print\n");
 		return true;
@@ -134,11 +134,26 @@ static bool dbgPs(uint8_t argc, char** argv)
 
 	uxTaskGetSystemState(pxTaskStatusArray, uxArraySize, &pulTotalRunTime);
 
+	PRINT("id name             S B  P  counter   Stk base stack remaining\n");
+	PRINT("-- ---------------- - -- -- --------- -------- ---------------\n");
+
 	for (i=0; i<uxArraySize; i++) {
 		TaskStatus_t* pTask = &pxTaskStatusArray[i];
+		char	cState = ' ';
+		switch (pTask->eCurrentState) {
+			case eRunning:		cState = 'x';	break;
+			case eReady:		cState = 'r';	break;
+			case eBlocked:		cState = 'b';	break;
+			case eSuspended:	cState = 's';	break;
+			case eDeleted:		cState = 'd';	break;
+			case eInvalid:		cState = 'n';	break;
+			default:
+				cState = ' ';	break;
+
+		}
 
 		PRINT("%2d %-16s ", pTask->xTaskNumber, pTask->pcTaskName);
-		PRINT("%2d %2d %2d %8d ", pTask->eCurrentState, pTask->uxCurrentPriority, pTask->uxBasePriority, pTask->ulRunTimeCounter);
+		PRINT("%c %2d %2d %9d ", cState, pTask->uxCurrentPriority, pTask->uxBasePriority, (uint32_t)pTask->ulRunTimeCounter);
 		PRINT("%08x ", pTask->pxStackBase);
     	PRINT("%d\n", pTask->usStackHighWaterMark);
 	}
