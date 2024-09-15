@@ -118,8 +118,37 @@ static bool dbgVer(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgPs(uint8_t argc, char** argv)
+{
+	UBaseType_t	uxArraySize;
+	TaskStatus_t pxTaskStatusArray[32];
+	uint8_t		i;
+	unsigned long pulTotalRunTime;
+
+	uxArraySize = uxTaskGetNumberOfTasks();
+	PRINT("%d tasks\n", uxArraySize);
+	if (uxArraySize > 32) {
+		PRINT("too many tasks to print\n");
+		return true;
+	}
+
+	uxTaskGetSystemState(pxTaskStatusArray, uxArraySize, &pulTotalRunTime);
+
+	for (i=0; i<uxArraySize; i++) {
+		TaskStatus_t* pTask = &pxTaskStatusArray[i];
+
+		PRINT("%2d %-16s ", pTask->xTaskNumber, pTask->pcTaskName);
+		PRINT("%2d %2d %2d %8d ", pTask->eCurrentState, pTask->uxCurrentPriority, pTask->uxBasePriority, pTask->ulRunTimeCounter);
+		PRINT("%08x ", pTask->pxStackBase);
+    	PRINT("%d\n", pTask->usStackHighWaterMark);
+	}
+
+	return true;
+}
+
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_CMD("ver",			NULL,		NULL, dbgVer)
+	DEBUG_MENU_CMD("ps",			NULL,		NULL, dbgPs)
 DEBUG_MENU_END
 
 bool	CLI_init(void)
