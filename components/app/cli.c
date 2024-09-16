@@ -125,6 +125,7 @@ static bool dbgPs(uint8_t argc, char** argv)
 	TaskStatus_t taskStatusArray[32] = {0};
 	bool		 valid[32] = {0};
 	bool		 stackReduced[32] = {0};
+	uint32_t	 dt[32] = {0};
 	uint8_t		i;
 	unsigned long pulTotalRunTime;
 
@@ -140,6 +141,7 @@ static bool dbgPs(uint8_t argc, char** argv)
 	for (i=0; i<uxArraySize; i++) {
 		TaskStatus_t* pTask = &taskStatusArray[i];
 		valid[pTask->xTaskNumber] = true;
+		dt[pTask->xTaskNumber] = pTask->ulRunTimeCounter - g_cliDb.taskStatusArray[pTask->xTaskNumber].ulRunTimeCounter;
 
 		if (pTask->usStackHighWaterMark < g_cliDb.taskStatusArray[pTask->xTaskNumber].usStackHighWaterMark) {
 			stackReduced[pTask->xTaskNumber] = true;
@@ -173,7 +175,7 @@ static bool dbgPs(uint8_t argc, char** argv)
 		}
 
 		PRINT("%2d %-16s ", pTask->xTaskNumber, pTask->pcTaskName);
-		PRINT("%c %2d %2d %9d ", cState, pTask->uxCurrentPriority, pTask->uxBasePriority, (uint32_t)pTask->ulRunTimeCounter);
+		PRINT("%c %2d %2d %9d ", cState, pTask->uxCurrentPriority, pTask->uxBasePriority, dt[i]);
 		PRINT("%08x ", pTask->pxStackBase);
     	PRINT("%d", pTask->usStackHighWaterMark);
 		if (stackReduced[i]) {
