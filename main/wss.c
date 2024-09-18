@@ -24,7 +24,7 @@
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
 #endif
 
-typedef struct async_resp_arg {
+struct async_resp_arg {
     httpd_handle_t hd;
     int fd;
 };
@@ -143,15 +143,13 @@ bool wss_send(struct async_resp_arg *i_pAsync, void* pBuf, size_t len)
     return true;
 }
 
-bool _cmdSendResp(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
+bool _cmdSendResp(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
 {
     bool    ret;
     struct async_resp_arg *pAsync = (struct async_resp_arg*)pArg;
 
 	uint8_t 	buf[300];
 	uint8_t*	pBuf = buf;
-
-    int s = *(int*)pArg;
 
 	*(uint16_t*)pBuf	= size;
 	pBuf += 2;
@@ -210,8 +208,6 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
     } else {
         if ((ws_pkt.type == HTTPD_WS_TYPE_TEXT) || (ws_pkt.type == HTTPD_WS_TYPE_BINARY)) {
-            static uint8_t count;
-            static char rsp[256];
             INFO("WS Received packet with message: type=%d\n", ws_pkt.type);
             INFO_BUF("WS Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
 
@@ -226,7 +222,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
                     .pArg       = &async,
                 };
 
-                uint8_t len = ws_pkt.payload[0];
+                //uint8_t len = ws_pkt.payload[0];
                 uint8_t type = ws_pkt.payload[2];
 
                 CMD_processMessage(&context, type, ws_pkt.payload+3, ws_pkt.len-3);
@@ -415,6 +411,7 @@ httpd_handle_t wss_start_server(void)
     return server;
 }
 
+#if 0
 static esp_err_t stop_wss_echo_server(httpd_handle_t server)
 {
     // Stop the keep-alive engine
@@ -438,7 +435,6 @@ static void disconnect_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
-#if 0
 static void connect_handler(void* arg, esp_event_base_t event_base,
                             int32_t event_id, void* event_data)
 {

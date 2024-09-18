@@ -16,8 +16,6 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#include "esp_log.h"
-#include "esp_console.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_event.h"
@@ -102,10 +100,6 @@ const int FLAG_DISCONNECT           = BIT1;
 const int FLAG_GOT_IP_TCP           = BIT2;
 const int FLAG_GOT_IP_UDP           = BIT3;
 const int FLAG_GOT_IP_UDP_TIME_SYNC = BIT4;
-
-#define NVS_NAMESPACE_WIFI      "wifi"
-#define NVS_KEY_WIFI_SSID       "ssid"
-#define NVS_KEY_WIFI_PASSWD     "passwd"
 
 static bool _mdnsInit(void)
 {
@@ -309,7 +303,7 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     _socket_close(&socket_listen_stream);
 }
 
-static bool _sockSend(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
+static bool _sockSend(void* pArg, void* i_pBuf, uint16_t size)
 {
 	uint8_t	buf[300];
 	uint8_t*	pBuf = buf;
@@ -318,7 +312,7 @@ static bool _sockSend(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
 
 	*(uint16_t*)pBuf	= size;
 	pBuf += 2;
-	*pBuf	= type;
+	*pBuf	= 0x43; // PNU
 	pBuf++;
 
 	memcpy(pBuf, i_pBuf, size);

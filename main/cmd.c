@@ -139,7 +139,7 @@ static struct {
 } g_cmd;
 
 
-bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t size)
+bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint8_t size)
 {
 	bool	ret;
 	CMD_CONTEXT* pContext = i_pContext;
@@ -163,7 +163,7 @@ bool _sendResp(CMD_CONTEXT* i_pContext, COMM_TYPE msgType, void* i_pBuf, uint8_t
 
 	TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
-	ret = pContext->p_cbSend(pContext->pArg, msgType, i_pBuf, size);
+	ret = pContext->p_cbSend(pContext->pArg, type, i_pBuf, size);
 
 	xSemaphoreGive(g_cmd.semaphore);
 
@@ -429,15 +429,6 @@ static bool	_req_SET_VALVES_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_VALVES*
 	_sendResp(i_pContext, CMD_RSP_SET_VALVES, &rsp, sizeof(rsp));
 
     return true;
-}
-
-static bool _isValidMsgType(uint8_t type)
-{
-	switch (type) {
-		CMD(CMD_IS_VALID_SWITCH, CMD_NONE)
-	}
-
-	return false;
 }
 
 void CMD_parseInit(void)
