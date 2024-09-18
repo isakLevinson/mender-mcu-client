@@ -6,7 +6,8 @@ import ssl
 import binascii
 
 cert_path = "main/certs/servercert.pem"
-uri = "wss://192.168.1.148"
+#uri = "wss://192.168.1.148"
+uri = "wss://pnu-esp32.local"
 uri_ws = "/ws"
 uri_events = "/events"
 

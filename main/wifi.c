@@ -107,6 +107,23 @@ const int FLAG_GOT_IP_UDP_TIME_SYNC = BIT4;
 #define NVS_KEY_WIFI_SSID       "ssid"
 #define NVS_KEY_WIFI_PASSWD     "passwd"
 
+static bool _mdnsInit(void)
+{
+    INFO("mDNS init\n");
+    esp_err_t err = mdns_init();
+    if (err) {
+        ERROR("MDNS Init failed: %d\n", err);
+        return false;
+    }
+
+    //set hostname
+    mdns_hostname_set("pnu-esp32");
+    //set default instance
+    mdns_instance_name_set("Jhon's ESP32 Thing");
+
+    return true;
+}
+
 bool    wifi_nvs_get_ssid(char* ssid, char* passwd)
 {
     bool    ret = true;
@@ -262,6 +279,7 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
     xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 
     wifi_nvs_set_ssid(g_wifi.currentSsid, g_wifi.currentPasswd);
+    _mdnsInit();
 }
 
 static void _socket_close(int* pSocket)
@@ -1051,16 +1069,7 @@ static bool dbgBroadcastTime(uint8_t argc, char **argv)
 
 static bool dbgMdns(uint8_t argc, char **argv)
 {
-    esp_err_t err = mdns_init();
-    if (err) {
-        ERROR("MDNS Init failed: %d\n", err);
-        return true;
-    }
-
-    //set hostname
-    mdns_hostname_set("my-esp32");
-    //set default instance
-    mdns_instance_name_set("Jhon's ESP32 Thing");
+    _mdnsInit();
 
     return true;
 }
@@ -1078,7 +1087,6 @@ DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
-
 
 void register_wifi(void)
 {
