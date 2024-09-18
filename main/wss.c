@@ -16,6 +16,7 @@
 #include <esp_https_server.h>
 #include "wss_keepalive.h"
 #include "sdkconfig.h"
+#include "wss.h"
 #include "cmd.h"
 
 #define USE_SSL 1
@@ -24,11 +25,6 @@
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
 #endif
 
-struct async_resp_arg {
-    httpd_handle_t hd;
-    int fd;
-};
-
 struct send_arg_t {
     httpd_handle_t  hd;
     int             fd;
@@ -36,7 +32,7 @@ struct send_arg_t {
     uint8_t         buf[];
 };
 
-struct async_resp_arg events_async_resp = {0};
+struct async_resp_arg events_async_resp;
 
 static const size_t max_clients = 4;
 
