@@ -36,12 +36,11 @@
 #define   WIFI_MAX_SSID_LENGTH    32
 #define   WIFI_MAX_PASSWD_LENGTH  32
 
-static struct {
-    nvs_handle_t nvsHandle;
-    char    currentSsid[32];
-    char    currentPasswd[32];
-    uint8_t recvBuf[1024];
-} g_wifi;
+#define FLAG_CONNECTED            BIT0
+#define FLAG_DISCONNECT           BIT1
+#define FLAG_GOT_IP_TCP           BIT2
+#define FLAG_GOT_IP_UDP           BIT3
+#define FLAG_GOT_IP_UDP_TIME_SYNC BIT4
 
 static struct {
     int udpSocket;
@@ -52,27 +51,18 @@ static struct {
     bool reconnect;
     esp_netif_t *netif_ap;
     esp_netif_t *netif_sta;
+    EventGroupHandle_t event_group;
+
+    struct {
+        nvs_handle_t nvsHandle;
+        char         currentSsid[32];
+        char         currentPasswd[32];
+        uint8_t      recvBuf[1024];
+    } wifi;
+
 } g_server = {
     .reconnect = true,
 };
-
-typedef struct {
-    struct arg_str *ssid;
-    struct arg_str *password;
-    struct arg_end *end;
-} wifi_args_t;
-
-typedef struct {
-    struct arg_str *ssid;
-    struct arg_end *end;
-} wifi_scan_arg_t;
-
-static EventGroupHandle_t wifi_event_group;
-const int FLAG_CONNECTED            = BIT0;
-const int FLAG_DISCONNECT           = BIT1;
-const int FLAG_GOT_IP_TCP           = BIT2;
-const int FLAG_GOT_IP_UDP           = BIT3;
-const int FLAG_GOT_IP_UDP_TIME_SYNC = BIT4;
 
 static bool _mdnsInit(void)
 {
@@ -239,18 +229,17 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
                            int32_t event_id, void *event_data)
 {
     INFO("got_ip_handler\n");
-    xEventGroupClearBits(wifi_event_group, FLAG_DISCONNECT);
-    xEventGroupSetBits(wifi_event_group, FLAG_CONNECTED);
-    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_TCP);
-    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_UDP);
-    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
+    xEventGroupClearBits(g_server.event_group, FLAG_DISCONNECT);
+    xEventGroupSetBits(g_server.event_group, FLAG_CONNECTED);
+    xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_TCP);
+    xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_UDP);
+    xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 
-    wifi_nvs_set_ssid(g_wifi.currentSsid, g_wifi.currentPasswd);
+    wifi_nvs_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
     _mdnsInit();
 }
 
-static void disconnect_handler(void *arg, esp_event_base_t event_base,
-                               int32_t event_id, void *event_data)
+static void disconnect_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     if (g_server.reconnect) {
         TRACE("sta disconnect, reconnect...\n");
@@ -258,12 +247,12 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     } else {
         INFO("sta disconnect\n");
     }
-    xEventGroupClearBits(wifi_event_group, FLAG_CONNECTED);
-    xEventGroupSetBits(wifi_event_group, FLAG_DISCONNECT);
+    xEventGroupClearBits(g_server.event_group, FLAG_CONNECTED);
+    xEventGroupSetBits(g_server.event_group, FLAG_DISCONNECT);
 
-    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_TCP);
-    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_UDP);
-    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
+    xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_TCP);
+    xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_UDP);
+    xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 }
 
 static bool _sockSend(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
@@ -575,7 +564,7 @@ static void task_tcp_server(void *arg)
     while(true) {
         if (!ip.addr) {
             TRACE("waiting for FLAG_GOT_IP\n");
-            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_TCP, 1, 1, 1000);
+            int bits = xEventGroupWaitBits(g_server.event_group, FLAG_GOT_IP_TCP, 1, 1, 1000);
 
             if (bits & FLAG_GOT_IP_TCP) {
                 INFO("got FLAG_GOT_IP\n");
@@ -610,7 +599,7 @@ static void task_udp_server(void *arg)
     while(true) {
         if (!ip.addr) {
             TRACE("UDP waiting for FLAG_GOT_IP\n");
-            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_UDP, 1, 1, 1000);
+            int bits = xEventGroupWaitBits(g_server.event_group, FLAG_GOT_IP_UDP, 1, 1, 1000);
 
             if (bits & FLAG_GOT_IP_UDP) {
                 ip = wifi_getSelfIp();
@@ -638,7 +627,7 @@ static void task_udp_time_server(void *arg)
     while(true) {
         if (!ip.addr) {
             TRACE("UDP waiting for FLAG_GOT_IP\n");
-            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC, 1, 1, 1000);
+            int bits = xEventGroupWaitBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC, 1, 1, 1000);
 
             if (bits & FLAG_GOT_IP_UDP_TIME_SYNC) {
                 ip = wifi_getSelfIp();
@@ -722,7 +711,7 @@ void initialise_wifi(void)
     }
 
     ESP_ERROR_CHECK(esp_netif_init());
-    wifi_event_group = xEventGroupCreate();
+    g_server.event_group = xEventGroupCreate();
     ESP_ERROR_CHECK( esp_event_loop_create_default() );
     g_server.netif_ap = esp_netif_create_default_wifi_ap();
     assert(g_server.netif_ap);
@@ -778,10 +767,10 @@ void initialise_wifi(void)
 
 bool wifi_cmd_sta_join(const char *ssid, const char *pass)
 {
-    strcpy(g_wifi.currentSsid, ssid);
-    strcpy(g_wifi.currentPasswd, pass);
+    strcpy(g_server.wifi.currentSsid, ssid);
+    strcpy(g_server.wifi.currentPasswd, pass);
 
-    int bits = xEventGroupWaitBits(wifi_event_group, FLAG_CONNECTED, 0, 1, 0);
+    int bits = xEventGroupWaitBits(g_server.event_group, FLAG_CONNECTED, 0, 1, 0);
 
     wifi_config_t wifi_config = { 0 };
 
@@ -792,9 +781,9 @@ bool wifi_cmd_sta_join(const char *ssid, const char *pass)
 
     if (bits & FLAG_CONNECTED) {
         g_server.reconnect = false;
-        xEventGroupClearBits(wifi_event_group, FLAG_CONNECTED);
+        xEventGroupClearBits(g_server.event_group, FLAG_CONNECTED);
         ESP_ERROR_CHECK( esp_wifi_disconnect() );
-        xEventGroupWaitBits(wifi_event_group, FLAG_DISCONNECT, 0, 1, portTICK_PERIOD_MS);
+        xEventGroupWaitBits(g_server.event_group, FLAG_DISCONNECT, 0, 1, portTICK_PERIOD_MS);
     }
 
     g_server.reconnect = true;
@@ -802,7 +791,7 @@ bool wifi_cmd_sta_join(const char *ssid, const char *pass)
     ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     esp_wifi_connect();
 
-    xEventGroupWaitBits(wifi_event_group, FLAG_DISCONNECT, 0, 1, 5000 / portTICK_PERIOD_MS);
+    xEventGroupWaitBits(g_server.event_group, FLAG_DISCONNECT, 0, 1, 5000 / portTICK_PERIOD_MS);
 
     return true;
 }
@@ -872,7 +861,7 @@ static bool dbgStatus(uint8_t argc, char **argv)
         esp_wifi_get_config(WIFI_IF_AP, &cfg);
         INFO("AP mode, %s %s\n", cfg.ap.ssid, cfg.ap.password);
     } else if (WIFI_MODE_STA == mode) {
-        int bits = xEventGroupWaitBits(wifi_event_group, FLAG_CONNECTED, 0, 1, 0);
+        int bits = xEventGroupWaitBits(g_server.event_group, FLAG_CONNECTED, 0, 1, 0);
         if (bits & FLAG_CONNECTED) {
             esp_wifi_get_config(WIFI_IF_STA, &cfg);
             INFO("sta mode, connected %s\n", cfg.ap.ssid);
@@ -901,11 +890,11 @@ static bool dbgNvs(uint8_t argc, char **argv)
     if (argc == 2) {
         if (!strcmp(argv[1], "close")) {
             printf("close\n");
-            nvs_close(g_wifi.nvsHandle);
-            g_wifi.nvsHandle = (nvs_handle_t)NULL;
+            nvs_close(g_server.wifi.nvsHandle);
+            g_server.wifi.nvsHandle = (nvs_handle_t)NULL;
         } else if (!strcmp(argv[1], "commit")) {
             printf("commit\n");
-            err = nvs_commit(g_wifi.nvsHandle);
+            err = nvs_commit(g_server.wifi.nvsHandle);
         } else if (!strcmp(argv[1], "stats")) {
             nvs_stats_t nvs_stats;
 
@@ -956,13 +945,13 @@ static bool dbgNvs(uint8_t argc, char **argv)
     } else if (argc == 3) {
         if (!strcmp(argv[1], "open\n")) {
             printf("open %s\n", argv[2]);
-            err = nvs_open(argv[2], NVS_READWRITE, &g_wifi.nvsHandle);
+            err = nvs_open(argv[2], NVS_READWRITE, &g_server.wifi.nvsHandle);
         } else if (!strcmp(argv[1], "get\n")) {
             char    str[256];
              size_t length;
 
             printf("get %s\n", argv[2]);
-            err =  nvs_get_str(g_wifi.nvsHandle, argv[2], str, &length);
+            err =  nvs_get_str(g_server.wifi.nvsHandle, argv[2], str, &length);
             if (err == ESP_OK) {
                 str[length] = '\0';
                 printf("str=<%s>\n", str);
@@ -971,7 +960,7 @@ static bool dbgNvs(uint8_t argc, char **argv)
     } else if (argc == 4) {
         if (!strcmp(argv[1], "set")) {
             printf("set %s <- %s\n", argv[2], argv[3]);
-            err = nvs_set_str(g_wifi.nvsHandle, argv[2], argv[3]);
+            err = nvs_set_str(g_server.wifi.nvsHandle, argv[2], argv[3]);
         } else if (!strcmp(argv[1], "ssid")) {
             wifi_nvs_set_ssid(argv[2], argv[3]);
         }
