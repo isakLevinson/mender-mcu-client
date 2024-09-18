@@ -90,7 +90,6 @@ int socket_stream = -1;
 int socket_listen_stream = -1;
 
 static bool reconnect = true;
-static const char *TAG = "cmd_wifi";
 static esp_netif_t *netif_ap = NULL;
 static esp_netif_t *netif_sta = NULL;
 
@@ -303,7 +302,7 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     _socket_close(&socket_listen_stream);
 }
 
-static bool _sockSend(void* pArg, void* i_pBuf, uint16_t size)
+static bool _sockSend(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
 {
 	uint8_t	buf[300];
 	uint8_t*	pBuf = buf;
@@ -312,7 +311,7 @@ static bool _sockSend(void* pArg, void* i_pBuf, uint16_t size)
 
 	*(uint16_t*)pBuf	= size;
 	pBuf += 2;
-	*pBuf	= 0x43; // PNU
+	*pBuf	= type;
 	pBuf++;
 
 	memcpy(pBuf, i_pBuf, size);
@@ -357,7 +356,6 @@ static bool _sendUdpTo(int s, COMM_TYPE type, void* i_pBuf, uint8_t size)
 
     return true;
 }
-#endif
 
 static void cmd_tcp_server(void)
 {
@@ -455,6 +453,7 @@ exit:
         WARN("listener exit with ret=0x%x\n", ret);
     }
 }
+#endif
 
 static void _udp_server(void)
 {
