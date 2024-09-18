@@ -18,22 +18,15 @@
 
 #include "esp_wifi.h"
 #include "esp_netif.h"
-#include "esp_event.h"
-#include "esp_check.h"
-#include "esp_log.h"
-#include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "esp_coexist.h"
 #include "mdns.h"
 
-#include "argtable3/argtable3.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
 
-#include "driver/uart.h"
 #include "main.h"
-#include "cmd_wifi.h"
 #include "nvs.h"
 #include "wifi.h"
 #include "cmd.h"
@@ -744,7 +737,6 @@ bool    SER_sendTcp(void* i_pBuf, uint16_t len)
 
 void initialise_wifi(void)
 {
-    esp_log_level_set("wifi\n", ESP_LOG_WARN);
     static bool initialized = false;
 
     if (initialized) {

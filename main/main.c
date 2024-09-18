@@ -17,17 +17,13 @@
 
 #include <errno.h>
 #include <string.h>
-#include "esp_wifi.h"
 #include "esp_log.h"
-#include "esp_err.h"
-#include "esp_console.h"
 #include "nvs_flash.h"
 
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "sdkconfig.h"
 #include "cmd_ble.h"
-#include "wifi.h"
 #include "main.h"
 #include "cli.h"
 #include "cmd.h"
@@ -85,7 +81,7 @@ void app_main(void)
     
     register_wifi();
 
-   esp_log_level_set("*", ESP_LOG_ERROR);
+    esp_log_level_set("*", ESP_LOG_ERROR);
 
     PRINT("\n");
     PRINT(" ==================================================\n");
