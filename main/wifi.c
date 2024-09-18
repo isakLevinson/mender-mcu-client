@@ -36,20 +36,6 @@
 #define   WIFI_MAX_SSID_LENGTH    32
 #define   WIFI_MAX_PASSWD_LENGTH  32
 
-typedef struct {
-    struct arg_str *ip;
-    struct arg_lit *server;
-    struct arg_lit *udp;
-    struct arg_lit *version;
-    struct arg_int *port;
-    struct arg_int *length;
-    struct arg_int *interval;
-    struct arg_int *time;
-    struct arg_int *bw_limit;
-    struct arg_lit *abort;
-    struct arg_end *end;
-} wifi_iperf_t;
-
 static struct {
     nvs_handle_t nvsHandle;
     char    currentSsid[32];
@@ -62,7 +48,13 @@ static struct {
     int tcpSocket;
     struct sockaddr_in udp_addr;
     struct sockaddr_in udp_time_sync_addr;
-} g_server;
+
+    bool reconnect;
+    esp_netif_t *netif_ap;
+    esp_netif_t *netif_sta;
+} g_server = {
+    .reconnect = true,
+};
 
 typedef struct {
     struct arg_str *ssid;
@@ -74,17 +66,6 @@ typedef struct {
     struct arg_str *ssid;
     struct arg_end *end;
 } wifi_scan_arg_t;
-
-
-
-int socket_cmd = -1;
-int socket_listen_cmd = -1;
-int socket_stream = -1;
-int socket_listen_stream = -1;
-
-static bool reconnect = true;
-static esp_netif_t *netif_ap = NULL;
-static esp_netif_t *netif_sta = NULL;
 
 static EventGroupHandle_t wifi_event_group;
 const int FLAG_CONNECTED            = BIT0;
@@ -268,17 +249,10 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
     _mdnsInit();
 }
 
-static void _socket_close(int* pSocket)
-{
-    shutdown(*pSocket, 0);
-    close(*pSocket);
-    *pSocket = -1;
-}
-
 static void disconnect_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
 {
-    if (reconnect) {
+    if (g_server.reconnect) {
         TRACE("sta disconnect, reconnect...\n");
         esp_wifi_connect();
     } else {
@@ -290,9 +264,6 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base,
     xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_TCP);
     xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_UDP);
     xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
-
-    _socket_close(&socket_listen_cmd);
-    _socket_close(&socket_listen_stream);
 }
 
 static bool _sockSend(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
@@ -320,6 +291,13 @@ static bool _sockSend(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
 }
 
 #if 0
+static void _socket_close(int* pSocket)
+{
+    shutdown(*pSocket, 0);
+    close(*pSocket);
+    *pSocket = -1;
+}
+
 static bool _sendUdpTo(int s, COMM_TYPE type, void* i_pBuf, uint8_t size)
 {
 	uint8_t	buf[300];
@@ -462,7 +440,7 @@ static void _udp_server(void)
     listen_addr4.sin_family = AF_INET;
     listen_addr4.sin_port = htons(UDP_SERVER_PORT);
 
-    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
+    if (esp_netif_get_ip_info(g_server.netif_sta, &ip) == 0) {
         INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
         INFO("MASK:" IPSTR "\n", IP2STR(&ip.netmask));
         INFO("GW:" IPSTR "\n", IP2STR(&ip.gw));
@@ -746,10 +724,10 @@ void initialise_wifi(void)
     ESP_ERROR_CHECK(esp_netif_init());
     wifi_event_group = xEventGroupCreate();
     ESP_ERROR_CHECK( esp_event_loop_create_default() );
-    netif_ap = esp_netif_create_default_wifi_ap();
-    assert(netif_ap);
-    netif_sta = esp_netif_create_default_wifi_sta();
-    assert(netif_sta);
+    g_server.netif_ap = esp_netif_create_default_wifi_ap();
+    assert(g_server.netif_ap);
+    g_server.netif_sta = esp_netif_create_default_wifi_sta();
+    assert(g_server.netif_sta);
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
@@ -813,13 +791,13 @@ bool wifi_cmd_sta_join(const char *ssid, const char *pass)
     }
 
     if (bits & FLAG_CONNECTED) {
-        reconnect = false;
+        g_server.reconnect = false;
         xEventGroupClearBits(wifi_event_group, FLAG_CONNECTED);
         ESP_ERROR_CHECK( esp_wifi_disconnect() );
         xEventGroupWaitBits(wifi_event_group, FLAG_DISCONNECT, 0, 1, portTICK_PERIOD_MS);
     }
 
-    reconnect = true;
+    g_server.reconnect = true;
     ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
     ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     esp_wifi_connect();
@@ -846,7 +824,7 @@ esp_ip4_addr_t  wifi_getSelfIp(void)
 
     memset(&ip, 0, sizeof(esp_netif_ip_info_t));
 
-    esp_netif_get_ip_info(netif_sta, &ip);
+    esp_netif_get_ip_info(g_server.netif_sta, &ip);
 
     return ip.ip;
 }
@@ -908,7 +886,7 @@ static bool dbgStatus(uint8_t argc, char **argv)
 
     memset(&ip, 0, sizeof(esp_netif_ip_info_t));
 
-    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
+    if (esp_netif_get_ip_info(g_server.netif_sta, &ip) == 0) {
         INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
         INFO("MASK:" IPSTR "\n", IP2STR(&ip.netmask));
         INFO("GW:" IPSTR "\n", IP2STR(&ip.gw));
