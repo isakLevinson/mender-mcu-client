@@ -110,7 +110,7 @@ static void _handleData(void* pBuf, int len)
     ESP_LOGI(TAG, "ssid  : <%s>", str);
     ESP_LOGI(TAG, "passwd: <%s>", passwd);
 
-    wifi_cmd_sta_join(str, passwd);
+    //wifi_cmd_sta_join(str, passwd);
 
     ip = wifi_getSelfIp();
     sprintf(ipStr, "%d.%d.%d.%d", ipArray[0], ipArray[1], ipArray[2], ipArray[3]);

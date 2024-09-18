@@ -7,7 +7,6 @@ idf_component_register(SRCS	"main.c"
 				"time.c"
 				"pump.c"
 				"adc.c"
-				"uart.c"
 				"wss.c"
 				"wss_keepalive.c"
 

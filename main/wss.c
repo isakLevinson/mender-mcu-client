@@ -16,6 +16,7 @@
 #include <esp_https_server.h>
 #include "wss_keepalive.h"
 #include "sdkconfig.h"
+#include "wss.h"
 #include "cmd.h"
 
 #define USE_SSL 1
@@ -24,11 +25,6 @@
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
 #endif
 
-typedef struct async_resp_arg {
-    httpd_handle_t hd;
-    int fd;
-};
-
 struct send_arg_t {
     httpd_handle_t  hd;
     int             fd;
@@ -36,7 +32,7 @@ struct send_arg_t {
     uint8_t         buf[];
 };
 
-struct async_resp_arg events_async_resp = {0};
+struct async_resp_arg events_async_resp;
 
 static const size_t max_clients = 4;
 
@@ -143,15 +139,13 @@ bool wss_send(struct async_resp_arg *i_pAsync, void* pBuf, size_t len)
     return true;
 }
 
-bool _cmdSendResp(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
+bool _cmdSendResp(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
 {
     bool    ret;
     struct async_resp_arg *pAsync = (struct async_resp_arg*)pArg;
 
 	uint8_t 	buf[300];
 	uint8_t*	pBuf = buf;
-
-    int s = *(int*)pArg;
 
 	*(uint16_t*)pBuf	= size;
 	pBuf += 2;
@@ -210,8 +204,6 @@ static esp_err_t ws_handler(httpd_req_t *req)
 
     } else {
         if ((ws_pkt.type == HTTPD_WS_TYPE_TEXT) || (ws_pkt.type == HTTPD_WS_TYPE_BINARY)) {
-            static uint8_t count;
-            static char rsp[256];
             INFO("WS Received packet with message: type=%d\n", ws_pkt.type);
             INFO_BUF("WS Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
 
@@ -226,7 +218,7 @@ static esp_err_t ws_handler(httpd_req_t *req)
                     .pArg       = &async,
                 };
 
-                uint8_t len = ws_pkt.payload[0];
+                //uint8_t len = ws_pkt.payload[0];
                 uint8_t type = ws_pkt.payload[2];
 
                 CMD_processMessage(&context, type, ws_pkt.payload+3, ws_pkt.len-3);
@@ -414,38 +406,3 @@ httpd_handle_t wss_start_server(void)
 
     return server;
 }
-
-static esp_err_t stop_wss_echo_server(httpd_handle_t server)
-{
-    // Stop the keep-alive engine
-    wss_keep_alive_stop(httpd_get_global_user_ctx(server));
-
-    // Stop the HTTP server with SSL
-    return httpd_ssl_stop(server);
-}
-
-static void disconnect_handler(void* arg, esp_event_base_t event_base,
-                               int32_t event_id, void* event_data)
-{
-    httpd_handle_t* server = (httpd_handle_t*) arg;
-    if (*server) {
-        // Stop the server if it is running
-        if (stop_wss_echo_server(*server) == ESP_OK) {
-            *server = NULL;
-        } else {
-            ERROR("Failed to stop https server");
-        }
-    }
-}
-
-#if 0
-static void connect_handler(void* arg, esp_event_base_t event_base,
-                            int32_t event_id, void* event_data)
-{
-    httpd_handle_t* server = (httpd_handle_t*) arg;
-    if (*server == NULL) {
-        // Start the server if it is not running
-        *server = start_wss_echo_server();
-    }
-}
-#endif

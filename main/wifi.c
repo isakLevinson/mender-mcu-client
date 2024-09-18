@@ -16,26 +16,17 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#include "esp_log.h"
-#include "esp_console.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
-#include "esp_event.h"
-#include "esp_check.h"
-#include "esp_log.h"
-#include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "esp_coexist.h"
 #include "mdns.h"
 
-#include "argtable3/argtable3.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
 
-#include "driver/uart.h"
 #include "main.h"
-#include "cmd_wifi.h"
 #include "nvs.h"
 #include "wifi.h"
 #include "cmd.h"
@@ -45,67 +36,33 @@
 #define   WIFI_MAX_SSID_LENGTH    32
 #define   WIFI_MAX_PASSWD_LENGTH  32
 
-typedef struct {
-    struct arg_str *ip;
-    struct arg_lit *server;
-    struct arg_lit *udp;
-    struct arg_lit *version;
-    struct arg_int *port;
-    struct arg_int *length;
-    struct arg_int *interval;
-    struct arg_int *time;
-    struct arg_int *bw_limit;
-    struct arg_lit *abort;
-    struct arg_end *end;
-} wifi_iperf_t;
-
-static struct {
-    nvs_handle_t nvsHandle;
-    char    currentSsid[32];
-    char    currentPasswd[32];
-    uint8_t recvBuf[1024];
-} g_wifi;
+#define FLAG_CONNECTED            BIT0
+#define FLAG_DISCONNECT           BIT1
+#define FLAG_GOT_IP_TCP           BIT2
+#define FLAG_GOT_IP_UDP           BIT3
+#define FLAG_GOT_IP_UDP_TIME_SYNC BIT4
 
 static struct {
     int udpSocket;
     int tcpSocket;
     struct sockaddr_in udp_addr;
     struct sockaddr_in udp_time_sync_addr;
-} g_server;
 
-typedef struct {
-    struct arg_str *ssid;
-    struct arg_str *password;
-    struct arg_end *end;
-} wifi_args_t;
+    bool reconnect;
+    esp_netif_t *netif_ap;
+    esp_netif_t *netif_sta;
+    EventGroupHandle_t event_group;
 
-typedef struct {
-    struct arg_str *ssid;
-    struct arg_end *end;
-} wifi_scan_arg_t;
+    struct {
+        nvs_handle_t nvsHandle;
+        char         currentSsid[32];
+        char         currentPasswd[32];
+        uint8_t      recvBuf[1024];
+    } wifi;
 
-
-
-int socket_cmd = -1;
-int socket_listen_cmd = -1;
-int socket_stream = -1;
-int socket_listen_stream = -1;
-
-static bool reconnect = true;
-static const char *TAG = "cmd_wifi";
-static esp_netif_t *netif_ap = NULL;
-static esp_netif_t *netif_sta = NULL;
-
-static EventGroupHandle_t wifi_event_group;
-const int FLAG_CONNECTED            = BIT0;
-const int FLAG_DISCONNECT           = BIT1;
-const int FLAG_GOT_IP_TCP           = BIT2;
-const int FLAG_GOT_IP_UDP           = BIT3;
-const int FLAG_GOT_IP_UDP_TIME_SYNC = BIT4;
-
-#define NVS_NAMESPACE_WIFI      "wifi"
-#define NVS_KEY_WIFI_SSID       "ssid"
-#define NVS_KEY_WIFI_PASSWD     "passwd"
+} g_server = {
+    .reconnect = true,
+};
 
 static bool _mdnsInit(void)
 {
@@ -124,7 +81,7 @@ static bool _mdnsInit(void)
     return true;
 }
 
-bool    wifi_nvs_get_ssid(char* ssid, char* passwd)
+static bool _nvs_get_ssid(char* ssid, char* passwd)
 {
     bool    ret = true;
     esp_err_t err = ESP_OK;
@@ -179,7 +136,7 @@ bool    wifi_nvs_get_ssid(char* ssid, char* passwd)
     return ret;
 }
 
-bool    wifi_nvs_set_ssid(char* ssid, char* passwd)
+static bool _nvs_set_ssid(char* ssid, char* passwd)
 {
     bool    ret = true;
     esp_err_t err = ESP_OK;
@@ -272,255 +229,30 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
                            int32_t event_id, void *event_data)
 {
     INFO("got_ip_handler\n");
-    xEventGroupClearBits(wifi_event_group, FLAG_DISCONNECT);
-    xEventGroupSetBits(wifi_event_group, FLAG_CONNECTED);
-    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_TCP);
-    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_UDP);
-    xEventGroupSetBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
+    xEventGroupClearBits(g_server.event_group, FLAG_DISCONNECT);
+    xEventGroupSetBits(g_server.event_group, FLAG_CONNECTED);
+    xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_TCP);
+    xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_UDP);
+    xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 
-    wifi_nvs_set_ssid(g_wifi.currentSsid, g_wifi.currentPasswd);
+    _nvs_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
     _mdnsInit();
 }
 
-static void _socket_close(int* pSocket)
+static void disconnect_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
-    shutdown(*pSocket, 0);
-    close(*pSocket);
-    *pSocket = -1;
-}
-
-static void disconnect_handler(void *arg, esp_event_base_t event_base,
-                               int32_t event_id, void *event_data)
-{
-    if (reconnect) {
+    if (g_server.reconnect) {
         TRACE("sta disconnect, reconnect...\n");
         esp_wifi_connect();
     } else {
         INFO("sta disconnect\n");
     }
-    xEventGroupClearBits(wifi_event_group, FLAG_CONNECTED);
-    xEventGroupSetBits(wifi_event_group, FLAG_DISCONNECT);
+    xEventGroupClearBits(g_server.event_group, FLAG_CONNECTED);
+    xEventGroupSetBits(g_server.event_group, FLAG_DISCONNECT);
 
-    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_TCP);
-    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_UDP);
-    xEventGroupClearBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
-
-    _socket_close(&socket_listen_cmd);
-    _socket_close(&socket_listen_stream);
-}
-
-static bool _sockSend(void* pArg, COMM_TYPE type, void* i_pBuf, uint16_t size)
-{
-	uint8_t	buf[300];
-	uint8_t*	pBuf = buf;
-
-    int s = *(int*)pArg;
-
-	*(uint16_t*)pBuf	= size;
-	pBuf += 2;
-	*pBuf	= type;
-	pBuf++;
-
-	memcpy(pBuf, i_pBuf, size);
-	pBuf += size;
-
-	//INFO_BUF("tx header", PRINT_BUF_STYLE_HEX_SIZE_NL, header, sizeof(header));
-	//INFO_BUF("tx data  ", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
-	TRACE_BUF("_cmdSend", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf - buf);
-
-    send(s, buf, pBuf - buf, 0);
-
-	return true;
-}
-
-#if 0
-static bool _sendUdpTo(int s, COMM_TYPE type, void* i_pBuf, uint8_t size)
-{
-	uint8_t	buf[300];
-	uint8_t*	pBuf = buf;
-    int sent;
-
-    //INFO("_sendUdpTo s:%d, addr:%08x\n", s, g_server.udp_time_sync_addr.sin_addr);
-    //INFO_BUF("_sendUdpTo", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
-
-//	*pBuf	= START_MESSAGE_CHARACTER;
-//	pBuf++;
-	*pBuf	= type;
-	pBuf++;
-	//*pBuf	= size;
-	//pBuf++;
-	memcpy(pBuf, i_pBuf, size);
-	pBuf += size;
-
-    g_server.udp_time_sync_addr.sin_family = AF_INET;
-    g_server.udp_time_sync_addr.sin_port = htons(UDP_SERVER_PORT);
-
-    size = pBuf - buf;
-    sent = sendto(s, buf, size, 0, (struct sockaddr*)&g_server.udp_time_sync_addr, sizeof(g_server.udp_time_sync_addr));
-    if (sent != size) {
-        ERROR("sendto %d != %d", sent, size);
-    }
-
-    return true;
-}
-#endif
-
-static void cmd_tcp_server(void)
-{
-    esp_err_t ret = ESP_OK;
-    int err = 0;
-    esp_netif_ip_info_t ip;
-    struct sockaddr_in listen_addr4 = { 0 };
-    struct sockaddr_storage listen_addr = { 0 };
-    struct sockaddr_in remote_addr;
-    //struct timeval timeout = { 0 };
-    socklen_t addr_len = sizeof(struct sockaddr);
-    int opt = 1;
-    int listenS;
-
-    INFO("listener loop started\n");
-
-    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
-        INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
-        INFO("MASK:" IPSTR "\n", IP2STR(&ip.netmask));
-        INFO("GW:" IPSTR "\n", IP2STR(&ip.gw));
-
-        listen_addr4.sin_addr.s_addr = ip.ip.addr;
-
-    } else {
-        ERROR("esp_netif_get_ip_info failed\n");
-        return;
-    }
-
-    listen_addr4.sin_family = AF_INET;
-    listen_addr4.sin_port = htons(TCP_CMD_PORT);
-
-    listenS = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    ESP_GOTO_ON_FALSE((listenS >= 0), ESP_FAIL, exit, TAG, "Unable to create socket: errno %d\n", errno);
-
-    setsockopt(listenS, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    INFO("listen socket created\n");
-
-    err = bind(listenS, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
-    ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Socket unable to bind: errno %d, IPPROTO: %d\n", errno, AF_INET);
-
-    err = listen(listenS, 5);
-    ESP_GOTO_ON_FALSE((err == 0), ESP_FAIL, exit, TAG, "Error occurred during listen: errno %d\n", errno);
-    memcpy(&listen_addr, &listen_addr4, sizeof(listen_addr4));
-
-    INFO("listen on addr %d.%d.%d.%d\n",
-             listen_addr4.sin_addr.s_addr & 0xFF,
-             (listen_addr4.sin_addr.s_addr >> 8) & 0xFF,
-             (listen_addr4.sin_addr.s_addr >> 16) & 0xFF,
-             (listen_addr4.sin_addr.s_addr >> 24) & 0xFF);
-
-    g_server.tcpSocket = accept(listenS, (struct sockaddr *)&remote_addr, &addr_len);
-    ESP_GOTO_ON_FALSE((g_server.tcpSocket >= 0), ESP_FAIL, exit, TAG, "Unable to accept connection: errno %d\n", errno);
-    INFO("accept %s,%d\n\n", inet_ntoa(remote_addr.sin_addr), htons(remote_addr.sin_port));
-
-    uint8_t *buffer;
-    int want_recv = 0;
-    int actual_recv = 0;
-    socklen_t socklen = sizeof(struct sockaddr_in);
-
-    buffer = g_wifi.recvBuf;
-    want_recv = sizeof(g_wifi.recvBuf);
-    while (true) {
-        int i;
-
-        CMD_CONTEXT	cmdContext = {
-            .p_cbSend	= _sockSend,
-            .pArg       = &g_server.tcpSocket,
-        };
-
-        actual_recv = recvfrom(g_server.tcpSocket, buffer, want_recv, 0, (struct sockaddr *)&listen_addr, &socklen);
-        if (actual_recv < 0) {
-            WARN("tcp recvfrom error, error code: %d\n", actual_recv);
-            break;
-        } else {
-            TRACE_BUF("tcp recv",	PRINT_BUF_STYLE_HEX_SIZE_NL, buffer, actual_recv);
-            for (i = 0; i < actual_recv; i++) {
-                CMD_parseByte(&cmdContext, buffer[i]);
-            }
-        }
-    }
-
-exit:
-    if (g_server.tcpSocket != -1) {
-        INFO("client socket closed.\n");
-        _socket_close(&g_server.tcpSocket);
-    }
-
-    if (listenS != -1) {
-        _socket_close(&listenS);
-        INFO("listener socket closed.\n");
-    }
-
-    if (ESP_OK != ret) {
-        WARN("listener exit with ret=0x%x\n", ret);
-    }
-}
-
-static void _udp_server(void)
-{
-    esp_netif_ip_info_t ip;
-    struct sockaddr_in listen_addr4 = { 0 };
-    //struct sockaddr_storage listen_addr = { 0 };
-    int actual_recv = 0;
-    uint8_t buf[64];
-    socklen_t socklen = sizeof(struct sockaddr_in);
-
-    INFO("_udp_server()\n");
-
-    listen_addr4.sin_family = AF_INET;
-    listen_addr4.sin_port = htons(UDP_SERVER_PORT);
-
-    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
-        INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
-        INFO("MASK:" IPSTR "\n", IP2STR(&ip.netmask));
-        INFO("GW:" IPSTR "\n", IP2STR(&ip.gw));
-
-        listen_addr4.sin_addr.s_addr = ip.ip.addr;
-
-    } else {
-        ERROR("esp_netif_get_ip_info failed\n");
-        return;
-    }
-
-    g_server.udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    bind(g_server.udpSocket, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
-
-    while (true) {
-        CMD_CONTEXT	cmdContext = {
-            .p_cbSend	= _sockSend,
-            .pArg		= &g_server.udpSocket,
-        };
-
-        //actual_recv = recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr *)&listen_addr, &socklen);
-        actual_recv = recvfrom(g_server.udpSocket, buf, sizeof(buf), 0, (struct sockaddr *)&g_server.udp_addr, &socklen);
-
-        if (actual_recv < 0) {
-            WARN("udp recvfrom error, error code: %d\n", actual_recv);
-            break;
-        } else {
-            TRACE("udp from: %08x\n", g_server.udp_addr.sin_addr);
-            
-            TRACE_BUF("udp recv", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, actual_recv);
-
-            if (actual_recv >= 1) {
-                uint8_t cmd = buf[0];
-                CMD_processMessage(&cmdContext, cmd, buf+1, actual_recv-1);
-            }
-        }
-    }
-
-//exit:
-    if (g_server.udpSocket!= -1) {
-        INFO("client socket closed.\n");
-        close(g_server.udpSocket);
-    }
-    INFO("_udp_server exited\n");
+    xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_TCP);
+    xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_UDP);
+    xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 }
 
 static void _udp_time_server(void)
@@ -534,22 +266,7 @@ static void _udp_time_server(void)
     int s;
 
     INFO("_udp_time_server\n");
-#if 0
-    listen_addr4.sin_family = AF_INET;
-    listen_addr4.sin_port = htons(UDP_TIME_SERVER_PORT);
 
-    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
-        INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
-        INFO("MASK:" IPSTR "\n", IP2STR(&ip.netmask));
-        INFO("GW:" IPSTR "\n", IP2STR(&ip.gw));
-
-        listen_addr4.sin_addr.s_addr = ip.ip.addr;
-
-    } else {
-        ERROR("esp_netif_get_ip_info failed\n");
-        return;
-    }
-#endif
     s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     bind(s, (struct sockaddr *)&listen_addr4, sizeof(listen_addr4));
 
@@ -611,7 +328,7 @@ static void task_tcp_server(void *arg)
     while(true) {
         if (!ip.addr) {
             TRACE("waiting for FLAG_GOT_IP\n");
-            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_TCP, 1, 1, 1000);
+            int bits = xEventGroupWaitBits(g_server.event_group, FLAG_GOT_IP_TCP, 1, 1, 1000);
 
             if (bits & FLAG_GOT_IP_TCP) {
                 INFO("got FLAG_GOT_IP\n");
@@ -637,34 +354,6 @@ static void task_tcp_server(void *arg)
     }
 }
 
-static void task_udp_server(void *arg)
-{
-    esp_ip4_addr_t  ip  = {0};
-
-    INFO("UDP server started\n");
-
-    while(true) {
-        if (!ip.addr) {
-            TRACE("UDP waiting for FLAG_GOT_IP\n");
-            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_UDP, 1, 1, 1000);
-
-            if (bits & FLAG_GOT_IP_UDP) {
-                ip = wifi_getSelfIp();
-                INFO("UDP got ip=%08x\n", ip.addr);
-            }
-        }
-    
-        if (!ip.addr) {
-            continue;
-        }
-
-        _udp_server();
-        ip = wifi_getSelfIp();
-    }
-
-    vTaskDelete(NULL);
-}
-
 static void task_udp_time_server(void *arg)
 {
     esp_ip4_addr_t  ip  = {0};
@@ -674,7 +363,7 @@ static void task_udp_time_server(void *arg)
     while(true) {
         if (!ip.addr) {
             TRACE("UDP waiting for FLAG_GOT_IP\n");
-            int bits = xEventGroupWaitBits(wifi_event_group, FLAG_GOT_IP_UDP_TIME_SYNC, 1, 1, 1000);
+            int bits = xEventGroupWaitBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC, 1, 1, 1000);
 
             if (bits & FLAG_GOT_IP_UDP_TIME_SYNC) {
                 ip = wifi_getSelfIp();
@@ -705,12 +394,6 @@ static int _startServer(void)
         return ESP_FAIL;
     }
 
-    ret = xTaskCreate(task_udp_server, "udp_server", 8192, NULL, 4, NULL);
-    if (ret != pdPASS) {
-        ERROR("create task %s failed\n", task_udp_server);
-        return ESP_FAIL;
-    }
-
     ret = xTaskCreate(task_udp_time_server, "udp_time", 8192, NULL, 3, NULL);
     if (ret != pdPASS) {
         ERROR("create task %s failed\n", task_udp_time_server);
@@ -720,38 +403,40 @@ static int _startServer(void)
     return ESP_OK;
 }
 
-bool    SER_sendUdp(void* i_pBuf, uint16_t len)
+
+static bool _sta_join(const char *ssid, const char *pass)
 {
-    int sent;
+    strcpy(g_server.wifi.currentSsid, ssid);
+    strcpy(g_server.wifi.currentPasswd, pass);
 
-    //TRACE_BUF("UDP tx", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, len);
-    sent = sendto(g_server.udpSocket, i_pBuf, len, 0, (struct sockaddr*)&g_server.udp_addr, sizeof(g_server.udp_addr));
+    int bits = xEventGroupWaitBits(g_server.event_group, FLAG_CONNECTED, 0, 1, 0);
 
-    if (len != sent) {
-        TRACE("send %d\n", sent);
+    wifi_config_t wifi_config = { 0 };
+
+    strlcpy((char *) wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
+    if (pass) {
+        strlcpy((char *) wifi_config.sta.password, pass, sizeof(wifi_config.sta.password));
     }
+
+    if (bits & FLAG_CONNECTED) {
+        g_server.reconnect = false;
+        xEventGroupClearBits(g_server.event_group, FLAG_CONNECTED);
+        ESP_ERROR_CHECK( esp_wifi_disconnect() );
+        xEventGroupWaitBits(g_server.event_group, FLAG_DISCONNECT, 0, 1, portTICK_PERIOD_MS);
+    }
+
+    g_server.reconnect = true;
+    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
+    ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
+    esp_wifi_connect();
+
+    xEventGroupWaitBits(g_server.event_group, FLAG_DISCONNECT, 0, 1, 5000 / portTICK_PERIOD_MS);
 
     return true;
 }
 
-
-bool    SER_sendTcp(void* i_pBuf, uint16_t len)
+static void _init(void)
 {
-    int sent;
-
-    TRACE_BUF("TCP tx", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, len);
-    sent = send(g_server.tcpSocket, i_pBuf, len, 0);
-
-    if (len != sent) {
-        ERROR("send s:%d len:%d sent:%d\n", g_server.tcpSocket, len, sent);
-    }
-
-    return true;
-}
-
-void initialise_wifi(void)
-{
-    esp_log_level_set("wifi\n", ESP_LOG_WARN);
     static bool initialized = false;
 
     if (initialized) {
@@ -759,12 +444,12 @@ void initialise_wifi(void)
     }
 
     ESP_ERROR_CHECK(esp_netif_init());
-    wifi_event_group = xEventGroupCreate();
+    g_server.event_group = xEventGroupCreate();
     ESP_ERROR_CHECK( esp_event_loop_create_default() );
-    netif_ap = esp_netif_create_default_wifi_ap();
-    assert(netif_ap);
-    netif_sta = esp_netif_create_default_wifi_sta();
-    assert(netif_sta);
+    g_server.netif_ap = esp_netif_create_default_wifi_ap();
+    assert(g_server.netif_ap);
+    g_server.netif_sta = esp_netif_create_default_wifi_sta();
+    assert(g_server.netif_sta);
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
@@ -786,15 +471,6 @@ void initialise_wifi(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL) );
     ESP_ERROR_CHECK(esp_wifi_start() );
 
-#if CONFIG_EXTERNAL_COEX_ENABLE
-    esp_external_coex_gpio_set_t gpio_pin;
-    gpio_pin.in_pin0  = 1;
-    gpio_pin.in_pin1  = 2;
-    gpio_pin.out_pin0 = 3;
-
-    ESP_ERROR_CHECK( esp_enable_extern_coex_gpio_pin(EXTERN_COEX_WIRE_3, gpio_pin) );
-#endif
-
     _startServer();
 
     {
@@ -802,49 +478,19 @@ void initialise_wifi(void)
         char    ssid[32];
         char    passwd[32];
 
-        ret = wifi_nvs_get_ssid(ssid, passwd);
+        ret = _nvs_get_ssid(ssid, passwd);
         if (ret) {
             INFO("ssid  : %s\n\n", ssid);
             INFO("passwd: %s\n\n", passwd);
-            wifi_cmd_sta_join(ssid, passwd);
+            _sta_join(ssid, passwd);
         }
     }
 
     initialized = true;
 }
 
-bool wifi_cmd_sta_join(const char *ssid, const char *pass)
-{
-    strcpy(g_wifi.currentSsid, ssid);
-    strcpy(g_wifi.currentPasswd, pass);
 
-    int bits = xEventGroupWaitBits(wifi_event_group, FLAG_CONNECTED, 0, 1, 0);
-
-    wifi_config_t wifi_config = { 0 };
-
-    strlcpy((char *) wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
-    if (pass) {
-        strlcpy((char *) wifi_config.sta.password, pass, sizeof(wifi_config.sta.password));
-    }
-
-    if (bits & FLAG_CONNECTED) {
-        reconnect = false;
-        xEventGroupClearBits(wifi_event_group, FLAG_CONNECTED);
-        ESP_ERROR_CHECK( esp_wifi_disconnect() );
-        xEventGroupWaitBits(wifi_event_group, FLAG_DISCONNECT, 0, 1, portTICK_PERIOD_MS);
-    }
-
-    reconnect = true;
-    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
-    ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
-    esp_wifi_connect();
-
-    xEventGroupWaitBits(wifi_event_group, FLAG_DISCONNECT, 0, 1, 5000 / portTICK_PERIOD_MS);
-
-    return true;
-}
-
-static bool wifi_cmd_sta_scan(const char *ssid)
+static bool _sta_scan(const char *ssid)
 {
     wifi_scan_config_t scan_config = { 0 };
     scan_config.ssid = (uint8_t *) ssid;
@@ -861,7 +507,7 @@ esp_ip4_addr_t  wifi_getSelfIp(void)
 
     memset(&ip, 0, sizeof(esp_netif_ip_info_t));
 
-    esp_netif_get_ip_info(netif_sta, &ip);
+    esp_netif_get_ip_info(g_server.netif_sta, &ip);
 
     return ip.ip;
 }
@@ -872,15 +518,14 @@ static bool dbgConnect(uint8_t argc, char** argv)
         return false;
     }
 
-    wifi_cmd_sta_join(argv[1], argv[2]);
+    _sta_join(argv[1], argv[2]);
 
     return true;
 }
 
 static bool dbgScan(uint8_t argc, char **argv)
 {
-    //wifi_cmd_sta_scan(scan_args.ssid->sval[0]);
-    wifi_cmd_sta_scan(NULL);
+    _sta_scan(NULL);
     return true;
 }
 
@@ -909,7 +554,7 @@ static bool dbgStatus(uint8_t argc, char **argv)
         esp_wifi_get_config(WIFI_IF_AP, &cfg);
         INFO("AP mode, %s %s\n", cfg.ap.ssid, cfg.ap.password);
     } else if (WIFI_MODE_STA == mode) {
-        int bits = xEventGroupWaitBits(wifi_event_group, FLAG_CONNECTED, 0, 1, 0);
+        int bits = xEventGroupWaitBits(g_server.event_group, FLAG_CONNECTED, 0, 1, 0);
         if (bits & FLAG_CONNECTED) {
             esp_wifi_get_config(WIFI_IF_STA, &cfg);
             INFO("sta mode, connected %s\n", cfg.ap.ssid);
@@ -923,7 +568,7 @@ static bool dbgStatus(uint8_t argc, char **argv)
 
     memset(&ip, 0, sizeof(esp_netif_ip_info_t));
 
-    if (esp_netif_get_ip_info(netif_sta, &ip) == 0) {
+    if (esp_netif_get_ip_info(g_server.netif_sta, &ip) == 0) {
         INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
         INFO("MASK:" IPSTR "\n", IP2STR(&ip.netmask));
         INFO("GW:" IPSTR "\n", IP2STR(&ip.gw));
@@ -938,11 +583,11 @@ static bool dbgNvs(uint8_t argc, char **argv)
     if (argc == 2) {
         if (!strcmp(argv[1], "close")) {
             printf("close\n");
-            nvs_close(g_wifi.nvsHandle);
-            g_wifi.nvsHandle = (nvs_handle_t)NULL;
+            nvs_close(g_server.wifi.nvsHandle);
+            g_server.wifi.nvsHandle = (nvs_handle_t)NULL;
         } else if (!strcmp(argv[1], "commit")) {
             printf("commit\n");
-            err = nvs_commit(g_wifi.nvsHandle);
+            err = nvs_commit(g_server.wifi.nvsHandle);
         } else if (!strcmp(argv[1], "stats")) {
             nvs_stats_t nvs_stats;
 
@@ -985,7 +630,7 @@ static bool dbgNvs(uint8_t argc, char **argv)
             bool ret;
             char ssid[WIFI_MAX_SSID_LENGTH] = "";
             char passwd[WIFI_MAX_PASSWD_LENGTH] = "";
-            ret = wifi_nvs_get_ssid(ssid, passwd);
+            ret = _nvs_get_ssid(ssid, passwd);
             if (ret) {
                 printf("%s:%s\n\n", ssid, passwd);
             }
@@ -993,13 +638,13 @@ static bool dbgNvs(uint8_t argc, char **argv)
     } else if (argc == 3) {
         if (!strcmp(argv[1], "open\n")) {
             printf("open %s\n", argv[2]);
-            err = nvs_open(argv[2], NVS_READWRITE, &g_wifi.nvsHandle);
+            err = nvs_open(argv[2], NVS_READWRITE, &g_server.wifi.nvsHandle);
         } else if (!strcmp(argv[1], "get\n")) {
             char    str[256];
              size_t length;
 
             printf("get %s\n", argv[2]);
-            err =  nvs_get_str(g_wifi.nvsHandle, argv[2], str, &length);
+            err =  nvs_get_str(g_server.wifi.nvsHandle, argv[2], str, &length);
             if (err == ESP_OK) {
                 str[length] = '\0';
                 printf("str=<%s>\n", str);
@@ -1008,9 +653,9 @@ static bool dbgNvs(uint8_t argc, char **argv)
     } else if (argc == 4) {
         if (!strcmp(argv[1], "set")) {
             printf("set %s <- %s\n", argv[2], argv[3]);
-            err = nvs_set_str(g_wifi.nvsHandle, argv[2], argv[3]);
+            err = nvs_set_str(g_server.wifi.nvsHandle, argv[2], argv[3]);
         } else if (!strcmp(argv[1], "ssid")) {
-            wifi_nvs_set_ssid(argv[2], argv[3]);
+            _nvs_set_ssid(argv[2], argv[3]);
         }
     }
 
@@ -1088,7 +733,9 @@ DEBUG_MENU_START(g_menu)
 DEBUG_MENU_END
 // *INDENT-ON*
 
-void register_wifi(void)
+void WIFI_init(void)
 {
 	DBG_TREE_add("/", g_menu);
+
+    _init();
 }

@@ -62,7 +62,9 @@
 #define GPIO_PWM_30 35
 #define GPIO_PWM_31 34
 
-
+#define NVS_NAMESPACE_WIFI      "wifi"
+#define NVS_KEY_WIFI_SSID       "ssid"
+#define NVS_KEY_WIFI_PASSWD     "passwd"
 
 #define MENU_LOC      
 #define DBG_MENU_STORAGE    

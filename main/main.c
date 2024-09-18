@@ -17,17 +17,13 @@
 
 #include <errno.h>
 #include <string.h>
-#include "esp_wifi.h"
 #include "esp_log.h"
-#include "esp_err.h"
-#include "esp_console.h"
 #include "nvs_flash.h"
 
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "sdkconfig.h"
 #include "cmd_ble.h"
-#include "wifi.h"
 #include "main.h"
 #include "cli.h"
 #include "cmd.h"
@@ -35,7 +31,6 @@
 #include "pump.h"
 #include "app.h"
 #include "adc.h"
-#include "uart.h"
 
 #define BUF_SIZE    1024
 
@@ -76,18 +71,16 @@ void app_main(void)
     uart_init();
     CLI_init();
 
-    initialise_wifi();
     initialise_ble();
 
-    UART_init();
     CMD_init(NULL);
     PMP_init();
     ADC_init();
     APP_init();
     
-    register_wifi();
+    WIFI_init();
 
-   esp_log_level_set("*", ESP_LOG_ERROR);
+    esp_log_level_set("*", ESP_LOG_ERROR);
 
     PRINT("\n");
     PRINT(" ==================================================\n");

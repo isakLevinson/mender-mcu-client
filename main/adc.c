@@ -150,7 +150,7 @@ static void _init(void)
 
     adc_oneshot_chan_cfg_t config = {
         .bitwidth = ADC_BITWIDTH_DEFAULT,
-        .atten = ADC_ATTEN_DB_11,
+        .atten = ADC_ATTEN_DB_12,
     };
 
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, GPIO_ADC1_CHAN0, &config));
@@ -158,7 +158,7 @@ static void _init(void)
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, GPIO_ADC1_CHAN2, &config));
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, GPIO_ADC1_CHAN3, &config));
 
-    do_calibration1 = example_adc_calibration_init(ADC_UNIT_1, ADC_ATTEN_DB_11, &adc1_cali_handle);
+    do_calibration1 = example_adc_calibration_init(ADC_UNIT_1, ADC_ATTEN_DB_12, &adc1_cali_handle);
 }
 
 static bool dbgStatus(uint8_t argc, char** argv)
