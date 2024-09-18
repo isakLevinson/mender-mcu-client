@@ -14,6 +14,10 @@
 #include "wss_keepalive.h"
 #include "sdkconfig.h"
 
+struct async_resp_arg {
+    httpd_handle_t hd;
+    int fd;
+};
 
 httpd_handle_t wss_start_server(void);
 bool wss_send(struct async_resp_arg *i_pAsync, void* pBuf, size_t len);
