@@ -71,7 +71,6 @@ void app_main(void)
     uart_init();
     CLI_init();
 
-    initialise_wifi();
     initialise_ble();
 
     CMD_init(NULL);
@@ -79,7 +78,7 @@ void app_main(void)
     ADC_init();
     APP_init();
     
-    register_wifi();
+    WIFI_init();
 
     esp_log_level_set("*", ESP_LOG_ERROR);
 

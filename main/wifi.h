@@ -10,13 +10,8 @@ extern "C" {
 
 
 // Register WiFi functions
-void register_wifi(void);
-void initialise_wifi(void);
-bool wifi_cmd_sta_join(const char *ssid, const char *pass);
+void WIFI_init(void);
 esp_ip4_addr_t  wifi_getSelfIp(void);
-
-bool    SER_sendUdp(void* i_pBuf, uint16_t len);
-bool    SER_sendTcp(void* i_pBuf, uint16_t len);
 
 #ifdef __cplusplus
 }

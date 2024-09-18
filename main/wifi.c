@@ -403,36 +403,39 @@ static int _startServer(void)
     return ESP_OK;
 }
 
-bool    SER_sendUdp(void* i_pBuf, uint16_t len)
+
+static bool _sta_join(const char *ssid, const char *pass)
 {
-    int sent;
+    strcpy(g_server.wifi.currentSsid, ssid);
+    strcpy(g_server.wifi.currentPasswd, pass);
 
-    //TRACE_BUF("UDP tx", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, len);
-    sent = sendto(g_server.udpSocket, i_pBuf, len, 0, (struct sockaddr*)&g_server.udp_addr, sizeof(g_server.udp_addr));
+    int bits = xEventGroupWaitBits(g_server.event_group, FLAG_CONNECTED, 0, 1, 0);
 
-    if (len != sent) {
-        TRACE("send %d\n", sent);
+    wifi_config_t wifi_config = { 0 };
+
+    strlcpy((char *) wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
+    if (pass) {
+        strlcpy((char *) wifi_config.sta.password, pass, sizeof(wifi_config.sta.password));
     }
+
+    if (bits & FLAG_CONNECTED) {
+        g_server.reconnect = false;
+        xEventGroupClearBits(g_server.event_group, FLAG_CONNECTED);
+        ESP_ERROR_CHECK( esp_wifi_disconnect() );
+        xEventGroupWaitBits(g_server.event_group, FLAG_DISCONNECT, 0, 1, portTICK_PERIOD_MS);
+    }
+
+    g_server.reconnect = true;
+    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
+    ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
+    esp_wifi_connect();
+
+    xEventGroupWaitBits(g_server.event_group, FLAG_DISCONNECT, 0, 1, 5000 / portTICK_PERIOD_MS);
 
     return true;
 }
 
-
-bool    SER_sendTcp(void* i_pBuf, uint16_t len)
-{
-    int sent;
-
-    TRACE_BUF("TCP tx", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, len);
-    sent = send(g_server.tcpSocket, i_pBuf, len, 0);
-
-    if (len != sent) {
-        ERROR("send s:%d len:%d sent:%d\n", g_server.tcpSocket, len, sent);
-    }
-
-    return true;
-}
-
-void initialise_wifi(void)
+static void _init(void)
 {
     static bool initialized = false;
 
@@ -468,15 +471,6 @@ void initialise_wifi(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL) );
     ESP_ERROR_CHECK(esp_wifi_start() );
 
-#if CONFIG_EXTERNAL_COEX_ENABLE
-    esp_external_coex_gpio_set_t gpio_pin;
-    gpio_pin.in_pin0  = 1;
-    gpio_pin.in_pin1  = 2;
-    gpio_pin.out_pin0 = 3;
-
-    ESP_ERROR_CHECK( esp_enable_extern_coex_gpio_pin(EXTERN_COEX_WIRE_3, gpio_pin) );
-#endif
-
     _startServer();
 
     {
@@ -488,45 +482,15 @@ void initialise_wifi(void)
         if (ret) {
             INFO("ssid  : %s\n\n", ssid);
             INFO("passwd: %s\n\n", passwd);
-            wifi_cmd_sta_join(ssid, passwd);
+            _sta_join(ssid, passwd);
         }
     }
 
     initialized = true;
 }
 
-bool wifi_cmd_sta_join(const char *ssid, const char *pass)
-{
-    strcpy(g_server.wifi.currentSsid, ssid);
-    strcpy(g_server.wifi.currentPasswd, pass);
 
-    int bits = xEventGroupWaitBits(g_server.event_group, FLAG_CONNECTED, 0, 1, 0);
-
-    wifi_config_t wifi_config = { 0 };
-
-    strlcpy((char *) wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
-    if (pass) {
-        strlcpy((char *) wifi_config.sta.password, pass, sizeof(wifi_config.sta.password));
-    }
-
-    if (bits & FLAG_CONNECTED) {
-        g_server.reconnect = false;
-        xEventGroupClearBits(g_server.event_group, FLAG_CONNECTED);
-        ESP_ERROR_CHECK( esp_wifi_disconnect() );
-        xEventGroupWaitBits(g_server.event_group, FLAG_DISCONNECT, 0, 1, portTICK_PERIOD_MS);
-    }
-
-    g_server.reconnect = true;
-    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
-    ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
-    esp_wifi_connect();
-
-    xEventGroupWaitBits(g_server.event_group, FLAG_DISCONNECT, 0, 1, 5000 / portTICK_PERIOD_MS);
-
-    return true;
-}
-
-static bool wifi_cmd_sta_scan(const char *ssid)
+static bool _sta_scan(const char *ssid)
 {
     wifi_scan_config_t scan_config = { 0 };
     scan_config.ssid = (uint8_t *) ssid;
@@ -554,15 +518,14 @@ static bool dbgConnect(uint8_t argc, char** argv)
         return false;
     }
 
-    wifi_cmd_sta_join(argv[1], argv[2]);
+    _sta_join(argv[1], argv[2]);
 
     return true;
 }
 
 static bool dbgScan(uint8_t argc, char **argv)
 {
-    //wifi_cmd_sta_scan(scan_args.ssid->sval[0]);
-    wifi_cmd_sta_scan(NULL);
+    _sta_scan(NULL);
     return true;
 }
 
@@ -770,7 +733,9 @@ DEBUG_MENU_START(g_menu)
 DEBUG_MENU_END
 // *INDENT-ON*
 
-void register_wifi(void)
+void WIFI_init(void)
 {
 	DBG_TREE_add("/", g_menu);
+
+    _init();
 }

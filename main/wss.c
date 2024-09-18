@@ -406,38 +406,3 @@ httpd_handle_t wss_start_server(void)
 
     return server;
 }
-
-#if 0
-static esp_err_t stop_wss_echo_server(httpd_handle_t server)
-{
-    // Stop the keep-alive engine
-    wss_keep_alive_stop(httpd_get_global_user_ctx(server));
-
-    // Stop the HTTP server with SSL
-    return httpd_ssl_stop(server);
-}
-
-static void disconnect_handler(void* arg, esp_event_base_t event_base,
-                               int32_t event_id, void* event_data)
-{
-    httpd_handle_t* server = (httpd_handle_t*) arg;
-    if (*server) {
-        // Stop the server if it is running
-        if (stop_wss_echo_server(*server) == ESP_OK) {
-            *server = NULL;
-        } else {
-            ERROR("Failed to stop https server");
-        }
-    }
-}
-
-static void connect_handler(void* arg, esp_event_base_t event_base,
-                            int32_t event_id, void* event_data)
-{
-    httpd_handle_t* server = (httpd_handle_t*) arg;
-    if (*server == NULL) {
-        // Start the server if it is not running
-        *server = start_wss_echo_server();
-    }
-}
-#endif
