@@ -1,8 +1,6 @@
 idf_component_register(SRCS	"main.c"
        				"app.c"
 				"cmd.c"
-				"cmd_ble.c"
-				"gatt_svr.c"
 				"wifi.c"
 				"time.c"
 				"pump.c"

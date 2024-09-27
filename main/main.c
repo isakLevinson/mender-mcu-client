@@ -23,7 +23,6 @@
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "sdkconfig.h"
-#include "cmd_ble.h"
 #include "main.h"
 #include "cli.h"
 #include "cmd.h"
@@ -71,7 +70,7 @@ void app_main(void)
     uart_init();
     CLI_init();
 
-    initialise_ble();
+//    initialise_ble();
 
     CMD_init(NULL);
     PMP_init();
