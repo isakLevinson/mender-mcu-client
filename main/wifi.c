@@ -446,6 +446,22 @@ static void _init(void)
 
    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
  
+    wifi_config_t wifi_sta_config = {
+        .sta = {
+            .ssid = "Levinson",
+            .password = "camelot5",
+            .scan_method = WIFI_ALL_CHANNEL_SCAN,
+            .failure_retry_cnt = 5,
+            /* Authmode threshold resets to WPA2 as default if password matches WPA2 standards (password len => 8).
+             * If you want to connect the device to deprecated WEP/WPA networks, Please set the threshold value
+             * to WIFI_AUTH_WEP/WIFI_AUTH_WPA_PSK and set the password with length and format matching to
+            * WIFI_AUTH_WEP/WIFI_AUTH_WPA_PSK standards.
+             */
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,//ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD,
+            .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
+        },
+    };
+
     wifi_config_t wifi_ap_config = {
         .ap = {
             .ssid = "ESP",
@@ -497,20 +513,21 @@ static void _init(void)
     g_server.netif_sta = esp_netif_create_default_wifi_sta();
     assert(g_server.netif_sta);
 
-    err = esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config);
-    if (ESP_OK != err) {
-        ERROR("esp_wifi_set_config %d 0x%x\n", err, err);
-        return;
-    } else {
-        INFO("esp_wifi_set_config OK\n");
-        INFO("esp_wifi_set_config OK\n");
-        INFO("esp_wifi_set_config OK\n");
-        INFO("esp_wifi_set_config OK\n");
-    }
-
     //if (strlen(EXAMPLE_ESP_WIFI_AP_PASSWD) == 0) {
     //    wifi_ap_config.ap.authmode = WIFI_AUTH_OPEN;
     //}
+
+    err = esp_wifi_set_config(WIFI_IF_STA, &wifi_sta_config);
+    if (ESP_OK != err) {
+        ERROR("esp_wifi_set_config WIFI_IF_STA %d 0x%x\n", err, err);
+        return;
+    }
+
+    err = esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config);
+    if (ESP_OK != err) {
+        ERROR("esp_wifi_set_config WIFI_IF_AP %d 0x%x\n", err, err);
+        return;
+    }
 
     ESP_ERROR_CHECK(esp_wifi_start() );
     
