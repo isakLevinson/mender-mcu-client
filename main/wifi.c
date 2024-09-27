@@ -436,22 +436,22 @@ static bool _sta_join(const char *ssid, const char *pass)
 }
 
 /* Initialize soft AP */
-char ap_ssid[] = "esp";
-char ap_passwd[] = "12345678";
-#define AP_PASSWD   "12345678"
-esp_netif_t *wifi_init_softap(void)
-{
-    esp_err_t err;
-    
-    INFO("starting AP\n");
-    esp_netif_t *esp_netif_ap = esp_netif_create_default_wifi_ap();
+const char ap_ssid[] = "esp";
+const char ap_passwd[] = "12345678";
 
+static void _init(void)
+{
+   static bool initialized = false;
+   esp_err_t err;
+
+   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+ 
     wifi_config_t wifi_ap_config = {
         .ap = {
-            .ssid = "",//(uint8_t*)ap_ssid,
-            .ssid_len = strlen(ap_ssid),
-            .channel = 1,
-            .password = AP_PASSWD,//(uint8_t*)ap_passwd,
+            .ssid = "ESP",
+            .ssid_len = 3,
+            .password = "12345678",
+            .channel = 5,
             .max_connection = 1,
             .authmode = WIFI_AUTH_WPA2_PSK,
             .pmf_cfg = {
@@ -460,38 +460,18 @@ esp_netif_t *wifi_init_softap(void)
         },
     };
 
-    //if (strlen(EXAMPLE_ESP_WIFI_AP_PASSWD) == 0) {
-    //    wifi_ap_config.ap.authmode = WIFI_AUTH_OPEN;
-    //}
-    INFO("calling esp_wifi_set_config\n");
-    err = esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config);
-    if (ESP_OK != err) {
-        ERROR("esp_wifi_set_config %d\n", err);
-        return NULL;
-    }
-
-    INFO("wifi_init_softap finished\n");
-
-    return esp_netif_ap;
-}
-
-static void _init(void)
-{
-    static bool initialized = false;
-
     if (initialized) {
         return;
     }
 
+    //strcpy((char*)wifi_ap_config.ap.ssid, ap_ssid);
+    //wifi_ap_config.ap.ssid_len = strlen(ap_ssid);
+    //strcpy((char*)wifi_ap_config.ap.password, ap_passwd);
+
     ESP_ERROR_CHECK(esp_netif_init());
     g_server.event_group = xEventGroupCreate();
     ESP_ERROR_CHECK( esp_event_loop_create_default() );
-    g_server.netif_ap = esp_netif_create_default_wifi_ap();
-    assert(g_server.netif_ap);
-    g_server.netif_sta = esp_netif_create_default_wifi_sta();
-    assert(g_server.netif_sta);
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
                     WIFI_EVENT_SCAN_DONE,
                     &scan_done_handler,
@@ -507,11 +487,34 @@ static void _init(void)
                     &got_ip_handler,
                     NULL,
                     NULL));
-    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM) );
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA) );
-    ESP_ERROR_CHECK(esp_wifi_start() );
 
-    wifi_init_softap();
+    //ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM) );
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA) );
+
+    g_server.netif_ap  = esp_netif_create_default_wifi_ap();
+    assert(g_server.netif_ap);
+    g_server.netif_sta = esp_netif_create_default_wifi_sta();
+    assert(g_server.netif_sta);
+
+    err = esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config);
+    if (ESP_OK != err) {
+        ERROR("esp_wifi_set_config %d 0x%x\n", err, err);
+        return;
+    } else {
+        INFO("esp_wifi_set_config OK\n");
+        INFO("esp_wifi_set_config OK\n");
+        INFO("esp_wifi_set_config OK\n");
+        INFO("esp_wifi_set_config OK\n");
+    }
+
+    //if (strlen(EXAMPLE_ESP_WIFI_AP_PASSWD) == 0) {
+    //    wifi_ap_config.ap.authmode = WIFI_AUTH_OPEN;
+    //}
+
+    ESP_ERROR_CHECK(esp_wifi_start() );
+    
+    esp_netif_set_default_netif(g_server.netif_sta);
 
 #if 0
   /* Enable napt on the AP netif */
@@ -529,8 +532,8 @@ static void _init(void)
 
         ret = _nvs_get_ssid(ssid, passwd);
         if (ret) {
-            INFO("ssid  : %s\n\n", ssid);
-            INFO("passwd: %s\n\n", passwd);
+            INFO("ssid  : %s\n", ssid);
+            INFO("passwd: %s\n", passwd);
             _sta_join(ssid, passwd);
         }
     }
