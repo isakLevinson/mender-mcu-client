@@ -426,7 +426,6 @@ static bool _sta_join(const char *ssid, const char *pass)
     }
 
     g_server.reconnect = true;
-    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
     ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     esp_wifi_connect();
 
@@ -434,10 +433,6 @@ static bool _sta_join(const char *ssid, const char *pass)
 
     return true;
 }
-
-/* Initialize soft AP */
-const char ap_ssid[] = "esp";
-const char ap_passwd[] = "12345678";
 
 static void _init(void)
 {
@@ -464,7 +459,7 @@ static void _init(void)
 
     wifi_config_t wifi_ap_config = {
         .ap = {
-            .ssid = "ESP",
+            .ssid = "PNU",
             .ssid_len = 3,
             .password = "12345678",
             .channel = 5,
@@ -564,7 +559,6 @@ static bool _sta_scan(const char *ssid)
     wifi_scan_config_t scan_config = { 0 };
     scan_config.ssid = (uint8_t *) ssid;
 
-    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
     esp_wifi_scan_start(&scan_config, false);
 
     return true;
@@ -619,10 +613,16 @@ static bool dbgStatus(uint8_t argc, char **argv)
     esp_netif_ip_info_t ip;
 
     esp_wifi_get_mode(&mode);
-    if (WIFI_MODE_AP == mode) {
+
+    bool    useSTA = ((WIFI_MODE_APSTA == mode) || ((WIFI_MODE_STA == mode)));
+    bool    useAP =  ((WIFI_MODE_APSTA == mode) || ((WIFI_MODE_AP == mode)));
+
+    if (useAP) {
         esp_wifi_get_config(WIFI_IF_AP, &cfg);
         INFO("AP mode, %s %s\n", cfg.ap.ssid, cfg.ap.password);
-    } else if (WIFI_MODE_STA == mode) {
+    }
+
+    if (useSTA) {
         int bits = xEventGroupWaitBits(g_server.event_group, FLAG_CONNECTED, 0, 1, 0);
         if (bits & FLAG_CONNECTED) {
             esp_wifi_get_config(WIFI_IF_STA, &cfg);
@@ -630,9 +630,6 @@ static bool dbgStatus(uint8_t argc, char **argv)
         } else {
             INFO("sta mode, disconnected\n");
         }
-    } else {
-        INFO("NULL mode %d\n", mode);
-        return true;
     }
 
     memset(&ip, 0, sizeof(esp_netif_ip_info_t));
