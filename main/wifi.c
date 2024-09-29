@@ -239,6 +239,25 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
     _mdnsInit();
 }
 
+static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+{
+    char* strEvent = NULL;
+    switch (event_id) {
+        case WIFI_EVENT_AP_STACONNECTED:    strEvent = "WIFI_EVENT_AP_STACONNECTED";   break;
+        case WIFI_EVENT_AP_STADISCONNECTED: strEvent = "WIFI_EVENT_AP_STADISCONNECTED";   break;
+        default:
+    }
+
+    if (strEvent) {
+        INFO("wifi_event_handler 0x%x %s\n", event_base, strEvent);
+    } else {
+        INFO("wifi_event_handler 0x%x %d\n", event_base, event_id);
+    }
+
+//IP_EVENT_AP_STAIPASSIGNED
+
+}
+
 static void disconnect_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     if (g_server.reconnect) {
@@ -499,7 +518,13 @@ static void _init(void)
                     NULL,
                     NULL));
 
-    //ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM) );
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
+                    ESP_EVENT_ANY_ID,
+                    &wifi_event_handler,
+                    NULL,
+                    NULL));                    
+
+
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA) );
 
