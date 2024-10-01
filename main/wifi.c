@@ -239,23 +239,40 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
     _mdnsInit();
 }
 
-static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
-    char* strEvent = NULL;
-    switch (event_id) {
-        case WIFI_EVENT_AP_STACONNECTED:    strEvent = "WIFI_EVENT_AP_STACONNECTED";   break;
-        case WIFI_EVENT_AP_STADISCONNECTED: strEvent = "WIFI_EVENT_AP_STADISCONNECTED";   break;
-        default:
+    char* strEvent  = NULL;
+    char* strBase    = "";
+
+    if (event_base == WIFI_EVENT) {
+        strBase = "WIFI";
+        switch (event_id) {
+            case WIFI_EVENT_AP_STACONNECTED:    strEvent = "WIFI_EVENT_AP_STACONNECTED";   break;
+            case WIFI_EVENT_AP_STADISCONNECTED: strEvent = "WIFI_EVENT_AP_STADISCONNECTED";   break;
+            case WIFI_EVENT_STA_START:          strEvent = "WIFI_EVENT_STA_START";  break;
+            case WIFI_EVENT_AP_START:           strEvent = "WIFI_EVENT_AP_START";  break;
+            case WIFI_EVENT_HOME_CHANNEL_CHANGE:strEvent = "WIFI_EVENT_HOME_CHANNEL_CHANGE";  break;
+            case WIFI_EVENT_STA_CONNECTED:      strEvent = "WIFI_EVENT_STA_CONNECTED";  break;
+
+
+
+            default:
+        }
+    } else if  (event_base == IP_EVENT) {
+        strBase = "IP";
+        switch (event_id) {
+            case IP_EVENT_AP_STAIPASSIGNED:    strEvent = "IP_EVENT_AP_STAIPASSIGNED";   break;
+            default:
+        }
+    } else {
+        strBase = "";
     }
 
     if (strEvent) {
-        INFO("wifi_event_handler 0x%x %s\n", event_base, strEvent);
+        INFO("event_handler %s\n", strEvent);
     } else {
-        INFO("wifi_event_handler 0x%x %d\n", event_base, event_id);
+        INFO("event_handler %s %d\n", strBase, event_id);
     }
-
-//IP_EVENT_AP_STAIPASSIGNED
-
 }
 
 static void disconnect_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
@@ -273,6 +290,58 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base, int32_t e
     xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_UDP);
     xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 }
+
+extern const char root_start[] asm("_binary_root_html_start");
+extern const char root_end[] asm("_binary_root_html_end");
+
+static esp_err_t root_get_handler(httpd_req_t *req)
+{
+    const uint32_t root_len = root_end - root_start;
+
+    INFO("Serve root\n");
+    httpd_resp_set_type(req, "text/html");
+    httpd_resp_send(req, root_start, root_len);
+
+    return ESP_OK;
+}
+
+esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
+{
+    // Set status
+    httpd_resp_set_status(req, "302 Temporary Redirect");
+    // Redirect to the "/" root directory
+    httpd_resp_set_hdr(req, "Location", "/");
+    // iOS requires content in the response to detect a captive portal, simply redirecting is not sufficient.
+    httpd_resp_send(req, "Redirect to the captive portal", HTTPD_RESP_USE_STRLEN);
+
+    INFO("Redirecting to root\n");
+    return ESP_OK;
+}
+
+static const httpd_uri_t root = {
+    .uri = "/",
+    .method = HTTP_GET,
+    .handler = root_get_handler
+};
+
+static httpd_handle_t _start_webserver(void)
+{
+    httpd_handle_t server = NULL;
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.max_open_sockets = 1;
+    config.lru_purge_enable = true;
+
+    // Start the httpd server
+    INFO("Starting server on port: '%d\n", config.server_port);
+    if (httpd_start(&server, &config) == ESP_OK) {
+        // Set URI handlers
+        INFO("Registering URI handlers\n");
+        httpd_register_uri_handler(server, &root);
+        httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
+    }
+    return server;
+}
+
 
 static void _udp_time_server(void)
 {
@@ -520,7 +589,7 @@ static void _init(void)
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
                     ESP_EVENT_ANY_ID,
-                    &wifi_event_handler,
+                    &event_handler,
                     NULL,
                     NULL));                    
 
@@ -560,6 +629,7 @@ static void _init(void)
     }
 #endif
 
+    _start_webserver();
     _startServer();
 
     {

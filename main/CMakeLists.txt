@@ -12,6 +12,7 @@ idf_component_register(SRCS	"main.c"
 
                 EMBED_TXTFILES "certs/servercert.pem"
                                "certs/prvtkey.pem"
-	)
+								"root.html"
+				)
 
 target_compile_options(${COMPONENT_LIB} PUBLIC "-Wno-format"  )
