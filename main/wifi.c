@@ -258,7 +258,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
 
             default:
         }
-    } else if  (event_base == IP_EVENT) {
+    } else if (event_base == IP_EVENT) {
         strBase = "IP";
         switch (event_id) {
             case IP_EVENT_AP_STAIPASSIGNED:    strEvent = "IP_EVENT_AP_STAIPASSIGNED";   break;
@@ -294,13 +294,17 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base, int32_t e
 extern const char root_start[] asm("_binary_root_html_start");
 extern const char root_end[] asm("_binary_root_html_end");
 
+extern const char upload_script_start[] asm("_binary_upload_script_html_start");
+extern const char upload_script_end[] asm("_binary_upload_script_html_end");
+
+
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
-    const uint32_t root_len = root_end - root_start;
+    const uint32_t root_len = upload_script_end - upload_script_start;
 
     INFO("Serve root\n");
     httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, root_start, root_len);
+    httpd_resp_send(req, upload_script_start, root_len);
 
     return ESP_OK;
 }
