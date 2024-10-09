@@ -265,6 +265,9 @@ static void _init(void)
         gpio_set_level(g_valveGpios[i], 0);
     }
 
+    gpio_set_direction(GPIO_PIEZO_CTRL, GPIO_MODE_OUTPUT);
+    gpio_set_level(GPIO_PIEZO_CTRL, 0);
+
     ret = xTaskCreate(_task, "app", 8192, NULL, 3, NULL);
     if (ret != pdPASS) {
         ERROR("create task %s failed\n", "app");
@@ -275,9 +278,9 @@ static void _init(void)
 static void _clearFsm(uint8_t ch)
 {
     g_app.channels[ch].deflateDone      = false;
-    g_app.channels[ch].pressurizeState  = PRESS_STATE_IDLE;
     g_app.channels[ch].valveDelay       = false;
     g_app.channels[ch].valveZeroDelay   = false;
+    _pressurize(ch, PRESS_STATE_IDLE);
 }
 
 bool APP_loopEnable(bool on)
@@ -531,6 +534,7 @@ DEBUG_MENU_START(g_menu)
         DEBUG_MENU_CMD("cuff",		NULL,		NULL, dbgCuff)
         DEBUG_MENU_CMD("target",    NULL,		NULL, dbgTarget)
         DEBUG_MENU_CMD("loop",    	NULL,		NULL, dbgLoopEnable)
+        DEBUG_MENU_CMD("piezoCfg", 	NULL,		NULL, dbgPiezoCtrl)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
