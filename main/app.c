@@ -33,7 +33,6 @@ static const uint8_t g_valveGpios[] = {
     GPIO_VALVE_1,
     GPIO_VALVE_2,
     GPIO_VALVE_3,
-    GPIO_VALVE_4,
 };
 
 #define VALVE_COUNT     (sizeof(g_valveGpios)/sizeof(g_valveGpios[0]))
@@ -459,6 +458,20 @@ static bool dbgLoopEnable(uint8_t argc, char** argv)
 
     on = strtol(argv[1], NULL, 10);
     APP_loopEnable(on);
+
+    return true;
+}
+
+static bool dbgPiezoCtrl(uint8_t argc, char** argv)
+{
+    bool    on;
+
+    if (argc < 2) {
+        return false;
+    }
+
+    on = strtol(argv[1], NULL, 10);
+    gpio_set_level(GPIO_PIEZO_CTRL, on);
 
     return true;
 }

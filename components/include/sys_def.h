@@ -38,6 +38,7 @@
 #define UART_PORT_NUM_CMD  (1)
 #define UART_BAUD_CMD      (115200)
 
+#define LED_SPI_HOST     SPI2_HOST
 
 #define GPIO_ADC1_CHAN0          ADC_CHANNEL_0   /* gpio 1*/
 #define GPIO_ADC1_CHAN1          ADC_CHANNEL_2   /* gpio 3*/
@@ -51,7 +52,6 @@
 #define GPIO_VALVE_1    10
 #define GPIO_VALVE_2    11
 #define GPIO_VALVE_3    12
-#define GPIO_VALVE_4    13
 
 #define GPIO_PWM_00 35
 #define GPIO_PWM_01 34
@@ -61,6 +61,11 @@
 #define GPIO_PWM_21 38
 #define GPIO_PWM_30 41
 #define GPIO_PWM_31 40
+
+#define GPIO_LED        13
+#define GPIO_24EN       14
+#define GPIO_12EN       15
+#define GPIO_PIEZO_CTRL 16
 
 #define NVS_NAMESPACE_WIFI      "wifi"
 #define NVS_KEY_WIFI_SSID       "ssid"
