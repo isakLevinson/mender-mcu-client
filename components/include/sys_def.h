@@ -40,12 +40,12 @@
 
 
 #define GPIO_ADC1_CHAN0          ADC_CHANNEL_0   /* gpio 1*/
-#define GPIO_ADC1_CHAN1          ADC_CHANNEL_1   /* gpio 2*/
-#define GPIO_ADC1_CHAN2          ADC_CHANNEL_2   /* gpio 3*/
+#define GPIO_ADC1_CHAN1          ADC_CHANNEL_2   /* gpio 3*/
+#define GPIO_ADC1_CHAN2          ADC_CHANNEL_1   /* gpio 2*/
 #define GPIO_ADC1_CHAN3          ADC_CHANNEL_3   /* gpio 4*/
 
-#define GPIO_UART_RXD       (5)
-#define GPIO_UART_TXD       (6)
+#define GPIO_UART_RXD   5
+#define GPIO_UART_TXD   6
 
 #define GPIO_VALVE_0    9
 #define GPIO_VALVE_1    10
@@ -53,14 +53,14 @@
 #define GPIO_VALVE_3    12
 #define GPIO_VALVE_4    13
 
-#define GPIO_PWM_00 41
-#define GPIO_PWM_01 40
-#define GPIO_PWM_10 39
-#define GPIO_PWM_11 38
-#define GPIO_PWM_20 37
-#define GPIO_PWM_21 36
-#define GPIO_PWM_30 35
-#define GPIO_PWM_31 34
+#define GPIO_PWM_00 35
+#define GPIO_PWM_01 34
+#define GPIO_PWM_10 37
+#define GPIO_PWM_11 36
+#define GPIO_PWM_20 39
+#define GPIO_PWM_21 38
+#define GPIO_PWM_30 41
+#define GPIO_PWM_31 40
 
 #define NVS_NAMESPACE_WIFI      "wifi"
 #define NVS_KEY_WIFI_SSID       "ssid"
