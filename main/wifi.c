@@ -291,62 +291,6 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base, int32_t e
     xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 }
 
-extern const char root_start[] asm("_binary_root_html_start");
-extern const char root_end[] asm("_binary_root_html_end");
-
-extern const char upload_script_start[] asm("_binary_upload_script_html_start");
-extern const char upload_script_end[] asm("_binary_upload_script_html_end");
-
-
-static esp_err_t root_get_handler(httpd_req_t *req)
-{
-    const uint32_t root_len = upload_script_end - upload_script_start;
-
-    INFO("Serve root\n");
-    httpd_resp_set_type(req, "text/html");
-    httpd_resp_send(req, upload_script_start, root_len);
-
-    return ESP_OK;
-}
-
-esp_err_t http_404_error_handler(httpd_req_t *req, httpd_err_code_t err)
-{
-    // Set status
-    httpd_resp_set_status(req, "302 Temporary Redirect");
-    // Redirect to the "/" root directory
-    httpd_resp_set_hdr(req, "Location", "/");
-    // iOS requires content in the response to detect a captive portal, simply redirecting is not sufficient.
-    httpd_resp_send(req, "Redirect to the captive portal", HTTPD_RESP_USE_STRLEN);
-
-    INFO("Redirecting to root\n");
-    return ESP_OK;
-}
-
-static const httpd_uri_t root = {
-    .uri = "/",
-    .method = HTTP_GET,
-    .handler = root_get_handler
-};
-
-static httpd_handle_t _start_webserver(void)
-{
-    httpd_handle_t server = NULL;
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_open_sockets = 1;
-    config.lru_purge_enable = true;
-
-    // Start the httpd server
-    INFO("Starting server on port: '%d\n", config.server_port);
-    if (httpd_start(&server, &config) == ESP_OK) {
-        // Set URI handlers
-        INFO("Registering URI handlers\n");
-        httpd_register_uri_handler(server, &root);
-        httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
-    }
-    return server;
-}
-
-
 static void _udp_time_server(void)
 {
     //esp_netif_ip_info_t ip;
@@ -633,7 +577,6 @@ static void _init(void)
     }
 #endif
 
-    _start_webserver();
     _startServer();
 
     {
@@ -884,6 +827,12 @@ static bool dbgMdns(uint8_t argc, char **argv)
     return true;
 }
 
+static bool dbgHttpd(uint8_t argc, char **argv)
+{
+    http_start_server();
+    return NULL;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("wifi", NULL)
@@ -894,6 +843,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("nvs",	            NULL,		NULL, dbgNvs)
 		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
 		DEBUG_MENU_CMD("mdns",          	NULL,		NULL, dbgMdns)
+		DEBUG_MENU_CMD("httpd",          	NULL,		NULL, dbgHttpd)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

@@ -26,6 +26,7 @@
 #define SPI_DEVICES         2
 #define MODULES_PER_SPI     8
 
+#define HTTPD_PORT              8000
 #define UDP_SERVER_PORT		    5000
 #define UDP_TIME_SERVER_PORT	5001
 #define TCP_CMD_PORT		    5002
