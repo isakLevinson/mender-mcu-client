@@ -439,8 +439,7 @@ static int _startServer(void)
     return ESP_OK;
 }
 
-
-static bool _sta_join(const char *ssid, const char *pass)
+bool sta_connect(const char *ssid, const char *pass)
 {
     strcpy(g_server.wifi.currentSsid, ssid);
     strcpy(g_server.wifi.currentPasswd, pass);
@@ -588,7 +587,7 @@ static void _init(void)
         if (ret) {
             INFO("ssid  : %s\n", ssid);
             INFO("passwd: %s\n", passwd);
-            _sta_join(ssid, passwd);
+            sta_connect(ssid, passwd);
         }
     }
 
@@ -623,7 +622,7 @@ static bool dbgConnect(uint8_t argc, char** argv)
         return false;
     }
 
-    _sta_join(argv[1], argv[2]);
+    sta_connect(argv[1], argv[2]);
 
     return true;
 }
@@ -827,12 +826,6 @@ static bool dbgMdns(uint8_t argc, char **argv)
     return true;
 }
 
-static bool dbgHttpd(uint8_t argc, char **argv)
-{
-    http_start_server();
-    return NULL;
-}
-
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("wifi", NULL)
@@ -843,7 +836,6 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("nvs",	            NULL,		NULL, dbgNvs)
 		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
 		DEBUG_MENU_CMD("mdns",          	NULL,		NULL, dbgMdns)
-		DEBUG_MENU_CMD("httpd",          	NULL,		NULL, dbgHttpd)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

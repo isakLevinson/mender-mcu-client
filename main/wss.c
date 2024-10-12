@@ -18,6 +18,7 @@
 #include "sdkconfig.h"
 #include "wss.h"
 #include "cmd.h"
+#include "wifi.h"
 
 #define USE_SSL 1
 
@@ -299,10 +300,53 @@ static esp_err_t events_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static bool _parseJson(char* i_pStr, char* pItem, char* o_pVal)
+{
+    char item[32];
+    int itemLen = strlen(pItem);
+    char* pStr;
+    char* pVal = o_pVal;
+    char  c;
+
+    if (!itemLen) {
+        return false;
+    }
+
+    strcpy(item, pItem);
+    strcat(item, ":");
+
+    pStr = strstr(i_pStr, item);
+    if (!pStr) {
+        return false;
+    }
+
+    pStr += strlen(item);
+
+    while (*pStr) {
+        if ((',' == *pStr) || ('}' == *pStr)) {
+            *pVal = '\0';
+            return true;
+            break;
+        }
+
+        if (' ' == *pStr) {
+            pStr++;
+            continue;
+        }
+
+        *pVal++ = *pStr;
+        pStr++;
+    }
+    return false;
+}
+
 static esp_err_t _config_handler(httpd_req_t *req)
 {
-    esp_err_t ret;
+    //esp_err_t ret;
+    bool    ret;
     char buf[256];
+    bool    validSsid;
+    bool    validPasswd;
 
     INFO("config_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
@@ -315,6 +359,24 @@ static esp_err_t _config_handler(httpd_req_t *req)
 
     //INFO("POST: %.*s\n", ret, buf);
     INFO_BUF("/config POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
+
+    char ssid[32];
+    char passwd[32];
+
+    validSsid = _parseJson(buf, "ssid", ssid);
+    if (ret) {
+        INFO("ssid: <%s>\n", ssid);
+    }
+
+    validPasswd = _parseJson(buf, "passwd", passwd);
+    if (ret) {
+        INFO("passwd: <%s>\n", passwd);
+    }
+
+    if (validSsid && validPasswd) {
+        INFO("setting ssid and passwd\n");
+        sta_connect(ssid, passwd);
+    }
 
     /* Send response with body set as the
      * string passed in user context*/
