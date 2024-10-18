@@ -30,6 +30,7 @@
 #include "pump.h"
 #include "app.h"
 #include "adc.h"
+#include "led.h"
 
 #define BUF_SIZE    1024
 
@@ -75,6 +76,7 @@ void app_main(void)
     CMD_init(NULL);
     PMP_init();
     ADC_init();
+    LED_init();
     APP_init();
     
     WIFI_init();

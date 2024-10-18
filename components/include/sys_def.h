@@ -52,7 +52,8 @@
 #define GPIO_VALVE_1    10
 #define GPIO_VALVE_2    11
 #define GPIO_VALVE_3    12
-#define GPIO_VALVE_4    13
+
+#define GPIO_LED        13
 
 #define GPIO_PWM_00 41
 #define GPIO_PWM_01 40
