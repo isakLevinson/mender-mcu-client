@@ -17,6 +17,29 @@ static struct {
     nvs_handle_t nvsHandle;
 } g_nvs;
 
+static void _printErr(int err)
+{
+    char* pStr = NULL;
+    if (err == ESP_OK) {
+        return;
+    }
+
+    switch(err) {
+        case ESP_ERR_NVS_NOT_FOUND:         pStr = "ESP_ERR_NVS_NOT_FOUND"; break;
+        case ESP_ERR_NVS_NOT_INITIALIZED:   pStr = "ESP_ERR_NVS_NOT_INITIALIZED";  break;
+        case ESP_ERR_NO_MEM:                pStr = "ESP_ERR_NO_MEM";  break;
+        case ESP_ERR_INVALID_ARG:           pStr = "ESP_ERR_INVALID_ARG";  break;
+        case ESP_ERR_NVS_INVALID_LENGTH:    pStr = "ESP_ERR_NVS_INVALID_LENGTH";   break;
+    }
+
+    if (pStr) {
+        PRINT("failed %s\n", pStr);
+    } else {
+        PRINT("failed 0x%x\n", err);
+    }
+
+}
+
 bool NVS_get_ssid(char* ssid, char* passwd)
 {
     bool    ret = true;
@@ -133,121 +156,117 @@ bool NVS_set_ssid(char* ssid, char* passwd)
         return ret;
 }
 
-static bool dbgNvs(uint8_t argc, char **argv)
+static bool dbgOpen(uint8_t argc, char **argv)
 {
-    bool        ret;
     esp_err_t   err = ESP_OK;
-    bool    close   = false;
-    bool    commit  = false;
-    bool    status  = false;
-    bool    list    = false;
-    char*   openStr = NULL;
-    char*   getKey  = NULL;
-    char*   setKey  = NULL;
-    char*   arg1    = NULL;
-    char*   arg2    = NULL;
 
-// *INDENT-OFF*
-	ARGS_ENTRY_BEGIN(args)
-		ARGS_ENTRY("open",		ARGS_TYPE_STRING,		0,	"",		&openStr)
-		ARGS_ENTRY("close",		ARGS_TYPE_SWITCH,		0,	"",		&close)
-		ARGS_ENTRY("commit",	ARGS_TYPE_SWITCH,		0,	"",		&commit)
-		ARGS_ENTRY("status",	ARGS_TYPE_SWITCH,		0,	"",		&status)
-		ARGS_ENTRY("list",	    ARGS_TYPE_SWITCH,		0,	"",		&list)
-        ARGS_ENTRY("get",       ARGS_TYPE_STRING,		0,	"", 	&getKey)
-        ARGS_ENTRY("set",       ARGS_TYPE_STRING,		0,	"", 	&setKey)
-        ARGS_ENTRY(NULL,        ARGS_TYPE_STRING,		0,	"arg1",	&arg1)
-        ARGS_ENTRY(NULL,        ARGS_TYPE_STRING,		0,	"arg2",	&arg2)
-	ARGS_ENTRY_END()
-// *INDENT-ON*
-
-	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
-	if (!ret) {
-		return false;
-	}
-
-    if (status) {
-        nvs_stats_t nvs_stats;
-
-        printf("stats\n\n");
-        err =  nvs_get_stats(NULL, &nvs_stats);
-        if (err == ESP_OK) {
-            printf("used_entries   : %d\n", nvs_stats.used_entries);
-            printf("free_entries   : %d\n", nvs_stats.free_entries);
-            printf("total_entries  : %d\n", nvs_stats.total_entries);
-            printf("namespace_count: %d\n", nvs_stats.namespace_count);
-        }
-    } else if (list) {
-        nvs_iterator_t it;
-        printf("list\n\n");
-        
-        err =  nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it);
-        while (err == ESP_OK) {
-            nvs_entry_info_t info;
-            char* pTypeStr = "";
-
-            nvs_entry_info(it, &info); // Can omit error check if parameters are guaranteed to be non-NULL
-            PRINT("'%s', key: '%s', type: '%x'", info.namespace_name, info.key, info.type);
-
-            switch (info.type) {
-                case NVS_TYPE_U8:   pTypeStr = "U8";  break;
-                case NVS_TYPE_I8:   pTypeStr = "I8";  break;
-                case NVS_TYPE_U16:  pTypeStr = "U16";  break;
-                case NVS_TYPE_I16:  pTypeStr = "I16";  break;
-                case NVS_TYPE_U32:  pTypeStr = "U32";  break;
-                case NVS_TYPE_I32:  pTypeStr = "I32";  break;
-                case NVS_TYPE_U64:  pTypeStr = "U64";  break;
-                case NVS_TYPE_I64:  pTypeStr = "I64";  break;
-                case NVS_TYPE_STR:  pTypeStr = "STR";  break;
-                case NVS_TYPE_BLOB: pTypeStr = "BLOB";  break;
-                default:
-            }
-            PRINT("%s\n", pTypeStr);
-            err = nvs_entry_next(&it);
-        }
-    } else if (commit) {
-        err = nvs_commit(g_nvs.nvsHandle);
-    } else if (close) {
-        nvs_close(g_nvs.nvsHandle);
-        g_nvs.nvsHandle = (nvs_handle_t)NULL;
+    if (argc < 2) {
+        return false;
     }
 
-    if (openStr) {
-        PRINT("opening %s\n", openStr);
-        err = nvs_open(openStr, NVS_READWRITE, &g_nvs.nvsHandle);
+    err = nvs_open(argv[1], NVS_READWRITE, &g_nvs.nvsHandle);
+    _printErr(err);
+
+    return true;
+}
+
+static bool dbgClose(uint8_t argc, char **argv)
+{
+    nvs_close(g_nvs.nvsHandle);
+    g_nvs.nvsHandle = (nvs_handle_t)NULL;
+
+    return true;
+}
+
+static bool dbgCommit(uint8_t argc, char **argv)
+{
+    esp_err_t   err = ESP_OK;
+
+    err = nvs_commit(g_nvs.nvsHandle);
+    _printErr(err);
+
+    return true;
+}
+
+static bool dbgGet(uint8_t argc, char **argv)
+{
+    esp_err_t   err = ESP_OK;
+    char str[32];
+    size_t length = sizeof(str);
+
+    if (argc < 2) {
+        return false;
     }
 
-    if (getKey) {
-        char str[32];
-        size_t length = sizeof(str);
-        PRINT("get %s\n", getKey);
-        err =  nvs_get_str(g_nvs.nvsHandle, getKey, str, &length);
-        if (err == ESP_OK) {
-            str[length] = '\0';
-            PRINT("str=<%s>\n", str);
-        }
+    err =  nvs_get_str(g_nvs.nvsHandle, argv[1], str, &length);
+    _printErr(err);
+
+    if (err == ESP_OK) {
+        str[length] = '\0';
+        PRINT("str=<%s>\n", str);
     }
 
-    if (setKey) {
-        err = nvs_set_str(g_nvs.nvsHandle, setKey, arg1);
+    return true;
+}
+
+static bool dbgSet(uint8_t argc, char **argv)
+{
+    esp_err_t   err = ESP_OK;
+
+    if (argc < 3) {
+        return false;
     }
 
-    if (err != ESP_OK) {
-        char* pStr = NULL;
+    err = nvs_set_str(g_nvs.nvsHandle, argv[1], argv[2]);
+    _printErr(err);
 
-        switch(err) {
-        case ESP_ERR_NVS_NOT_FOUND:         pStr = "ESP_ERR_NVS_NOT_FOUND"; break;
-        case ESP_ERR_NVS_NOT_INITIALIZED:   pStr = "ESP_ERR_NVS_NOT_INITIALIZED";  break;
-        case ESP_ERR_NO_MEM:                pStr = "ESP_ERR_NO_MEM";  break;
-        case ESP_ERR_INVALID_ARG:           pStr = "ESP_ERR_INVALID_ARG";  break;
-        case ESP_ERR_NVS_INVALID_LENGTH:    pStr = "ESP_ERR_NVS_INVALID_LENGTH";   break;
-        }
+    return true;
+}
 
-        if (pStr) {
-            PRINT("failed %s\n\n", pStr);
-        } else {
-            PRINT("failed 0x%x\n\n", err);
+static bool dbgList(uint8_t argc, char **argv)
+{
+    esp_err_t   err = ESP_OK;
+    nvs_iterator_t it;
+    
+    err =  nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it);
+    while (err == ESP_OK) {
+        nvs_entry_info_t info;
+        char* pTypeStr = "";
+
+        nvs_entry_info(it, &info); // Can omit error check if parameters are guaranteed to be non-NULL
+        PRINT("'%s', key: '%s', type: '%x'", info.namespace_name, info.key, info.type);
+
+        switch (info.type) {
+            case NVS_TYPE_U8:   pTypeStr = "U8";  break;
+            case NVS_TYPE_I8:   pTypeStr = "I8";  break;
+            case NVS_TYPE_U16:  pTypeStr = "U16";  break;
+            case NVS_TYPE_I16:  pTypeStr = "I16";  break;
+            case NVS_TYPE_U32:  pTypeStr = "U32";  break;
+            case NVS_TYPE_I32:  pTypeStr = "I32";  break;
+            case NVS_TYPE_U64:  pTypeStr = "U64";  break;
+            case NVS_TYPE_I64:  pTypeStr = "I64";  break;
+            case NVS_TYPE_STR:  pTypeStr = "STR";  break;
+            case NVS_TYPE_BLOB: pTypeStr = "BLOB";  break;
+            default:
         }
+        PRINT("%s\n", pTypeStr);
+        err = nvs_entry_next(&it);
+    }
+
+    return true;
+}
+
+static bool dbgStatus(uint8_t argc, char **argv)
+{
+    esp_err_t   err = ESP_OK;
+    nvs_stats_t nvs_stats;
+
+    err =  nvs_get_stats(NULL, &nvs_stats);
+    if (err == ESP_OK) {
+        PRINT("used_entries   : %d\n", nvs_stats.used_entries);
+        PRINT("free_entries   : %d\n", nvs_stats.free_entries);
+        PRINT("total_entries  : %d\n", nvs_stats.total_entries);
+        PRINT("namespace_count: %d\n", nvs_stats.namespace_count);
     }
 
     return true;
@@ -256,7 +275,13 @@ static bool dbgNvs(uint8_t argc, char **argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("nvs", NULL)
-		DEBUG_MENU_CMD("nvs",	        NULL,		NULL, dbgNvs)
+		DEBUG_MENU_CMD("open",	    NULL,		NULL, dbgOpen)
+		DEBUG_MENU_CMD("close",	    NULL,		NULL, dbgClose)
+		DEBUG_MENU_CMD("commit",    NULL,		NULL, dbgCommit)
+		DEBUG_MENU_CMD("get",       NULL,		NULL, dbgGet)
+		DEBUG_MENU_CMD("set",       NULL,		NULL, dbgSet)
+		DEBUG_MENU_CMD("list",      NULL,		NULL, dbgList)
+		DEBUG_MENU_CMD("status",    NULL,		NULL, dbgStatus)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
