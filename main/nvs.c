@@ -1,5 +1,5 @@
 
-#define DEF_DBG_MODULE	DBG_MODULE_ADC
+#define DEF_DBG_MODULE	DBG_MODULE_NVS
 
 #include <sys_def.h>
 #include "dbgMenus.h"
@@ -9,9 +9,7 @@
 #include <errno.h>
 #include <nvs_flash.h>
 
-#define   WIFI_MAX_SSID_LENGTH    32
-#define   WIFI_MAX_PASSWD_LENGTH  32
-
+#define   WIFI_MAX_NVS_LENGTH    128
 
 static struct {
     nvs_handle_t nvsHandle;
@@ -40,67 +38,40 @@ static void _printErr(int err)
 
 }
 
-bool NVS_get_ssid(char* ssid, char* passwd)
+static bool _get(char* key,  char* val)
 {
     bool    ret = true;
     esp_err_t err = ESP_OK;
     nvs_handle_t handle;
-    size_t length;
-    char* pStr = NULL;
+    size_t length = WIFI_MAX_NVS_LENGTH;
 
     err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READONLY, &handle);
     if (err != ESP_OK) {
-        printf("nvs_open <%s> failed %x\n\n",  NVS_NAMESPACE_WIFI, err);
+        ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE_WIFI, err);
         return false;
     }
 
-    length = WIFI_MAX_SSID_LENGTH;
-    err =  nvs_get_str(handle, NVS_KEY_WIFI_SSID, ssid, &length);
+    err =  nvs_get_str(handle, NVS_KEY_WIFI_SSID, key, &length);
     if (err != ESP_OK) {
-        printf("nvs_get_str ssid failed\n\n");
+        ERROR("nvs_get_str <%s> failed\n", key);
         ret = false;
         goto exit;
     }
-    ssid[length] = '\0';
-
-    length = WIFI_MAX_PASSWD_LENGTH;
-    err =  nvs_get_str(handle, NVS_KEY_WIFI_PASSWD, passwd, &length);
-    if (err != ESP_OK) {
-        printf("nvs_get_str passwd failed\n\n");
-        ret = false;
-        goto exit;
-    }
-    passwd[length] = '\0';
+    val[length] = '\0';
 
     exit:
     nvs_close(handle);
-
-    switch(err) {
-    case ESP_OK:    break;
-    case ESP_ERR_NVS_NOT_FOUND:         pStr = "ESP_ERR_NVS_NOT_FOUND"; break;
-    case ESP_ERR_NVS_NOT_INITIALIZED:   pStr = "ESP_ERR_NVS_NOT_INITIALIZED";  break;
-    case ESP_ERR_NO_MEM:                pStr = "ESP_ERR_NO_MEM";  break;
-    case ESP_ERR_INVALID_ARG:           pStr = "ESP_ERR_INVALID_ARG";  break;
-    default:
-    }
-
-    if (pStr) {
-        printf("%s\n\n", pStr);
-    } else {
-        if (ESP_OK != err) {
-            printf("0x%x\n", err);
-        }
-    }
+    _printErr(err);
 
     return ret;
 }
 
-bool NVS_set_ssid(char* ssid, char* passwd)
+static bool _set(char* key,  char* val)
 {
     bool    ret = true;
     esp_err_t err = ESP_OK;
     nvs_handle_t handle;
-    char    str[WIFI_MAX_SSID_LENGTH];
+    char    str[WIFI_MAX_NVS_LENGTH];
     size_t  length;
 
     err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READWRITE, &handle);
@@ -109,52 +80,139 @@ bool NVS_set_ssid(char* ssid, char* passwd)
         return false;
     }
 
-    length = WIFI_MAX_SSID_LENGTH;
-    err =  nvs_get_str(handle, NVS_KEY_WIFI_SSID, str, &length);
+    length = sizeof(str);
+    err =  nvs_get_str(handle, key, str, &length);
     if (err != ESP_OK) {
-        WARN("nvs_get_str ssid failed\n");
+        WARN("nvs_get_str <%s> failed\n", key);
         goto    store;
     }
     str[length] = '\0';
-    if (strcmp(str, ssid)) {
-        INFO("ssid mismatch. storing new <%s> <%s>\n", ssid, passwd);
-        goto store;
-    }
-    length = WIFI_MAX_PASSWD_LENGTH;
-    err =  nvs_get_str(handle, NVS_KEY_WIFI_PASSWD, str, &length);
-    if (err != ESP_OK) {
-        WARN("nvs_get_str passwd failed\n");
-        goto    store;
-    }
-    str[length] = '\0';
-    if (strcmp(str, passwd)) {
-        INFO("passwd mismatch. storing new <%s> <%s>\n", ssid, passwd);
+    if (strcmp(str, val)) {
+        INFO("<%s> mismatch. storing new <%s> <%s>\n", key, val);
         goto store;
     }
 
-    INFO("no need to store ssid or passwd\n");
+    INFO("no need to store <%s>\n", key);
     goto exit;
 
     store:
-        err = nvs_set_str (handle, NVS_KEY_WIFI_SSID, ssid);
+        err = nvs_set_str (handle, key, key);
         if (err != ESP_OK) {
             printf("nvs_set_str ssid failed %x\n", err);
             ret = false;
             goto exit;
         }
 
-        err = nvs_set_str (handle, NVS_KEY_WIFI_PASSWD, passwd);
-        if (err != ESP_OK) {
-            printf("nvs_set_str passwd failed %x\n", err);
-            ret = false;
-            goto exit;
-        }
-
-
     exit:
         nvs_close(handle);
         return ret;
 }
+
+bool NVS_get_ssid(char* ssid, char* passwd)
+{
+    bool    ret = true;
+
+    ret = _get(NVS_KEY_WIFI_SSID, ssid);
+    if (!ret)  {
+        ERROR("get ssid failed\n");
+    }
+
+    ret &= _get(NVS_KEY_WIFI_PASSWD, passwd);
+    if (!ret)  {
+        ERROR("get passwd failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_set_ssid(char* ssid, char* passwd)
+{
+    bool    ret = true;
+
+    ret = _set(NVS_KEY_WIFI_SSID, ssid);
+    if (!ret)  {
+        ERROR("set ssid failed\n");
+    }
+    ret &= _set(NVS_KEY_WIFI_PASSWD, passwd);
+    if (!ret)  {
+        ERROR("set passwd failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_get_certificate(char* val)
+{
+    bool    ret = true;
+
+    ret = _get(NVS_KEY_WIFI_CERT, val);
+    if (!ret)  {
+        ERROR("get cert failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_set_certificate(char* val)
+{
+    bool    ret = true;
+
+    ret = _set(NVS_KEY_WIFI_CERT, val);
+    if (!ret)  {
+        ERROR("set cert failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_get_sync_dns(char* val)
+{
+    bool    ret = true;
+
+    ret = _get(NVS_KEY_WIFI_SYNC_DNS, val);
+    if (!ret)  {
+        ERROR("get cert failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_set_sync_dns(char* val)
+{
+    bool    ret = true;
+
+    ret = _set(NVS_KEY_WIFI_SYNC_DNS, val);
+    if (!ret)  {
+        ERROR("set cert failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_get_sync_port(char* val)
+{
+    bool    ret = true;
+
+    ret = _get(NVS_KEY_WIFI_SYNC_PORT, val);
+    if (!ret)  {
+        ERROR("get cert failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_set_sync_port(char* val)
+{
+    bool    ret = true;
+
+    ret = _set(NVS_KEY_WIFI_SYNC_PORT, val);
+    if (!ret)  {
+        ERROR("set cert failed\n");
+    }
+
+    return ret;
+}
+
 
 static bool dbgOpen(uint8_t argc, char **argv)
 {

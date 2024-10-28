@@ -19,6 +19,7 @@
 #include "wss.h"
 #include "cmd.h"
 #include "wifi.h"
+#include "nvs.h"
 
 #define USE_SSL 1
 
@@ -344,7 +345,7 @@ static esp_err_t _config_handler(httpd_req_t *req)
 {
     //esp_err_t ret;
     bool    ret;
-    char buf[256];
+    char    buf[256];
     bool    validSsid;
     bool    validPasswd;
 
@@ -376,6 +377,24 @@ static esp_err_t _config_handler(httpd_req_t *req)
     if (validSsid && validPasswd) {
         INFO("setting ssid and passwd\n");
         sta_connect(ssid, passwd);
+    }
+
+    ret = _parseJson(buf, "cert", buf);
+    if (ret) {
+        INFO("setting certificate <%s>\n", buf);
+        NVS_set_certificate(buf);
+    }
+
+    ret = _parseJson(buf, "sync_dns", buf);
+    if (ret) {
+        INFO("setting dns <%s>\n", buf);
+        NVS_set_sync_dns(buf);
+    }
+
+    ret = _parseJson(buf, "sync_port", buf);
+    if (ret) {
+        INFO("setting port <%s>\n", buf);
+        NVS_set_sync_port(buf);
     }
 
     /* Send response with body set as the
