@@ -11,6 +11,7 @@
 #include <sys_def.h>
 #include "dbgMenus.h"
 #include "dbgPrint.h"
+#include "parseArgs.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -33,9 +34,6 @@
 #include "time.h"
 #include "wss.h"
 
-#define   WIFI_MAX_SSID_LENGTH    32
-#define   WIFI_MAX_PASSWD_LENGTH  32
-
 #define FLAG_CONNECTED            BIT0
 #define FLAG_DISCONNECT           BIT1
 #define FLAG_GOT_IP_TCP           BIT2
@@ -54,7 +52,6 @@ static struct {
     EventGroupHandle_t event_group;
 
     struct {
-        nvs_handle_t nvsHandle;
         char         currentSsid[32];
         char         currentPasswd[32];
         uint8_t      recvBuf[1024];
@@ -79,122 +76,6 @@ static bool _mdnsInit(void)
     mdns_instance_name_set("Jhon's ESP32 Thing");
 
     return true;
-}
-
-static bool _nvs_get_ssid(char* ssid, char* passwd)
-{
-    bool    ret = true;
-    esp_err_t err = ESP_OK;
-    nvs_handle_t handle;
-    size_t length;
-    char* pStr = NULL;
-
-    err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READONLY, &handle);
-    if (err != ESP_OK) {
-        printf("nvs_open <%s> failed %x\n\n",  NVS_NAMESPACE_WIFI, err);
-        return false;
-    }
-
-    length = WIFI_MAX_SSID_LENGTH;
-    err =  nvs_get_str(handle, NVS_KEY_WIFI_SSID, ssid, &length);
-    if (err != ESP_OK) {
-        printf("nvs_get_str ssid failed\n\n");
-        ret = false;
-        goto exit;
-    }
-    ssid[length] = '\0';
-
-    length = WIFI_MAX_PASSWD_LENGTH;
-    err =  nvs_get_str(handle, NVS_KEY_WIFI_PASSWD, passwd, &length);
-    if (err != ESP_OK) {
-        printf("nvs_get_str passwd failed\n\n");
-        ret = false;
-        goto exit;
-    }
-    passwd[length] = '\0';
-
-    exit:
-    nvs_close(handle);
-
-    switch(err) {
-    case ESP_OK:    break;
-    case ESP_ERR_NVS_NOT_FOUND:         pStr = "ESP_ERR_NVS_NOT_FOUND"; break;
-    case ESP_ERR_NVS_NOT_INITIALIZED:   pStr = "ESP_ERR_NVS_NOT_INITIALIZED";  break;
-    case ESP_ERR_NO_MEM:                pStr = "ESP_ERR_NO_MEM";  break;
-    case ESP_ERR_INVALID_ARG:           pStr = "ESP_ERR_INVALID_ARG";  break;
-    default:
-    }
-
-    if (pStr) {
-        printf("%s\n\n", pStr);
-    } else {
-        if (ESP_OK != err) {
-            printf("0x%x\n", err);
-        }
-    }
-
-    return ret;
-}
-
-static bool _nvs_set_ssid(char* ssid, char* passwd)
-{
-    bool    ret = true;
-    esp_err_t err = ESP_OK;
-    nvs_handle_t handle;
-    char    str[WIFI_MAX_SSID_LENGTH];
-    size_t  length;
-
-    err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READWRITE, &handle);
-    if (err != ESP_OK) {
-        ERROR("nvs_open failed\n");
-        return false;
-    }
-
-    length = WIFI_MAX_SSID_LENGTH;
-    err =  nvs_get_str(handle, NVS_KEY_WIFI_SSID, str, &length);
-    if (err != ESP_OK) {
-        WARN("nvs_get_str ssid failed\n");
-        goto    store;
-    }
-    str[length] = '\0';
-    if (strcmp(str, ssid)) {
-        INFO("ssid mismatch. storing new <%s> <%s>\n", ssid, passwd);
-        goto store;
-    }
-    length = WIFI_MAX_PASSWD_LENGTH;
-    err =  nvs_get_str(handle, NVS_KEY_WIFI_PASSWD, str, &length);
-    if (err != ESP_OK) {
-        WARN("nvs_get_str passwd failed\n");
-        goto    store;
-    }
-    str[length] = '\0';
-    if (strcmp(str, passwd)) {
-        INFO("passwd mismatch. storing new <%s> <%s>\n", ssid, passwd);
-        goto store;
-    }
-
-    INFO("no need to store ssid or passwd\n");
-    goto exit;
-
-    store:
-        err = nvs_set_str (handle, NVS_KEY_WIFI_SSID, ssid);
-        if (err != ESP_OK) {
-            printf("nvs_set_str ssid failed %x\n", err);
-            ret = false;
-            goto exit;
-        }
-
-        err = nvs_set_str (handle, NVS_KEY_WIFI_PASSWD, passwd);
-        if (err != ESP_OK) {
-            printf("nvs_set_str passwd failed %x\n", err);
-            ret = false;
-            goto exit;
-        }
-
-
-    exit:
-        nvs_close(handle);
-        return ret;
 }
 
 static void scan_done_handler(void *arg, esp_event_base_t event_base,
@@ -235,7 +116,7 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
     xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_UDP);
     xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 
-    _nvs_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
+    NVS_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
     _mdnsInit();
 }
 
@@ -583,7 +464,7 @@ static void _init(void)
         char    ssid[32];
         char    passwd[32];
 
-        ret = _nvs_get_ssid(ssid, passwd);
+        ret = NVS_get_ssid(ssid, passwd);
         if (ret) {
             INFO("ssid  : %s\n", ssid);
             INFO("passwd: %s\n", passwd);
@@ -683,109 +564,6 @@ static bool dbgStatus(uint8_t argc, char **argv)
     return true;
 }
 
-static bool dbgNvs(uint8_t argc, char **argv)
-{
-    esp_err_t err = ESP_OK;
-
-    if (argc == 2) {
-        if (!strcmp(argv[1], "close")) {
-            printf("close\n");
-            nvs_close(g_server.wifi.nvsHandle);
-            g_server.wifi.nvsHandle = (nvs_handle_t)NULL;
-        } else if (!strcmp(argv[1], "commit")) {
-            printf("commit\n");
-            err = nvs_commit(g_server.wifi.nvsHandle);
-        } else if (!strcmp(argv[1], "stats")) {
-            nvs_stats_t nvs_stats;
-
-            printf("stats\n\n");
-            err =  nvs_get_stats(NULL, &nvs_stats);
-            if (err == ESP_OK) {
-                printf("used_entries   : %d\n", nvs_stats.used_entries);
-                printf("free_entries   : %d\n", nvs_stats.free_entries);
-                printf("total_entries  : %d\n", nvs_stats.total_entries);
-                printf("namespace_count: %d\n", nvs_stats.namespace_count);
-            }
-        } else if (!strcmp(argv[1], "list\n")) {
-            nvs_iterator_t it;
-            printf("list\n\n");
-            
-            err =  nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it);
-            while (err == ESP_OK) {
-                nvs_entry_info_t info;
-                nvs_entry_info(it, &info); // Can omit error check if parameters are guaranteed to be non-NULL
-                printf("ns: '%s', key: '%s', type: '%x'\n", info.namespace_name, info.key, info.type);
-
-                switch (info.type) {
-                    case NVS_TYPE_U8:   printf("U8\n");  break;
-                    case NVS_TYPE_I8:   printf("I8\n");  break;
-                    case NVS_TYPE_U16:  printf("U16\n");  break;
-                    case NVS_TYPE_I16:  printf("I16\n");  break;
-                    case NVS_TYPE_U32:  printf("U32\n");  break;
-                    case NVS_TYPE_I32:  printf("I32\n");  break;
-                    case NVS_TYPE_U64:  printf("U64\n");  break;
-                    case NVS_TYPE_I64:  printf("I64\n");  break;
-                    case NVS_TYPE_STR:  printf("STR\n");  break;
-                    case NVS_TYPE_BLOB: printf("BLOB\n");  break;
-                    default:
-                }
-                printf("\n");
-
-                err = nvs_entry_next(&it);
-            }
-        } else if (!strcmp(argv[1], "ssid")) {
-            bool ret;
-            char ssid[WIFI_MAX_SSID_LENGTH] = "";
-            char passwd[WIFI_MAX_PASSWD_LENGTH] = "";
-            ret = _nvs_get_ssid(ssid, passwd);
-            if (ret) {
-                printf("%s:%s\n\n", ssid, passwd);
-            }
-        }
-    } else if (argc == 3) {
-        if (!strcmp(argv[1], "open\n")) {
-            printf("open %s\n", argv[2]);
-            err = nvs_open(argv[2], NVS_READWRITE, &g_server.wifi.nvsHandle);
-        } else if (!strcmp(argv[1], "get\n")) {
-            char    str[256];
-             size_t length;
-
-            printf("get %s\n", argv[2]);
-            err =  nvs_get_str(g_server.wifi.nvsHandle, argv[2], str, &length);
-            if (err == ESP_OK) {
-                str[length] = '\0';
-                printf("str=<%s>\n", str);
-            }
-        }
-    } else if (argc == 4) {
-        if (!strcmp(argv[1], "set")) {
-            printf("set %s <- %s\n", argv[2], argv[3]);
-            err = nvs_set_str(g_server.wifi.nvsHandle, argv[2], argv[3]);
-        } else if (!strcmp(argv[1], "ssid")) {
-            _nvs_set_ssid(argv[2], argv[3]);
-        }
-    }
-
-    if (err != ESP_OK) {
-        char* pStr = NULL;
-
-        switch(err) {
-        case ESP_ERR_NVS_NOT_FOUND:         pStr = "ESP_ERR_NVS_NOT_FOUND"; break;
-        case ESP_ERR_NVS_NOT_INITIALIZED:   pStr = "ESP_ERR_NVS_NOT_INITIALIZED";  break;
-        case ESP_ERR_NO_MEM:                pStr = "ESP_ERR_NO_MEM";  break;
-        case ESP_ERR_INVALID_ARG:           pStr = "ESP_ERR_INVALID_ARG";  break;
-        }
-
-        if (pStr) {
-            printf("failed %s\n\n", pStr);
-        } else {
-            printf("failed 0x%x\n\n", err);
-        }
-    }
-
-    return true;
-}
-
 static bool dbgBroadcastTime(uint8_t argc, char **argv)
 {
     int s;
@@ -833,7 +611,6 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("apn",	            NULL,		NULL, dbgConnect)
 		DEBUG_MENU_CMD("scan",	            NULL,		NULL, dbgScan)
 		DEBUG_MENU_CMD("wssSend",           NULL,		NULL, dbgWssSend)
-		DEBUG_MENU_CMD("nvs",	            NULL,		NULL, dbgNvs)
 		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
 		DEBUG_MENU_CMD("mdns",          	NULL,		NULL, dbgMdns)
 	DEBUG_MENU_DIR_END

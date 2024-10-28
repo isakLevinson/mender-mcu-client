@@ -8,6 +8,7 @@ idf_component_register(SRCS	"main.c"
 				"wss.c"
 				"wss_keepalive.c"
 				"led.c"
+				"nvs.c"
 
 				INCLUDE_DIRS "."
 

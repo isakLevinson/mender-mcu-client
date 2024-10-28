@@ -8,7 +8,6 @@ extern "C" {
 
 #include "esp_netif.h"
 
-
 // Register WiFi functions
 void WIFI_init(void);
 esp_ip4_addr_t  wifi_getSelfIp(void);
