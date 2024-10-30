@@ -63,6 +63,8 @@ static struct {
 
 static bool _mdnsInit(void)
 {
+    bool    ret;
+    char    mdns[32];
     INFO("mDNS init\n");
     esp_err_t err = mdns_init();
     if (err) {
@@ -70,8 +72,14 @@ static bool _mdnsInit(void)
         return false;
     }
 
+    ret = NVS_get_mdns(mdns);
+    if (!ret) {
+        strcpy(mdns, "pnu");
+        INFO("no MDNS name in NVS. using default %s\n", mdns);
+    }
+
     //set hostname
-    mdns_hostname_set("pnu-esp32");
+    mdns_hostname_set(mdns);
     //set default instance
     mdns_instance_name_set("Jhon's ESP32 Thing");
 
@@ -375,9 +383,9 @@ static void _init(void)
 
     wifi_config_t wifi_ap_config = {
         .ap = {
-            .ssid = "PNU",
+            .ssid = AP_SSID,
             .ssid_len = 3,
-            .password = "12345678",
+            .password = AP_PASSWD,
             .channel = 5,
             .max_connection = 1,
             .authmode = WIFI_AUTH_WPA2_PSK,

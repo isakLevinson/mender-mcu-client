@@ -20,6 +20,8 @@
 #include "cmd.h"
 #include "wifi.h"
 #include "nvs.h"
+#include "mdns.h"
+
 
 #define USE_SSL 1
 
@@ -365,12 +367,12 @@ static esp_err_t _config_handler(httpd_req_t *req)
     char passwd[32];
 
     validSsid = _parseJson(buf, "ssid", ssid);
-    if (ret) {
+    if (validSsid) {
         INFO("ssid: <%s>\n", ssid);
     }
 
     validPasswd = _parseJson(buf, "passwd", passwd);
-    if (ret) {
+    if (validPasswd) {
         INFO("passwd: <%s>\n", passwd);
     }
 
@@ -395,6 +397,13 @@ static esp_err_t _config_handler(httpd_req_t *req)
     if (ret) {
         INFO("setting port <%s>\n", buf);
         NVS_set_sync_port(buf);
+    }
+
+    ret = _parseJson(buf, "mdns", buf);
+    if (ret) {
+        INFO("setting mdns <%s>\n", buf);
+        NVS_set_mdns(buf);
+        mdns_hostname_set(buf);
     }
 
     /* Send response with body set as the
@@ -423,7 +432,6 @@ void wss_close_fd(httpd_handle_t hd, int sockfd)
     } else {
         INFO("wss_close_fd hd:0x%x fd:0x%x\n", hd, sockfd);
     }
-
 
     wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
     wss_keep_alive_remove_client(h, sockfd);

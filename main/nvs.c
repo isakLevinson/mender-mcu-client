@@ -88,7 +88,7 @@ static bool _set(char* key,  char* val)
     }
     str[length] = '\0';
     if (strcmp(str, val)) {
-        INFO("<%s> mismatch. storing new <%s> <%s>\n", key, val);
+        INFO("<%s> mismatch. storing new <%s>\n", key, val);
         goto store;
     }
 
@@ -96,7 +96,7 @@ static bool _set(char* key,  char* val)
     goto exit;
 
     store:
-        err = nvs_set_str (handle, key, key);
+        err = nvs_set_str (handle, key, val);
         if (err != ESP_OK) {
             printf("nvs_set_str ssid failed %x\n", err);
             ret = false;
@@ -215,6 +215,29 @@ bool NVS_set_sync_port(char* val)
     return ret;
 }
 
+bool NVS_get_mdns(char* val)
+{
+    bool    ret = true;
+
+    ret = _get(NVS_KEY_WIFI_MDNS, val);
+    if (!ret)  {
+        ERROR("get mdns failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_set_mdns(char* val)
+{
+    bool    ret = true;
+
+    ret = _set(NVS_KEY_WIFI_MDNS, val);
+    if (!ret)  {
+        ERROR("set mdns failed\n");
+    }
+
+    return ret;
+}
 
 static bool dbgOpen(uint8_t argc, char **argv)
 {
