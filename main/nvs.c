@@ -51,7 +51,7 @@ static bool _get(char* key,  char* val)
         return false;
     }
 
-    err =  nvs_get_str(handle, NVS_KEY_WIFI_SSID, key, &length);
+    err =  nvs_get_str(handle, key, val, &length);
     if (err != ESP_OK) {
         ERROR("nvs_get_str <%s> failed\n", key);
         ret = false;
@@ -115,14 +115,16 @@ bool NVS_get_ssid(char* ssid, char* passwd)
     ret = _get(NVS_KEY_WIFI_SSID, ssid);
     if (!ret)  {
         ERROR("get ssid failed\n");
+        return false;
     }
 
-    ret &= _get(NVS_KEY_WIFI_PASSWD, passwd);
+    ret = _get(NVS_KEY_WIFI_PASSWD, passwd);
     if (!ret)  {
         ERROR("get passwd failed\n");
+        return false;
     }
 
-    return ret;
+    return true;
 }
 
 bool NVS_set_ssid(char* ssid, char* passwd)
