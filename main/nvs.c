@@ -1,0 +1,351 @@
+
+#define DEF_DBG_MODULE	DBG_MODULE_NVS
+
+#include <sys_def.h>
+#include "dbgMenus.h"
+#include "dbgPrint.h"
+#include "parseArgs.h"
+
+#include <errno.h>
+#include <nvs_flash.h>
+
+#define   WIFI_MAX_NVS_LENGTH    128
+
+static struct {
+    nvs_handle_t nvsHandle;
+} g_nvs;
+
+static void _printErr(int err)
+{
+    char* pStr = NULL;
+    if (err == ESP_OK) {
+        return;
+    }
+
+    switch(err) {
+        case ESP_ERR_NVS_NOT_FOUND:         pStr = "ESP_ERR_NVS_NOT_FOUND"; break;
+        case ESP_ERR_NVS_NOT_INITIALIZED:   pStr = "ESP_ERR_NVS_NOT_INITIALIZED";  break;
+        case ESP_ERR_NO_MEM:                pStr = "ESP_ERR_NO_MEM";  break;
+        case ESP_ERR_INVALID_ARG:           pStr = "ESP_ERR_INVALID_ARG";  break;
+        case ESP_ERR_NVS_INVALID_LENGTH:    pStr = "ESP_ERR_NVS_INVALID_LENGTH";   break;
+    }
+
+    if (pStr) {
+        PRINT("failed %s\n", pStr);
+    } else {
+        PRINT("failed 0x%x\n", err);
+    }
+
+}
+
+static bool _get(char* key,  char* val)
+{
+    bool    ret = true;
+    esp_err_t err = ESP_OK;
+    nvs_handle_t handle;
+    size_t length = WIFI_MAX_NVS_LENGTH;
+
+    err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READONLY, &handle);
+    if (err != ESP_OK) {
+        ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE_WIFI, err);
+        return false;
+    }
+
+    err =  nvs_get_str(handle, NVS_KEY_WIFI_SSID, key, &length);
+    if (err != ESP_OK) {
+        ERROR("nvs_get_str <%s> failed\n", key);
+        ret = false;
+        goto exit;
+    }
+    val[length] = '\0';
+
+    exit:
+    nvs_close(handle);
+    _printErr(err);
+
+    return ret;
+}
+
+static bool _set(char* key,  char* val)
+{
+    bool    ret = true;
+    esp_err_t err = ESP_OK;
+    nvs_handle_t handle;
+    char    str[WIFI_MAX_NVS_LENGTH];
+    size_t  length;
+
+    err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ERROR("nvs_open failed\n");
+        return false;
+    }
+
+    length = sizeof(str);
+    err =  nvs_get_str(handle, key, str, &length);
+    if (err != ESP_OK) {
+        WARN("nvs_get_str <%s> failed\n", key);
+        goto    store;
+    }
+    str[length] = '\0';
+    if (strcmp(str, val)) {
+        INFO("<%s> mismatch. storing new <%s> <%s>\n", key, val);
+        goto store;
+    }
+
+    INFO("no need to store <%s>\n", key);
+    goto exit;
+
+    store:
+        err = nvs_set_str (handle, key, key);
+        if (err != ESP_OK) {
+            printf("nvs_set_str ssid failed %x\n", err);
+            ret = false;
+            goto exit;
+        }
+
+    exit:
+        nvs_close(handle);
+        return ret;
+}
+
+bool NVS_get_ssid(char* ssid, char* passwd)
+{
+    bool    ret = true;
+
+    ret = _get(NVS_KEY_WIFI_SSID, ssid);
+    if (!ret)  {
+        ERROR("get ssid failed\n");
+    }
+
+    ret &= _get(NVS_KEY_WIFI_PASSWD, passwd);
+    if (!ret)  {
+        ERROR("get passwd failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_set_ssid(char* ssid, char* passwd)
+{
+    bool    ret = true;
+
+    ret = _set(NVS_KEY_WIFI_SSID, ssid);
+    if (!ret)  {
+        ERROR("set ssid failed\n");
+    }
+    ret &= _set(NVS_KEY_WIFI_PASSWD, passwd);
+    if (!ret)  {
+        ERROR("set passwd failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_get_certificate(char* val)
+{
+    bool    ret = true;
+
+    ret = _get(NVS_KEY_WIFI_CERT, val);
+    if (!ret)  {
+        ERROR("get cert failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_set_certificate(char* val)
+{
+    bool    ret = true;
+
+    ret = _set(NVS_KEY_WIFI_CERT, val);
+    if (!ret)  {
+        ERROR("set cert failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_get_sync_dns(char* val)
+{
+    bool    ret = true;
+
+    ret = _get(NVS_KEY_WIFI_SYNC_DNS, val);
+    if (!ret)  {
+        ERROR("get cert failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_set_sync_dns(char* val)
+{
+    bool    ret = true;
+
+    ret = _set(NVS_KEY_WIFI_SYNC_DNS, val);
+    if (!ret)  {
+        ERROR("set cert failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_get_sync_port(char* val)
+{
+    bool    ret = true;
+
+    ret = _get(NVS_KEY_WIFI_SYNC_PORT, val);
+    if (!ret)  {
+        ERROR("get cert failed\n");
+    }
+
+    return ret;
+}
+
+bool NVS_set_sync_port(char* val)
+{
+    bool    ret = true;
+
+    ret = _set(NVS_KEY_WIFI_SYNC_PORT, val);
+    if (!ret)  {
+        ERROR("set cert failed\n");
+    }
+
+    return ret;
+}
+
+
+static bool dbgOpen(uint8_t argc, char **argv)
+{
+    esp_err_t   err = ESP_OK;
+
+    if (argc < 2) {
+        return false;
+    }
+
+    err = nvs_open(argv[1], NVS_READWRITE, &g_nvs.nvsHandle);
+    _printErr(err);
+
+    return true;
+}
+
+static bool dbgClose(uint8_t argc, char **argv)
+{
+    nvs_close(g_nvs.nvsHandle);
+    g_nvs.nvsHandle = (nvs_handle_t)NULL;
+
+    return true;
+}
+
+static bool dbgCommit(uint8_t argc, char **argv)
+{
+    esp_err_t   err = ESP_OK;
+
+    err = nvs_commit(g_nvs.nvsHandle);
+    _printErr(err);
+
+    return true;
+}
+
+static bool dbgGet(uint8_t argc, char **argv)
+{
+    esp_err_t   err = ESP_OK;
+    char str[32];
+    size_t length = sizeof(str);
+
+    if (argc < 2) {
+        return false;
+    }
+
+    err =  nvs_get_str(g_nvs.nvsHandle, argv[1], str, &length);
+    _printErr(err);
+
+    if (err == ESP_OK) {
+        str[length] = '\0';
+        PRINT("str=<%s>\n", str);
+    }
+
+    return true;
+}
+
+static bool dbgSet(uint8_t argc, char **argv)
+{
+    esp_err_t   err = ESP_OK;
+
+    if (argc < 3) {
+        return false;
+    }
+
+    err = nvs_set_str(g_nvs.nvsHandle, argv[1], argv[2]);
+    _printErr(err);
+
+    return true;
+}
+
+static bool dbgList(uint8_t argc, char **argv)
+{
+    esp_err_t   err = ESP_OK;
+    nvs_iterator_t it;
+    
+    err =  nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it);
+    while (err == ESP_OK) {
+        nvs_entry_info_t info;
+        char* pTypeStr = "";
+
+        nvs_entry_info(it, &info); // Can omit error check if parameters are guaranteed to be non-NULL
+        PRINT("'%s', key: '%s', type: '%x'", info.namespace_name, info.key, info.type);
+
+        switch (info.type) {
+            case NVS_TYPE_U8:   pTypeStr = "U8";  break;
+            case NVS_TYPE_I8:   pTypeStr = "I8";  break;
+            case NVS_TYPE_U16:  pTypeStr = "U16";  break;
+            case NVS_TYPE_I16:  pTypeStr = "I16";  break;
+            case NVS_TYPE_U32:  pTypeStr = "U32";  break;
+            case NVS_TYPE_I32:  pTypeStr = "I32";  break;
+            case NVS_TYPE_U64:  pTypeStr = "U64";  break;
+            case NVS_TYPE_I64:  pTypeStr = "I64";  break;
+            case NVS_TYPE_STR:  pTypeStr = "STR";  break;
+            case NVS_TYPE_BLOB: pTypeStr = "BLOB";  break;
+            default:
+        }
+        PRINT("%s\n", pTypeStr);
+        err = nvs_entry_next(&it);
+    }
+
+    return true;
+}
+
+static bool dbgStatus(uint8_t argc, char **argv)
+{
+    esp_err_t   err = ESP_OK;
+    nvs_stats_t nvs_stats;
+
+    err =  nvs_get_stats(NULL, &nvs_stats);
+    if (err == ESP_OK) {
+        PRINT("used_entries   : %d\n", nvs_stats.used_entries);
+        PRINT("free_entries   : %d\n", nvs_stats.free_entries);
+        PRINT("total_entries  : %d\n", nvs_stats.total_entries);
+        PRINT("namespace_count: %d\n", nvs_stats.namespace_count);
+    }
+
+    return true;
+}
+
+// *INDENT-OFF*
+DEBUG_MENU_START(g_menu)
+	DEBUG_MENU_DIR("nvs", NULL)
+		DEBUG_MENU_CMD("open",	    NULL,		NULL, dbgOpen)
+		DEBUG_MENU_CMD("close",	    NULL,		NULL, dbgClose)
+		DEBUG_MENU_CMD("commit",    NULL,		NULL, dbgCommit)
+		DEBUG_MENU_CMD("get",       NULL,		NULL, dbgGet)
+		DEBUG_MENU_CMD("set",       NULL,		NULL, dbgSet)
+		DEBUG_MENU_CMD("list",      NULL,		NULL, dbgList)
+		DEBUG_MENU_CMD("status",    NULL,		NULL, dbgStatus)
+	DEBUG_MENU_DIR_END
+DEBUG_MENU_END
+// *INDENT-ON*
+
+
+void NVS_init(void)
+{
+    DBG_TREE_add("/",		g_menu);
+}

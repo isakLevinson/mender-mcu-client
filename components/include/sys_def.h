@@ -26,6 +26,7 @@
 #define SPI_DEVICES         2
 #define MODULES_PER_SPI     8
 
+#define HTTPD_PORT              8000
 #define UDP_SERVER_PORT		    5000
 #define UDP_TIME_SERVER_PORT	5001
 #define TCP_CMD_PORT		    5002
@@ -70,6 +71,9 @@
 #define NVS_NAMESPACE_WIFI      "wifi"
 #define NVS_KEY_WIFI_SSID       "ssid"
 #define NVS_KEY_WIFI_PASSWD     "passwd"
+#define NVS_KEY_WIFI_CERT       "cert"
+#define NVS_KEY_WIFI_SYNC_DNS   "sync_dns"
+#define NVS_KEY_WIFI_SYNC_PORT  "sync_port"
 
 #define MENU_LOC      
 #define DBG_MENU_STORAGE    

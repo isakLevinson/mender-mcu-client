@@ -26,6 +26,7 @@
 #include "app.h"
 #include "pump.h"
 #include "adc.h"
+#include "led.h"
 #include "cli.h"
 
 static const uint8_t g_valveGpios[] = {
@@ -365,7 +366,6 @@ static bool dbgValve(uint8_t argc, char** argv)
 
 static bool dbgGpio(uint8_t argc, char** argv)
 {
-
     uint8_t gpio;
     char    val;
 
@@ -392,6 +392,23 @@ static bool dbgGpio(uint8_t argc, char** argv)
 
         default:
     }
+
+    return true;
+}
+
+static bool dbgLed(uint8_t argc, char** argv)
+{
+    uint8_t r,g,b;
+
+    if (argc < 4) {
+        return false;
+    }
+
+    r = strtoul(argv[1], NULL, 10);
+    g = strtoul(argv[2], NULL, 10);
+    b = strtoul(argv[3], NULL, 10);
+
+    LED_set(r,g,b);
 
     return true;
 }
@@ -531,6 +548,7 @@ DEBUG_MENU_START(g_menu)
 	    DEBUG_MENU_CMD("cfg",   	NULL,		NULL, dbgCfg)
 	    DEBUG_MENU_CMD("valve",		NULL,		NULL, dbgValve)
 	    DEBUG_MENU_CMD("gpio",		NULL,		NULL, dbgGpio)
+        DEBUG_MENU_CMD("led",    	NULL,		NULL, dbgLed)
         DEBUG_MENU_CMD("cuff",		NULL,		NULL, dbgCuff)
         DEBUG_MENU_CMD("target",    NULL,		NULL, dbgTarget)
         DEBUG_MENU_CMD("loop",    	NULL,		NULL, dbgLoopEnable)

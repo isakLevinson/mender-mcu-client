@@ -18,6 +18,8 @@
 #include "sdkconfig.h"
 #include "wss.h"
 #include "cmd.h"
+#include "wifi.h"
+#include "nvs.h"
 
 #define USE_SSL 1
 
@@ -299,6 +301,113 @@ static esp_err_t events_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static bool _parseJson(char* i_pStr, char* pItem, char* o_pVal)
+{
+    char item[32];
+    int itemLen = strlen(pItem);
+    char* pStr;
+    char* pVal = o_pVal;
+    char  c;
+
+    if (!itemLen) {
+        return false;
+    }
+
+    strcpy(item, pItem);
+    strcat(item, ":");
+
+    pStr = strstr(i_pStr, item);
+    if (!pStr) {
+        return false;
+    }
+
+    pStr += strlen(item);
+
+    while (*pStr) {
+        if ((',' == *pStr) || ('}' == *pStr)) {
+            *pVal = '\0';
+            return true;
+            break;
+        }
+
+        if (' ' == *pStr) {
+            pStr++;
+            continue;
+        }
+
+        *pVal++ = *pStr;
+        pStr++;
+    }
+    return false;
+}
+
+static esp_err_t _config_handler(httpd_req_t *req)
+{
+    //esp_err_t ret;
+    bool    ret;
+    char    buf[256];
+    bool    validSsid;
+    bool    validPasswd;
+
+    INFO("config_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
+
+    if (req->method != HTTP_POST) {
+        WARN("unsupported method %s. must be POST\n", req->method);
+        return ESP_OK;
+    }
+
+    ret = httpd_req_recv(req, buf, req->content_len);
+
+    //INFO("POST: %.*s\n", ret, buf);
+    INFO_BUF("/config POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
+
+    char ssid[32];
+    char passwd[32];
+
+    validSsid = _parseJson(buf, "ssid", ssid);
+    if (ret) {
+        INFO("ssid: <%s>\n", ssid);
+    }
+
+    validPasswd = _parseJson(buf, "passwd", passwd);
+    if (ret) {
+        INFO("passwd: <%s>\n", passwd);
+    }
+
+    if (validSsid && validPasswd) {
+        INFO("setting ssid and passwd\n");
+        sta_connect(ssid, passwd);
+    }
+
+    ret = _parseJson(buf, "cert", buf);
+    if (ret) {
+        INFO("setting certificate <%s>\n", buf);
+        NVS_set_certificate(buf);
+    }
+
+    ret = _parseJson(buf, "sync_dns", buf);
+    if (ret) {
+        INFO("setting dns <%s>\n", buf);
+        NVS_set_sync_dns(buf);
+    }
+
+    ret = _parseJson(buf, "sync_port", buf);
+    if (ret) {
+        INFO("setting port <%s>\n", buf);
+        NVS_set_sync_port(buf);
+    }
+
+    /* Send response with body set as the
+     * string passed in user context*/
+    //const char* resp_str = (const char*) req->user_ctx;
+    //httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, "OK\n", HTTPD_RESP_USE_STRLEN);
+
+    // End response
+    httpd_resp_send_chunk(req, NULL, 0);
+
+    return ESP_OK;
+}
 esp_err_t wss_open_fd(httpd_handle_t hd, int sockfd)
 {
     INFO("wss_open hd:0x%x fd:0x%x\n", hd, sockfd);
@@ -341,6 +450,15 @@ static const httpd_uri_t uri_events = {
         .uri        = "/events",
         .method     = HTTP_GET,
         .handler    = events_handler,
+        .user_ctx   = NULL,
+        .is_websocket = true,
+        .handle_ws_control_frames = true
+};
+
+static const httpd_uri_t uri_config = {
+        .uri        = "/config",
+        .method     = HTTP_POST,
+        .handler    = _config_handler,
         .user_ctx   = NULL,
         .is_websocket = true,
         .handle_ws_control_frames = true
@@ -402,6 +520,7 @@ httpd_handle_t wss_start_server(void)
     INFO("Registering URI handlers");
     httpd_register_uri_handler(server, &uri_ws);
     httpd_register_uri_handler(server, &uri_events);
+    httpd_register_uri_handler(server, &uri_config);
     wss_keep_alive_set_user_ctx(keep_alive, server);
 
     return server;
