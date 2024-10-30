@@ -22,7 +22,7 @@ bool LED_set(int8_t r, int8_t g, int8_t b)
 {
     led_strip_set_pixel(led_strip, 0, r, g, b);
     led_strip_refresh(led_strip);
-//    led_strip_clear(led_strip);
+
     return true;
 }
 

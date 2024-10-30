@@ -33,6 +33,7 @@
 #include "cmd.h"
 #include "time.h"
 #include "wss.h"
+#include "led.h"
 
 #define FLAG_CONNECTED            BIT0
 #define FLAG_DISCONNECT           BIT1
@@ -65,6 +66,7 @@ static bool _mdnsInit(void)
 {
     bool    ret;
     char    mdns[32];
+    
     INFO("mDNS init\n");
     esp_err_t err = mdns_init();
     if (err) {
@@ -126,6 +128,7 @@ static void got_ip_handler(void *arg, esp_event_base_t event_base,
 
     NVS_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
     _mdnsInit();
+    LED_set(0, 255, 0);
 }
 
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
@@ -178,6 +181,7 @@ static void disconnect_handler(void *arg, esp_event_base_t event_base, int32_t e
     xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_TCP);
     xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_UDP);
     xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
+    LED_set(255, 0, 0);
 }
 
 static void _udp_time_server(void)
@@ -399,6 +403,7 @@ static void _init(void)
         return;
     }
 
+    LED_set(255, 0, 0);
     //strcpy((char*)wifi_ap_config.ap.ssid, ap_ssid);
     //wifi_ap_config.ap.ssid_len = strlen(ap_ssid);
     //strcpy((char*)wifi_ap_config.ap.password, ap_passwd);

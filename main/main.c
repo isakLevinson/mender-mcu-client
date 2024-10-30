@@ -77,7 +77,7 @@ void app_main(void)
     ADC_init();
     LED_init();
     APP_init();
-    
+
     WIFI_init();
 
     esp_log_level_set("*", ESP_LOG_ERROR);
