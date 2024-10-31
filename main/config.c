@@ -7,7 +7,7 @@
 #include "parseArgs.h"
 
 #include "esp_partition.h"
-
+#include "esp_flash.h"
 
 static esp_partition_t* find_partition(esp_partition_type_t type, esp_partition_subtype_t subtype, const char* name)
 {
@@ -51,16 +51,17 @@ static bool dbgFindPart(uint8_t argc, char** argv)
     return true;
 }
 
+static esp_partition_t* g_partition = NULL;
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-    esp_partition_t* part;
-    part = find_partition(0x40, 0x01, NULL);
-    if (!part) {
+    g_partition = find_partition(0x40, 0x01, NULL);
+    if (!g_partition) {
         PRINT("config partition not found\n");
         return true;
     }
 
-    PRINT("addr:0x%x size:0x%x spi:0x%x\n", part->address, part->size, part->flash_chip);
+    PRINT("addr:0x%x size:0x%x spi:0x%x\n", g_partition->address, g_partition->size, g_partition->flash_chip);
 
     //PRINT_BUF("config:", PRINT_BUF_STYLE_ASC_SIZE_NL, part->address, part->size);
 
@@ -69,15 +70,34 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 static bool dbgRead(uint8_t argc, char** argv)
 {
-    uint32_t*    addr;
+    esp_err_t   err;
+    uint32_t    addr;
+    uint8_t     buf[32];
 
     if (argc < 2) {
         return false;
     }
 
+    if (!g_partition) {
+        PRINT("no partition set\n");
+        return true;
+    }
+
+    if (!g_partition->flash_chip) {
+        PRINT("partition doesnt contain valid flash chip\n");
+        return true;
+    }
+
     addr = strtol(argv[1], NULL, 16);
 
-    PRINT_BUF(NULL, PRINT_BUF_STYLE_HEX_SIZE_NL, addr, 4);
+    //err = esp_flash_read(g_partition->flash_chip, buf, addr, sizeof(buf));
+    err = esp_partition_read(g_partition, addr, buf, sizeof(buf));
+    if (ESP_OK != err) {
+        PRINT("read failed %d\n", err);
+        return true;
+    }
+
+    PRINT_BUF(NULL, PRINT_BUF_STYLE_HEX_SIZE_NL, buf, sizeof(buf));
 
     return true;
 }
