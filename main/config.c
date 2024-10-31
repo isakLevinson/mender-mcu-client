@@ -8,8 +8,11 @@
 
 #include "esp_partition.h"
 #include "esp_flash.h"
+#include "cJSON.h"
 
-static esp_partition_t* find_partition(esp_partition_type_t type, esp_partition_subtype_t subtype, const char* name)
+static const esp_partition_t* g_partition = NULL;
+
+static const esp_partition_t* find_partition(esp_partition_type_t type, esp_partition_subtype_t subtype, const char* name)
 {
 //    INFO("Find partition with type %s, subtype %s, label %s...", get_type_str(type), get_subtype_str(subtype),
 //                    name == NULL ? "NULL (unspecified)" : name);
@@ -31,7 +34,7 @@ static bool dbgFindPart(uint8_t argc, char** argv)
 {
     uint8_t type;
     uint8_t subType;
-    esp_partition_t* part;
+    const esp_partition_t* part;
 
     if (argc < 3) {
         return false;
@@ -50,8 +53,6 @@ static bool dbgFindPart(uint8_t argc, char** argv)
 
     return true;
 }
-
-static esp_partition_t* g_partition = NULL;
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
@@ -102,12 +103,49 @@ static bool dbgRead(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgJson(uint8_t argc, char** argv)
+{
+    cJSON *json = NULL;
+    const cJSON *object = NULL;
+
+    if (argc < 3) {
+        return false;
+    }
+
+    //cJSON_ParseWithLength
+    json = cJSON_Parse(argv[1]);    
+    if (!json) {
+        PRINT("json parse error\n");
+        return false;
+    }
+
+    object = cJSON_GetObjectItemCaseSensitive(json, argv[2]);
+    if (!object) {
+        PRINT("object not found\n");
+        return false;
+    }
+
+    if (cJSON_IsString(object)) {
+        PRINT("string:\n");
+        PRINT("string: %s\n", object->valuestring);
+
+    }
+
+    if (cJSON_IsNumber(object)) {
+        PRINT("number:\n");
+        PRINT("number: %f\n", object->valuedouble);
+    }
+
+    return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("config", NULL)
 		DEBUG_MENU_CMD("status",    NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("findPart",  NULL,		NULL, dbgFindPart)
 		DEBUG_MENU_CMD("rd",	    NULL,		NULL, dbgRead)
+		DEBUG_MENU_CMD("json",	    NULL,		NULL, dbgJson)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
