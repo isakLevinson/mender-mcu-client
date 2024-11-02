@@ -21,7 +21,7 @@
 #include "wifi.h"
 #include "nvs.h"
 #include "mdns.h"
-
+#include "config.h"
 
 #define USE_SSL 1
 
@@ -362,6 +362,7 @@ static esp_err_t _config_handler(httpd_req_t *req)
 
     //INFO("POST: %.*s\n", ret, buf);
     INFO_BUF("/config POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
+    CFG_parseWssCommand(buf, req->content_len);
 
     char ssid[32];
     char passwd[32];

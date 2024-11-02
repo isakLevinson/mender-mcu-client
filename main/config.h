@@ -2,5 +2,5 @@
 
 #include <sys_def.h>
 
-void CONFIG_init(void);
-
+void CFG_init(void);
+bool CFG_parseWssCommand(char* pStr, size_t size);

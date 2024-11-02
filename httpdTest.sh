@@ -1,3 +1,7 @@
 #!/bin/bash
 
-curl -k -H "Content-Type: app" -d "{cert: abcdefg}" -X POST https://192.168.1.234/config
+HOST=$1
+DATA=$2
+
+curl -k -H "Content-Type: app" -d "$DATA" -X POST "https://$HOST/config"
+

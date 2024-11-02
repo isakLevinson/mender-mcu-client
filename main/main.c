@@ -72,7 +72,7 @@ void app_main(void)
 
     uart_init();
     CLI_init();
-    CONFIG_init();
+    CFG_init();
     NVS_init();
     CMD_init(NULL);
     PMP_init();

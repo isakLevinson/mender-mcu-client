@@ -9,6 +9,9 @@
 #include "esp_partition.h"
 #include "esp_flash.h"
 #include "cJSON.h"
+#include "nvs.h"
+#include "mdns.h"
+#include "wifi.h"
 
 static const esp_partition_t* g_partition = NULL;
 
@@ -29,6 +32,57 @@ static const esp_partition_t* find_partition(esp_partition_type_t type, esp_part
     return part;
 }
 
+bool CFG_parseWssCommand(char* pStr, size_t size)
+{
+    cJSON *json = NULL;
+    const cJSON *object = NULL;
+    const cJSON *objectSsid = NULL;
+    const cJSON *objectPasswd = NULL;
+
+    json = cJSON_ParseWithLength(pStr, size);    
+    if (!json) {
+        PRINT("json parse error\n");
+        return false;
+    }
+
+    objectSsid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
+    if (objectSsid) {
+        INFO("ssid: %s\n", objectSsid->valuestring);
+        objectPasswd = cJSON_GetObjectItemCaseSensitive(json, "passwd");
+        if (objectPasswd) {
+            INFO("passwd: %s\n", objectPasswd->valuestring);
+            INFO("setting ssid and passwd\n");
+            sta_connect(objectSsid->valuestring, objectPasswd->valuestring);
+        }
+    }
+
+    object = cJSON_GetObjectItemCaseSensitive(json, "cert");
+    if (object) {
+        INFO("cert: %s\n", object->valuestring);
+        NVS_set_certificate(object->valuestring);
+    }
+
+    object = cJSON_GetObjectItemCaseSensitive(json, "sync_dns");
+    if (object) {
+        INFO("sync_dns: %s\n", object->valuestring);
+        NVS_set_sync_dns(object->valuestring);
+    }
+
+    object = cJSON_GetObjectItemCaseSensitive(json, "sync_port");
+    if (object) {
+        INFO("sync_port: %s\n", object->valuestring);
+        NVS_set_sync_port(object->valuestring);
+    }
+
+    object = cJSON_GetObjectItemCaseSensitive(json, "mdns");
+    if (object) {
+        INFO("mdns: %s\n", object->valuestring);
+        NVS_set_mdns(object->valuestring);
+        mdns_hostname_set(object->valuestring);
+    }
+
+    return true;
+}
 
 static bool dbgFindPart(uint8_t argc, char** argv)
 {
@@ -151,7 +205,7 @@ DEBUG_MENU_END
 // *INDENT-ON*
 
 
-void CONFIG_init(void)
+void CFG_init(void)
 {
     DBG_TREE_add("/",		g_menu);
 }
