@@ -1,1 +1,6 @@
-abc123
+{"private_key": "private abcd1234",
+"public_key":"public 1234",
+"certificate":"certificate 1234",
+"sn":"12345678",
+"hw_revision":"HW1234",
+"model":"X" }

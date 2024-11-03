@@ -14,6 +14,7 @@
 #include "wifi.h"
 
 static const esp_partition_t* g_partition = NULL;
+static char*    g_pBuf;
 
 static const esp_partition_t* find_partition(esp_partition_type_t type, esp_partition_subtype_t subtype, const char* name)
 {
@@ -84,6 +85,143 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
     return true;
 }
 
+static void _freeObject(void)
+{
+    free(g_pBuf);
+    g_pBuf = NULL;
+}
+
+static cJSON* _getFactoryObject(char* pObject)
+{
+    bool                    ret = true;
+    esp_err_t               err;
+    const cJSON*            json = NULL;
+    const cJSON*            object = NULL;
+    const esp_partition_t*  partition = NULL;
+
+    partition = find_partition(0x40, 0x01, NULL);
+    if (!partition) {
+        WARN("config partition not found\n");
+        return NULL;
+    }
+
+    if (!g_pBuf) {
+        INFO("addr:0x%x size:0x%x spi:0x%x\n", partition->address, partition->size, partition->flash_chip);
+        g_pBuf = malloc(partition->size);
+        if (!g_pBuf) {
+            ERROR("failed allocating %d bytes for partition\n", partition->size);
+            return NULL;
+        }
+
+        err = esp_partition_read(partition, 0, g_pBuf, partition->size);
+        if (ESP_OK != err) {
+            ERROR("read failed %d\n", err);
+            return NULL;
+        }
+    }
+
+    TRACE_BUF(NULL, PRINT_BUF_STYLE_ASC_SIZE_NL, g_pBuf, partition->size);
+
+    json = cJSON_ParseWithLength(g_pBuf, partition->size);    
+    if (!json) {
+        ERROR("json parse error\n");
+        return NULL;
+    }
+
+    object = cJSON_GetObjectItemCaseSensitive(json, pObject);
+    if (object) {
+        INFO("%s: %s\n", pObject, object->valuestring);
+    }
+
+    return object;
+}
+
+
+bool CFG_factoryGetPrivateKey(char* o_pStr)
+{
+    cJSON*  object;
+
+    object = _getFactoryObject("private_key");
+    if (!object) {
+        return false;
+    }
+
+    return true;
+}
+
+bool CFG_factoryGetPublicKey(char* o_pStr)
+{
+    cJSON*  object;
+
+    object = _getFactoryObject("public_key");
+    if (!object) {
+        return false;
+    }
+
+    return true;
+}
+
+bool CFG_factoryGetCertificate(char* o_pStr)
+{
+    cJSON*  object;
+
+    object = _getFactoryObject("certificate");
+    if (!object) {
+        return false;
+    }
+
+    return true;
+}
+
+bool CFG_factoryGetManufacturingDate(char* o_pStr)
+{
+    cJSON*  object;
+
+    object = _getFactoryObject("manufacturing_date");
+    if (!object) {
+        return false;
+    }
+
+    return true;
+}
+
+bool CFG_factoryGetSn(char* o_pStr)
+{
+    cJSON*  object;
+
+    object = _getFactoryObject("sn");
+    if (!object) {
+        return false;
+    }
+
+    return true;
+}
+
+bool CFG_factoryGetHwRevision(char* o_pStr)
+{
+    cJSON*  object;
+
+    object = _getFactoryObject("hw_revision");
+    if (!object) {
+        return false;
+    }
+
+    return true;
+}
+
+bool CFG_factoryGetModel(char* o_pStr)
+{
+    cJSON*  object;
+
+    object = _getFactoryObject("model");
+    if (!object) {
+        return false;
+    }
+
+    return true;
+}
+
+
 static bool dbgFindPart(uint8_t argc, char** argv)
 {
     uint8_t type;
@@ -117,8 +255,6 @@ static bool dbgStatus(uint8_t argc, char** argv)
     }
 
     PRINT("addr:0x%x size:0x%x spi:0x%x\n", g_partition->address, g_partition->size, g_partition->flash_chip);
-
-    //PRINT_BUF("config:", PRINT_BUF_STYLE_ASC_SIZE_NL, part->address, part->size);
 
     return true;
 }
@@ -193,6 +329,31 @@ static bool dbgJson(uint8_t argc, char** argv)
     return true;
 }
 
+
+static bool dbgGetObject(uint8_t argc, char** argv)
+{
+    static cJSON* object;
+    if (argc < 2) {
+        return false;
+    }
+
+    object = _getFactoryObject(argv[1]);
+    if (!object) {
+        PRINT("failed to get object\n");
+        return true;
+    }
+
+    PRINT("%s\n", object->valuestring);
+
+    return true;
+}
+
+static bool dbgFreeObject(uint8_t argc, char** argv)
+{
+    _freeObject();
+    return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("config", NULL)
@@ -200,6 +361,8 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("findPart",  NULL,		NULL, dbgFindPart)
 		DEBUG_MENU_CMD("rd",	    NULL,		NULL, dbgRead)
 		DEBUG_MENU_CMD("json",	    NULL,		NULL, dbgJson)
+		DEBUG_MENU_CMD("getObject", NULL,		NULL, dbgGetObject)
+		DEBUG_MENU_CMD("freeObject",NULL,		NULL, dbgFreeObject)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
