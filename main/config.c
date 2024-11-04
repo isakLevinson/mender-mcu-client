@@ -91,9 +91,8 @@ static void _freeObject(void)
     g_pBuf = NULL;
 }
 
-static cJSON* _getFactoryObject(char* pObject)
+static const cJSON* _getFactoryObject(char* pObject)
 {
-    bool                    ret = true;
     esp_err_t               err;
     const cJSON*            json = NULL;
     const cJSON*            object = NULL;
@@ -129,9 +128,13 @@ static cJSON* _getFactoryObject(char* pObject)
     }
 
     object = cJSON_GetObjectItemCaseSensitive(json, pObject);
-    if (object) {
-        INFO("%s: %s\n", pObject, object->valuestring);
+    if (!object) {
+        WARN("%s not found\n", pObject);
+        INFO_BUF(NULL, PRINT_BUF_STYLE_ASC_SIZE_NL, g_pBuf, partition->size);
+        return NULL;
     }
+
+    INFO("%s: %s\n", pObject, object->valuestring);
 
     return object;
 }
@@ -139,7 +142,7 @@ static cJSON* _getFactoryObject(char* pObject)
 
 bool CFG_factoryGetPrivateKey(char* o_pStr)
 {
-    cJSON*  object;
+    const cJSON*  object;
 
     object = _getFactoryObject("private_key");
     if (!object) {
@@ -151,7 +154,7 @@ bool CFG_factoryGetPrivateKey(char* o_pStr)
 
 bool CFG_factoryGetPublicKey(char* o_pStr)
 {
-    cJSON*  object;
+    const cJSON*  object;
 
     object = _getFactoryObject("public_key");
     if (!object) {
@@ -163,7 +166,7 @@ bool CFG_factoryGetPublicKey(char* o_pStr)
 
 bool CFG_factoryGetCertificate(char* o_pStr)
 {
-    cJSON*  object;
+    const cJSON*  object;
 
     object = _getFactoryObject("certificate");
     if (!object) {
@@ -175,7 +178,7 @@ bool CFG_factoryGetCertificate(char* o_pStr)
 
 bool CFG_factoryGetManufacturingDate(char* o_pStr)
 {
-    cJSON*  object;
+    const cJSON*  object;
 
     object = _getFactoryObject("manufacturing_date");
     if (!object) {
@@ -187,7 +190,7 @@ bool CFG_factoryGetManufacturingDate(char* o_pStr)
 
 bool CFG_factoryGetSn(char* o_pStr)
 {
-    cJSON*  object;
+    const cJSON*  object;
 
     object = _getFactoryObject("sn");
     if (!object) {
@@ -199,7 +202,7 @@ bool CFG_factoryGetSn(char* o_pStr)
 
 bool CFG_factoryGetHwRevision(char* o_pStr)
 {
-    cJSON*  object;
+    const cJSON*  object;
 
     object = _getFactoryObject("hw_revision");
     if (!object) {
@@ -211,7 +214,7 @@ bool CFG_factoryGetHwRevision(char* o_pStr)
 
 bool CFG_factoryGetModel(char* o_pStr)
 {
-    cJSON*  object;
+    const cJSON*  object;
 
     object = _getFactoryObject("model");
     if (!object) {
@@ -332,18 +335,65 @@ static bool dbgJson(uint8_t argc, char** argv)
 
 static bool dbgGetObject(uint8_t argc, char** argv)
 {
-    static cJSON* object;
-    if (argc < 2) {
-        return false;
-    }
+    bool    ret;
+    const cJSON* object;
+    bool    isPrivate       = false;
+    bool    isPublic        = false;
+    bool    isCertificate   = false;
+    bool    isDate          = false;
+    bool    isSn            = false;
+    bool    isRevision      = false;
+    bool    isModel         = false;
+    char*   pStr = NULL;
 
-    object = _getFactoryObject(argv[1]);
-    if (!object) {
-        PRINT("failed to get object\n");
-        return true;
-    }
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("priv",		ARGS_TYPE_SWITCH,		0,	"",				    &isPrivate)
+		ARGS_ENTRY("pub",		ARGS_TYPE_SWITCH,		0,	"",				    &isPublic)
+		ARGS_ENTRY("cert",		ARGS_TYPE_SWITCH,		0,	"",				    &isCertificate)
+		ARGS_ENTRY("date",		ARGS_TYPE_SWITCH,		0,	"",				    &isDate)
+		ARGS_ENTRY("sn",		ARGS_TYPE_SWITCH,		0,	"",				    &isSn)
+		ARGS_ENTRY("rev",		ARGS_TYPE_SWITCH,		0,	"",				    &isRevision)
+		ARGS_ENTRY("model",		ARGS_TYPE_SWITCH,		0,	"",				    &isModel)
+		ARGS_ENTRY(NULL,	    ARGS_TYPE_STRING,		0,	"generic object",   &pStr)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
 
-    PRINT("%s\n", object->valuestring);
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (!ret) {
+		return false;
+	}
+    
+    if (isPrivate) {
+        CFG_factoryGetPrivateKey(NULL);
+    }    
+    if (isPublic) {
+        CFG_factoryGetPublicKey(NULL);
+    }
+    if (isCertificate) {
+        CFG_factoryGetCertificate(NULL);
+    }
+    if (isDate) {
+        CFG_factoryGetManufacturingDate(NULL);
+    }
+    if (isSn) {
+        CFG_factoryGetSn(NULL);
+    }
+    if (isRevision) {
+        CFG_factoryGetHwRevision(NULL);
+    }
+    if (isModel) {
+        CFG_factoryGetModel(NULL);
+    }
+    if (pStr) {
+        object = _getFactoryObject(argv[1]);
+        if (!object) {
+            PRINT("failed to get object\n");
+            return true;
+        }
+
+        PRINT("%s\n", object->valuestring);
+    }
 
     return true;
 }
