@@ -33,6 +33,7 @@
 #include "led.h"
 #include "nvs.h"
 #include "config.h"
+#include "ota.h"
 
 #define BUF_SIZE    1024
 
@@ -74,6 +75,7 @@ void app_main(void)
     CLI_init();
     CFG_init();
     NVS_init();
+    OTA_init();
     CMD_init(NULL);
     PMP_init();
     ADC_init();

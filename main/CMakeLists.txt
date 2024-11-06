@@ -10,6 +10,7 @@ idf_component_register(SRCS	"main.c"
 				"led.c"
 				"nvs.c"
 				"config.c"
+				"ota.c"
 
 				INCLUDE_DIRS "."
 
