@@ -12,6 +12,9 @@
 extern const uint8_t server_cert_pem_start[] asm("_binary_ca_cert_pem_start");
 extern const uint8_t server_cert_pem_end[] asm("_binary_ca_cert_pem_end");
 
+static struct {
+    esp_https_ota_handle_t  handle;
+} g_ota;
 
 esp_err_t _http_event_handler(esp_http_client_event_t *evt)
 {
@@ -45,7 +48,7 @@ esp_err_t _http_event_handler(esp_http_client_event_t *evt)
 }
 
 
-static bool dbgDownload(uint8_t argc, char** argv)
+static bool dbgAuto(uint8_t argc, char** argv)
 {
     if (argc < 2) {
         return false;
@@ -85,6 +88,29 @@ static bool dbgDownload(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgBegin(uint8_t argc, char** argv)
+{
+    esp_err_t   err;
+
+    if (argc < 2) {
+        return false;
+    }
+
+    esp_http_client_config_t config = {
+        .cert_pem = (char *)server_cert_pem_start,
+        .event_handler = _http_event_handler,
+        .keep_alive_enable = true,
+    };
+
+    esp_https_ota_config_t ota_config = {
+        .http_config = &config,
+    };
+
+    config.url = argv[1];
+
+    err = esp_https_ota_begin(&ota_config, &g_ota.handle);
+    return true;
+}
 
 static bool dbgRestart(uint8_t argc, char** argv)
 {
@@ -99,9 +125,10 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("ota", NULL)
-	    DEBUG_MENU_CMD("status",			NULL,		NULL, dbgStatus)
-	    DEBUG_MENU_CMD("download",			NULL,		NULL, dbgDownload)
-	    DEBUG_MENU_CMD("restart",			NULL,		NULL, dbgRestart)
+	    DEBUG_MENU_CMD("status",		NULL,		NULL, dbgStatus)
+	    DEBUG_MENU_CMD("auto    ",		NULL,		NULL, dbgAuto)
+	    DEBUG_MENU_CMD("restart",		NULL,		NULL, dbgRestart)
+	    DEBUG_MENU_CMD("begin",			NULL,		NULL, dbgBegin)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
