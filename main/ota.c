@@ -112,6 +112,22 @@ static bool dbgBegin(uint8_t argc, char** argv)
     return true;
 }
 
+
+static bool dbgPerform(uint8_t argc, char** argv)
+{
+    esp_err_t   err;
+
+    do {
+        err = esp_https_ota_perform(&g_ota.handle);
+    } while (ESP_ERR_HTTPS_OTA_IN_PROGRESS == err);
+
+    if (ESP_OK != err) {
+        ERROR("esp_https_ota_perform failed %d\n", err);
+    }
+
+    return true;
+}
+
 static bool dbgRestart(uint8_t argc, char** argv)
 {
     esp_restart();
@@ -129,6 +145,7 @@ DEBUG_MENU_START(g_menu)
 	    DEBUG_MENU_CMD("auto    ",		NULL,		NULL, dbgAuto)
 	    DEBUG_MENU_CMD("restart",		NULL,		NULL, dbgRestart)
 	    DEBUG_MENU_CMD("begin",			NULL,		NULL, dbgBegin)
+	    DEBUG_MENU_CMD("perform",		NULL,		NULL, dbgPerform)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
