@@ -18,39 +18,50 @@ static struct {
 
 esp_err_t _http_event_handler(esp_http_client_event_t *evt)
 {
+    INFO("_http_event_handler: ");
+
     switch (evt->event_id) {
     case HTTP_EVENT_ERROR:
-        INFO("HTTP_EVENT_ERROR\n");
+        INFO("HTTP_EVENT_ERROR");
         break;
     case HTTP_EVENT_ON_CONNECTED:
-        INFO("HTTP_EVENT_ON_CONNECTED\n");
+        INFO("HTTP_EVENT_ON_CONNECTED");
         break;
     case HTTP_EVENT_HEADER_SENT:
-        INFO("HTTP_EVENT_HEADER_SENT\n");
+        INFO("HTTP_EVENT_HEADER_SENT");
         break;
     case HTTP_EVENT_ON_HEADER:
-        INFO("HTTP_EVENT_ON_HEADER, key=%s, value=%s\n", evt->header_key, evt->header_value);
+        INFO("HTTP_EVENT_ON_HEADER");
+        INFO_BUF("key", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_key, 10);
+        INFO_BUF("val", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_value, 10);
         break;
     case HTTP_EVENT_ON_DATA:
-        TRACE("HTTP_EVENT_ON_DATA, len=%d\n", evt->data_len);
+        INFO("HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
         break;
     case HTTP_EVENT_ON_FINISH:
-        INFO("HTTP_EVENT_ON_FINISH\n");
+        INFO("HTTP_EVENT_ON_FINISH");
         break;
     case HTTP_EVENT_DISCONNECTED:
-        INFO("HTTP_EVENT_DISCONNECTED\n");
+        INFO("HTTP_EVENT_DISCONNECTED");
         break;
     case HTTP_EVENT_REDIRECT:
-        INFO("HTTP_EVENT_REDIRECT\n");
+        INFO("HTTP_EVENT_REDIRECT");
         break;
+    default:
+        INFO("%d", evt->event_id);
     }
+
+    INFO("\n");
+
     return ESP_OK;
 }
 
 
 static bool dbgAuto(uint8_t argc, char** argv)
 {
-    if (argc < 2) {
+    char    url[64];
+
+    if (argc < 3) {
         return false;
     }
 
@@ -75,7 +86,9 @@ static bool dbgAuto(uint8_t argc, char** argv)
         .http_config = &config,
     };
 
-    config.url = argv[1];
+    sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
+
+    config.url = url;
 
     INFO("Attempting to download update from %s\n", config.url);
     esp_err_t ret = esp_https_ota(&ota_config);
@@ -91,8 +104,9 @@ static bool dbgAuto(uint8_t argc, char** argv)
 static bool dbgBegin(uint8_t argc, char** argv)
 {
     esp_err_t   err;
+    char    url[64];
 
-    if (argc < 2) {
+    if (argc < 3) {
         return false;
     }
 
@@ -106,24 +120,66 @@ static bool dbgBegin(uint8_t argc, char** argv)
         .http_config = &config,
     };
 
-    config.url = argv[1];
+    sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
+
+    config.url = url;
+
+    INFO("begin OTA from %s\n", config.url);
 
     err = esp_https_ota_begin(&ota_config, &g_ota.handle);
+    if (ESP_OK != err) {
+        ERROR("esp_https_ota_begin failed %d\n", err);
+    }
+
     return true;
 }
-
 
 static bool dbgPerform(uint8_t argc, char** argv)
 {
     esp_err_t   err;
+    int         size;
+    bool        complete;
+    int         prevSize = 0;
 
     do {
-        err = esp_https_ota_perform(&g_ota.handle);
+        err = esp_https_ota_perform(g_ota.handle);
+        size = esp_https_ota_get_image_len_read(g_ota.handle);
+        complete = esp_https_ota_is_complete_data_received(g_ota.handle);
+        PRINT("read: %d %d\n", size, complete);
+        if (size == prevSize) {
+            break;
+        }
+        prevSize = size;
     } while (ESP_ERR_HTTPS_OTA_IN_PROGRESS == err);
 
-    if (ESP_OK != err) {
+    if ((ESP_OK != err) && (ESP_ERR_HTTPS_OTA_IN_PROGRESS != err)) {
         ERROR("esp_https_ota_perform failed %d\n", err);
     }
+
+    return true;
+}
+
+static bool dbgFinish(uint8_t argc, char** argv)
+{
+    esp_err_t   err;
+
+    err =  esp_https_ota_finish(g_ota.handle);
+    if (ESP_OK != err) {
+        ERROR("esp_https_ota_finish failed %d\n", err);
+    }
+
+    return true;
+}
+
+static bool dbgAbort(uint8_t argc, char** argv)
+{
+    esp_err_t   err;
+
+    err =  esp_https_ota_abort(g_ota.handle);
+    if (ESP_OK != err) {
+        ERROR("esp_https_ota_abort failed %d\n", err);
+    }
+
 
     return true;
 }
@@ -136,16 +192,45 @@ static bool dbgRestart(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-     return true;
+    esp_err_t       err;
+    int             size;
+    esp_app_desc_t  new_app_info;
+
+    err = esp_https_ota_get_status_code(g_ota.handle);
+    if (err < 0) {
+        ERROR("esp_https_ota_get_status_code failed %d\n", err);
+    } else {
+        PRINT("esp_https_ota_get_status_code %d\n", err);
+    }
+
+    size = esp_https_ota_get_image_size(g_ota.handle);
+    PRINT("image size: %d\n", size);
+
+    err = esp_https_ota_get_img_desc(g_ota.handle, &new_app_info);
+    if (ESP_OK != err) {
+        ERROR("esp_https_ota_get_img_desc failed %d\n", err);
+    } else {
+        PRINT("magic_word     : 0x%x\n", new_app_info.magic_word);
+        PRINT("secure_version : %d\n", new_app_info.secure_version);
+        PRINT_BUF("ver", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.version, sizeof(new_app_info.version));
+        PRINT_BUF("proj", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.project_name, sizeof(new_app_info.project_name));
+        PRINT_BUF("time", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.time, sizeof(new_app_info.time));
+        PRINT_BUF("date", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.date, sizeof(new_app_info.date));
+        PRINT_BUF("idf", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.idf_ver, sizeof(new_app_info.idf_ver));
+    }
+
+    return true;
 }
 
 DEBUG_MENU_START(g_menu)
     DEBUG_MENU_DIR("ota", NULL)
-	    DEBUG_MENU_CMD("status",		NULL,		NULL, dbgStatus)
-	    DEBUG_MENU_CMD("auto    ",		NULL,		NULL, dbgAuto)
-	    DEBUG_MENU_CMD("restart",		NULL,		NULL, dbgRestart)
-	    DEBUG_MENU_CMD("begin",			NULL,		NULL, dbgBegin)
-	    DEBUG_MENU_CMD("perform",		NULL,		NULL, dbgPerform)
+	    DEBUG_MENU_CMD("status",	NULL,		    NULL, dbgStatus)
+	    DEBUG_MENU_CMD("auto",		NULL,		    NULL, dbgAuto)
+	    DEBUG_MENU_CMD("restart",	NULL,		    NULL, dbgRestart)
+	    DEBUG_MENU_CMD("begin",		"<ip> <file>",	NULL, dbgBegin)
+	    DEBUG_MENU_CMD("perform",	NULL,		    NULL, dbgPerform)
+	    DEBUG_MENU_CMD("finish",	NULL,		    NULL, dbgFinish)
+	    DEBUG_MENU_CMD("abort", 	NULL,		    NULL, dbgAbort)
     DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
