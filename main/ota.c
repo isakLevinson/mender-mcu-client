@@ -18,40 +18,40 @@ static struct {
 
 esp_err_t _http_event_handler(esp_http_client_event_t *evt)
 {
-    INFO("_http_event_handler: ");
+    TRACE("_http_event_handler: ");
 
     switch (evt->event_id) {
     case HTTP_EVENT_ERROR:
-        INFO("HTTP_EVENT_ERROR");
+        TRACE("HTTP_EVENT_ERROR");
         break;
     case HTTP_EVENT_ON_CONNECTED:
-        INFO("HTTP_EVENT_ON_CONNECTED");
+        TRACE("HTTP_EVENT_ON_CONNECTED");
         break;
     case HTTP_EVENT_HEADER_SENT:
-        INFO("HTTP_EVENT_HEADER_SENT");
+        TRACE("HTTP_EVENT_HEADER_SENT");
         break;
     case HTTP_EVENT_ON_HEADER:
-        INFO("HTTP_EVENT_ON_HEADER");
-        INFO_BUF("key", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_key, 10);
-        INFO_BUF("val", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_value, 10);
+        TRACE("HTTP_EVENT_ON_HEADER");
+        TRACE_BUF("key", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_key, 10);
+        TRACE_BUF("val", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_value, 10);
         break;
     case HTTP_EVENT_ON_DATA:
-        INFO("HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
+        TRACE("HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
         break;
     case HTTP_EVENT_ON_FINISH:
-        INFO("HTTP_EVENT_ON_FINISH");
+        TRACE("HTTP_EVENT_ON_FINISH");
         break;
     case HTTP_EVENT_DISCONNECTED:
-        INFO("HTTP_EVENT_DISCONNECTED");
+        TRACE("HTTP_EVENT_DISCONNECTED");
         break;
     case HTTP_EVENT_REDIRECT:
-        INFO("HTTP_EVENT_REDIRECT");
+        TRACE("HTTP_EVENT_REDIRECT");
         break;
     default:
-        INFO("%d", evt->event_id);
+        TRACE("%d", evt->event_id);
     }
 
-    INFO("\n");
+    TRACE("\n");
 
     return ESP_OK;
 }
@@ -114,6 +114,7 @@ static bool dbgBegin(uint8_t argc, char** argv)
         .cert_pem = (char *)server_cert_pem_start,
         .event_handler = _http_event_handler,
         .keep_alive_enable = true,
+        .skip_cert_common_name_check = true,
     };
 
     esp_https_ota_config_t ota_config = {
@@ -146,14 +147,29 @@ static bool dbgPerform(uint8_t argc, char** argv)
         size = esp_https_ota_get_image_len_read(g_ota.handle);
         complete = esp_https_ota_is_complete_data_received(g_ota.handle);
         PRINT("read: %d %d\n", size, complete);
-        if (size == prevSize) {
-            break;
+        
+//        if (ESP_ERR_HTTPS_OTA_IN_PROGRESS != err) {
+//            PRINT("err=0x%xd\n", err);
+//            break;
+//        }
+
+        if (complete) {
+            PRINT("complete==true\n");
+//            break;
         }
+
+        if (size == prevSize) {
+            PRINT("size not incremented\n");
+//            break;
+        }
+
         prevSize = size;
     } while (ESP_ERR_HTTPS_OTA_IN_PROGRESS == err);
 
     if ((ESP_OK != err) && (ESP_ERR_HTTPS_OTA_IN_PROGRESS != err)) {
         ERROR("esp_https_ota_perform failed %d\n", err);
+    } else {
+        PRINT("err=0x%x\n", err);
     }
 
     return true;
@@ -180,7 +196,6 @@ static bool dbgAbort(uint8_t argc, char** argv)
         ERROR("esp_https_ota_abort failed %d\n", err);
     }
 
-
     return true;
 }
 
@@ -195,14 +210,14 @@ static bool dbgStatus(uint8_t argc, char** argv)
     esp_err_t       err;
     int             size;
     esp_app_desc_t  new_app_info;
-
+#if 1
     err = esp_https_ota_get_status_code(g_ota.handle);
     if (err < 0) {
         ERROR("esp_https_ota_get_status_code failed %d\n", err);
     } else {
         PRINT("esp_https_ota_get_status_code %d\n", err);
     }
-
+#endif
     size = esp_https_ota_get_image_size(g_ota.handle);
     PRINT("image size: %d\n", size);
 
