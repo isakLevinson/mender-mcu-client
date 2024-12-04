@@ -9,14 +9,13 @@
 #include <string.h>
 #include "memory.h"
 
-#define VERSION    "0.1"
 #define PROMPT     "eeg"
 
 #define SIMULATION_MODE     true
 
 #define SW_VERSION_MAJOR		1
 #define SW_VERSION_MINOR		1
-#define SW_VERSION_BUILD		1
+#define SW_VERSION_BUILD		2
 
 #define HW_VERSION_MAJOR		1
 #define HW_VERSION_MINOR		0

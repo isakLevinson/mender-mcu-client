@@ -6,4 +6,4 @@ set(EXTRA_COMPONENT_DIRS $ENV{IDF_PATH}/examples/system/console/advanced/compone
 	)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(iperf)
+project(pnu)
