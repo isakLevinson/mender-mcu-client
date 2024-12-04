@@ -210,14 +210,14 @@ static bool dbgStatus(uint8_t argc, char** argv)
     esp_err_t       err;
     int             size;
     esp_app_desc_t  new_app_info;
-#if 1
+
     err = esp_https_ota_get_status_code(g_ota.handle);
     if (err < 0) {
         ERROR("esp_https_ota_get_status_code failed %d\n", err);
     } else {
         PRINT("esp_https_ota_get_status_code %d\n", err);
     }
-#endif
+
     size = esp_https_ota_get_image_size(g_ota.handle);
     PRINT("image size: %d\n", size);
 

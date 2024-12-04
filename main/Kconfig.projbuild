@@ -1,0 +1,44 @@
+menu "build type"
+
+    choice BUILD_TYPE
+        prompt "build type"
+        default PARTITION_TABLE_SINGLE_APP
+        help
+            The partition table to flash to the ESP32. The partition table
+            determines where apps, data and other resources are expected to
+            be found.
+
+            The predefined partition table CSV descriptions can be found
+            in the components/partition_table directory. These are mostly intended
+            for example and development use, it's expect that for production use you
+            will copy one of these CSV files and create a custom partition CSV for
+            your application.
+
+        config BUILD_TYPE_PNU
+            bool "PNU"
+            help
+                This is the default partition table, designed to fit into a 2MB or
+                larger flash with a single 1MB app partition.
+
+                The corresponding CSV file in the IDF directory is
+                components/partition_table/partitions_singleapp.csv
+
+                This partition table is not suitable for an app that needs OTA
+                (over the air update) capability.
+
+        config BUILD_TYPE_GSR
+            bool "GSR"
+            help
+                This is a variation of the default partition table, that expands
+                the 1MB app partition size to 1.5MB to fit more code.
+
+                The corresponding CSV file in the IDF directory is
+                components/partition_table/partitions_singleapp_large.csv
+
+                This partition table is not suitable for an app that needs OTA
+                (over the air update) capability.
+
+    endchoice
+
+endmenu
+

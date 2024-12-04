@@ -510,6 +510,15 @@ esp_ip4_addr_t  wifi_getSelfIp(void)
     return ip.ip;
 }
 
+bool WIFI_setMdns(char* pName)
+{
+    NVS_set_mdns(pName);
+    mdns_hostname_set(pName);
+
+    return true;
+}
+
+
 static bool dbgConnect(uint8_t argc, char** argv)
 {
     if (argc < 3) {
@@ -612,8 +621,15 @@ static bool dbgBroadcastTime(uint8_t argc, char **argv)
 
 static bool dbgMdns(uint8_t argc, char **argv)
 {
-    _mdnsInit();
+    char str[32];
 
+    if (argc < 2) {
+        NVS_get_mdns(str);
+        PRINT("%s\n", str);
+        return true;
+    }
+
+    WIFI_setMdns(argv[1]);
     return true;
 }
 
@@ -625,7 +641,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("scan",	            NULL,		NULL, dbgScan)
 		DEBUG_MENU_CMD("wssSend",           NULL,		NULL, dbgWssSend)
 		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
-		DEBUG_MENU_CMD("mdns",          	NULL,		NULL, dbgMdns)
+		DEBUG_MENU_CMD("mdns",          	"[name]",   NULL, dbgMdns)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

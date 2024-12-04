@@ -554,6 +554,13 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
+# build type
+#
+CONFIG_BUILD_TYPE_PNU=y
+# CONFIG_BUILD_TYPE_GSR is not set
+# end of build type
+
+#
 # Compiler options
 #
 CONFIG_COMPILER_OPTIMIZATION_DEBUG=y
