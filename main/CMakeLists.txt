@@ -1,9 +1,21 @@
-idf_component_register(SRCS	"main.c"
-       				"app.c"
+
+if (CONFIG_BUILD_TYPE_PNU)
+	set(SPECIFIC_SRC "pump.c" "app.c")
+endif()
+
+if (CONFIG_BUILD_TYPE_GSR)
+	set(SPECIFIC_SRC "")
+endif()
+
+message(SPECIFIC_SRC = "${SPECIFIC_SRC}")
+
+idf_component_register(
+				SRCS
+				${SPECIFIC_SRC}
+				"main.c"
 				"cmd.c"
 				"wifi.c"
 				"time.c"
-				"pump.c"
 				"adc.c"
 				"wss.c"
 				"wss_keepalive.c"
