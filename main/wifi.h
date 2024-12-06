@@ -12,7 +12,7 @@ extern "C" {
 void WIFI_init(void);
 esp_ip4_addr_t  wifi_getSelfIp(void);
 bool            sta_connect(const char *ssid, const char *pass);
-
+bool WIFI_setMdns(char* pName);
 
 #ifdef __cplusplus
 }
