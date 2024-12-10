@@ -4,7 +4,7 @@ if (CONFIG_BUILD_TYPE_PNU)
 endif()
 
 if (CONFIG_BUILD_TYPE_GSR)
-	set(SPECIFIC_SRC "")
+	set(SPECIFIC_SRC "max30001.c")
 endif()
 
 message(SPECIFIC_SRC = "${SPECIFIC_SRC}")

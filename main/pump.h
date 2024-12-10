@@ -2,8 +2,12 @@
 #define PUMP_H_
 
 
+#if CONFIG_BUILD_TYPE_PNU
 void PMP_init(void);
 bool PMP_on(uint8_t ch, uint32_t val);
-
+#else
+#define PMP_init()
+#define PMP_on()    false
+#endif
 
 #endif // PUMP_H_

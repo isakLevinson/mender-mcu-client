@@ -178,14 +178,17 @@ static void _streamPeriod(uint32_t period)
 
 static void _taskStreamer(void *arg)
 {
+#if CONFIG_BUILD_TYPE_PNU
 	bool	ret;
 	int32_t	t;
 	int16_t	press[4];
 	CMD_RSPBUF_STREAM	rsp;
 	uint32_t	i;
+#endif
 
     while (true) {
         vTaskDelay(10);
+#if CONFIG_BUILD_TYPE_PNU
 		if (!g_cmd.streamPeriod) {
 			continue;
 		}		
@@ -209,6 +212,7 @@ static void _taskStreamer(void *arg)
 			ERROR("failed to send. stopping streaming\n");
 			_streamPeriod(0);
 		}
+#endif		
     }
 }
 
@@ -269,6 +273,8 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 
 static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq, uint16_t size)
 {
+#if CONFIG_BUILD_TYPE_PNU
+
 	CMD_RSPBUF_STATUS	rsp;
 	int16_t	press[4];
 	bool	valves[5];
@@ -297,7 +303,7 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 	rsp.soc		= 90;
 
     _sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
-	
+#endif	
 	return true;
 }
 

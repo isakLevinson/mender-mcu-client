@@ -34,6 +34,7 @@
 #include "nvs.h"
 #include "config.h"
 #include "ota.h"
+#include "max30001.h"
 
 #define BUF_SIZE    1024
 
@@ -77,12 +78,18 @@ void app_main(void)
     NVS_init();
     OTA_init();
     CMD_init(NULL);
-    PMP_init();
+
     ADC_init();
     LED_init();
-    APP_init();
 
     WIFI_init();
+
+    max30001_init();
+
+    PMP_init();
+    APP_init();
+
+
 
     esp_log_level_set("*", ESP_LOG_ERROR);
 
