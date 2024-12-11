@@ -28,7 +28,7 @@ static const esp_partition_t* find_partition(esp_partition_type_t type, esp_part
 		return NULL;
 	}
 
-	INFO("found partition '%s' at offset 0x%x with size 0x%x\n", part->label, part->address, part->size);
+	TRACE("found partition '%s' at offset 0x%x with size 0x%x\n", part->label, part->address, part->size);
 
 	return part;
 }
@@ -337,17 +337,19 @@ static bool dbgGetObject(uint8_t argc, char** argv)
 {
 	bool    ret;
 	const cJSON* object;
-	bool    isPrivate       = false;
-	bool    isPublic        = false;
-	bool    isCertificate   = false;
-	bool    isDate          = false;
-	bool    isSn            = false;
-	bool    isRevision      = false;
-	bool    isModel         = false;
+	bool    isAll			= false;
+	bool    isPrivate		= false;
+	bool    isPublic		= false;
+	bool    isCertificate	= false;
+	bool    isDate			= false;
+	bool    isSn			= false;
+	bool    isRevision		= false;
+	bool    isModel			= false;
 	char*   pStr = NULL;
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("a",			ARGS_TYPE_SWITCH,		0,	"",				    &isAll)
 		ARGS_ENTRY("priv",		ARGS_TYPE_SWITCH,		0,	"",				    &isPrivate)
 		ARGS_ENTRY("pub",		ARGS_TYPE_SWITCH,		0,	"",				    &isPublic)
 		ARGS_ENTRY("cert",		ARGS_TYPE_SWITCH,		0,	"",				    &isCertificate)
@@ -362,6 +364,16 @@ static bool dbgGetObject(uint8_t argc, char** argv)
 	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
 	if (!ret) {
 		return false;
+	}
+
+	if (isAll) {
+		isPrivate		 = true;
+		isPublic		= true;
+		isCertificate	= true;
+		isDate			= true;
+		isSn			= true;
+		isRevision		= true;
+		isModel			= true;
 	}
 
 	if (isPrivate) {

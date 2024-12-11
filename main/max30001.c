@@ -42,7 +42,6 @@ static uint32_t _readReg(uint8_t i_reg)
 	spi_device_release_bus(spi_handle);
 	retVal = t.rx_data[0] << 24 | t.rx_data[1] << 16 | t.rx_data[2] << 8 | t.rx_data[3];
 
-
 	return retVal;
 }
 
