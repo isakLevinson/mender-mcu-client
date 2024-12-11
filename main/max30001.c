@@ -75,47 +75,49 @@ void max30001_start_ecg(void)
 	uint32_t max30001_timeout = 0;
 
 	max_regs_val.mngrInt.bit.clr_samp = 0x01;
-	max_regs_val.mngrInt.bit.b_fit    = 0x07;
-	max_regs_val.mngrInt.bit.e_fit    = 0x0F;
+	max_regs_val.mngrInt.bit.bfit     = 0x07;
+	max_regs_val.mngrInt.bit.efit     = 0x0F;
 
-	_writeReg(MAX30001_MNGR_INT_REG, max_regs_val.mngrInt.all);
+	_writeReg(MAX3001_REG_MNGR_INT, max_regs_val.mngrInt.all);
 
-	max_regs_val.cnfgEmux.all = _readReg(MAX30001_CNFG_EMUX_REG);
+	max_regs_val.cnfgEmux.all = _readReg(MAX3001_REG_CNFG_EMUX);
 	max_regs_val.cnfgEmux.bit.openp = 0; // Positive lead enabled
 	max_regs_val.cnfgEmux.bit.openn = 0; // Negative lead enabled
 	max_regs_val.cnfgEmux.bit.pol = 0;   // Positive polarity
 	max_regs_val.cnfgEmux.bit.calp_sel = 0; // Calibration disabled
 	max_regs_val.cnfgEmux.bit.caln_sel = 0; // Calibration disabled
 
-	_writeReg(MAX30001_CNFG_EMUX_REG, max_regs_val.cnfgEmux.all);
+	_writeReg(MAX3001_REG_CNFG_EMUX, max_regs_val.cnfgEmux.all);
 
-	max_regs_val.cnfgGen.all = _readReg(MAX30001_CNFG_GEN_REG);
+	max_regs_val.cnfgGen.all = _readReg(MAX3001_REG_CNFG_GEN);
 
 	max_regs_val.cnfgGen.bit.en_ecg = 1; // Enable ECG
 
-	_writeReg(MAX30001_CNFG_GEN_REG, max_regs_val.cnfgGen.all);
+	_writeReg(MAX3001_REG_CNFG_GEN, max_regs_val.cnfgGen.all);
 
 	// Wait until PLL is initialized
 	max30001_timeout = 0;
 	do {
-		max_regs_val.status.all = _readReg(MAX30001_STATUS_REG);
+		max_regs_val.status.all = _readReg(MAX3001_REG_STATUS);
 	} while (max_regs_val.status.bit.pllint == 1 && max30001_timeout++ <= 1000);
 
-	max_regs_val.mngrInt.all = _readReg(MAX30001_MNGR_DYN_REG);
+	max_regs_val.mngrInt.all = _readReg(MAX3001_REG_MNGR_DYN);
 
-	max_regs_val.mngrInt.bit.e_fit = 0x0F; // Set ECG FIFO to xxx
+	max_regs_val.mngrInt.bit.efit = 0x0F; // Set ECG FIFO to xxx
 
-	_writeReg(MAX30001_MNGR_INT_REG, max_regs_val.mngrInt.all);
+	_writeReg(MAX3001_REG_MNGR_INT, max_regs_val.mngrInt.all);
 
-	max_regs_val.cnfgEcg.all = _readReg(MAX30001_CNFG_ECG_REG);
+	max_regs_val.cnfgEcg.all = _readReg(MAX3001_REG_CNFG_ECG);
 
 	max_regs_val.cnfgEcg.bit.dlpf = 0x01;
 	max_regs_val.cnfgEcg.bit.dhpf = 0x01;
 	max_regs_val.cnfgEcg.bit.rate = 0x02; // 128 SPS
 	max_regs_val.cnfgEcg.bit.gain = 0x00; // 20V/V
 
-	_writeReg(MAX30001_CNFG_ECG_REG, max_regs_val.cnfgEcg.all);
+	_writeReg(MAX3001_REG_CNFG_ECG, max_regs_val.cnfgEcg.all);
 
+	_writeReg(MAX3001_REG_FIFO_RST, 0x00000000);
+	_writeReg(MAX3001_REG_SYNCH, 0x00000000);
 }
 
 void max30001_stop_ecg(void)
@@ -167,8 +169,8 @@ void max30001_set_ecg_bioz_r2r_cfg(void)
 	max_regs_val.enInt2.bit.intb_type = 0x03;
 
 	max_regs_val.mngrInt.bit.clr_samp = 0x01;
-	max_regs_val.mngrInt.bit.b_fit    = 0x07;
-	max_regs_val.mngrInt.bit.e_fit    = 0x0F;
+	max_regs_val.mngrInt.bit.bfit    = 0x07;
+	max_regs_val.mngrInt.bit.efit    = 0x0F;
 
 	max_regs_val.mngrDyn.bit.bloff_lo_it  = 0xFF;
 	max_regs_val.mngrDyn.bit.bloff_hi_it  = 0xFF;
@@ -209,33 +211,33 @@ void max30001_set_ecg_bioz_r2r_cfg(void)
 	max_regs_val.cnfg_rtor2.bit.ravg = 0x02;
 	max_regs_val.cnfg_rtor2.bit.hoff = 0x20;
 
-	INFO("write MAX30001_EN_INT_REG reg:       %08" PRIx32"\n", max_regs_val.enInt.all);
-	INFO("write MAX30001_EN_INT2_REG reg:      %08" PRIx32"\n", max_regs_val.enInt2.all);
-	INFO("write MAX30001_MNGR_INT_REG reg:     %08" PRIx32"\n", max_regs_val.mngrInt.all);
-	INFO("write MAX30001_MNGR_DYN_REG reg:     %08" PRIx32"\n", max_regs_val.mngrDyn.all);
-	INFO("write MAX30001_CNFG_GEN_REG reg:     %08" PRIx32"\n", max_regs_val.cnfgGen.all);
-	INFO("write MAX30001_CNFG_CAL_REG reg:     %08" PRIx32"\n", max_regs_val.cnfgCal.all);
-	INFO("write MAX30001_CNFG_EMUX_REG reg:    %08" PRIx32"\n", max_regs_val.cnfgEmux.all);
-	INFO("write MAX30001_CNFG_ECG_REG reg:     %08" PRIx32"\n", max_regs_val.cnfgEcg.all);
-	INFO("write MAX30001_CNFG_BMUX_REG reg:    %08" PRIx32"\n", max_regs_val.cnfgBmux.all);
-	INFO("write MAX30001_CNFG_BIOZ_REG reg:    %08" PRIx32"\n", max_regs_val.cnfgBioz.all);
-	INFO("write MAX30001_CNFG_BIOZ_LC_REG reg: %08" PRIx32"\n", max_regs_val.cnfgBiozLc.all);
-	INFO("write MAX30001_CNFG_RTOR1_REG reg:   %08" PRIx32"\n", max_regs_val.cnfgRtor1.all);
-	INFO("write MAX30001_CNFG_RTOR2_REG reg:   %08" PRIx32"\n", max_regs_val.cnfg_rtor2.all);
+	INFO("write MAX3001_REG_EN_INT reg:       %08" PRIx32"\n", max_regs_val.enInt.all);
+	INFO("write MAX3001_REG_EN_INT2 reg:      %08" PRIx32"\n", max_regs_val.enInt2.all);
+	INFO("write MAX3001_REG_MNGR_INT reg:     %08" PRIx32"\n", max_regs_val.mngrInt.all);
+	INFO("write MAX3001_REG_MNGR_DYN reg:     %08" PRIx32"\n", max_regs_val.mngrDyn.all);
+	INFO("write MAX3001_REG_CNFG_GEN reg:     %08" PRIx32"\n", max_regs_val.cnfgGen.all);
+	INFO("write MAX3001_REG_CNFG_CAL reg:     %08" PRIx32"\n", max_regs_val.cnfgCal.all);
+	INFO("write MAX3001_REG_CNFG_EMUX reg:    %08" PRIx32"\n", max_regs_val.cnfgEmux.all);
+	INFO("write MAX3001_REG_CNFG_ECG reg:     %08" PRIx32"\n", max_regs_val.cnfgEcg.all);
+	INFO("write MAX3001_REG_CNFG_BMUX reg:    %08" PRIx32"\n", max_regs_val.cnfgBmux.all);
+	INFO("write MAX3001_REG_CNFG_BIOZ reg:    %08" PRIx32"\n", max_regs_val.cnfgBioz.all);
+	INFO("write MAX3001_REG_CNFG_BIOZ_LC reg: %08" PRIx32"\n", max_regs_val.cnfgBiozLc.all);
+	INFO("write MAX3001_REG_CNFG_RTOR1 reg:   %08" PRIx32"\n", max_regs_val.cnfgRtor1.all);
+	INFO("write MAX3001_REG_CNFG_RTOR2 reg:   %08" PRIx32"\n", max_regs_val.cnfg_rtor2.all);
 
-	_writeReg(MAX30001_EN_INT_REG, max_regs_val.enInt.all);
-	_writeReg(MAX30001_EN_INT2_REG, max_regs_val.enInt2.all);
-	_writeReg(MAX30001_MNGR_INT_REG, max_regs_val.mngrInt.all);
-	_writeReg(MAX30001_MNGR_DYN_REG, max_regs_val.mngrDyn.all);
-	_writeReg(MAX30001_CNFG_GEN_REG, max_regs_val.cnfgGen.all);
-	_writeReg(MAX30001_CNFG_CAL_REG, max_regs_val.cnfgCal.all);
-	_writeReg(MAX30001_CNFG_EMUX_REG, max_regs_val.cnfgEmux.all);
-	_writeReg(MAX30001_CNFG_ECG_REG, max_regs_val.cnfgEcg.all);
-	_writeReg(MAX30001_CNFG_BMUX_REG, max_regs_val.cnfgBmux.all);
-	_writeReg(MAX30001_CNFG_BIOZ_REG, max_regs_val.cnfgBioz.all);
-	_writeReg(MAX30001_CNFG_BIOZ_LC_REG, max_regs_val.cnfgBiozLc.all);
-	_writeReg(MAX30001_CNFG_RTOR1_REG, max_regs_val.cnfgRtor1.all);
-	_writeReg(MAX30001_CNFG_RTOR2_REG, max_regs_val.cnfg_rtor2.all);
+	_writeReg(MAX3001_REG_EN_INT, max_regs_val.enInt.all);
+	_writeReg(MAX3001_REG_EN_INT2, max_regs_val.enInt2.all);
+	_writeReg(MAX3001_REG_MNGR_INT, max_regs_val.mngrInt.all);
+	_writeReg(MAX3001_REG_MNGR_DYN, max_regs_val.mngrDyn.all);
+	_writeReg(MAX3001_REG_CNFG_GEN, max_regs_val.cnfgGen.all);
+	_writeReg(MAX3001_REG_CNFG_CAL, max_regs_val.cnfgCal.all);
+	_writeReg(MAX3001_REG_CNFG_EMUX, max_regs_val.cnfgEmux.all);
+	_writeReg(MAX3001_REG_CNFG_ECG, max_regs_val.cnfgEcg.all);
+	_writeReg(MAX3001_REG_CNFG_BMUX, max_regs_val.cnfgBmux.all);
+	_writeReg(MAX3001_REG_CNFG_BIOZ, max_regs_val.cnfgBioz.all);
+	_writeReg(MAX3001_REG_CNFG_BIOZ_LC, max_regs_val.cnfgBiozLc.all);
+	_writeReg(MAX3001_REG_CNFG_RTOR1, max_regs_val.cnfgRtor1.all);
+	_writeReg(MAX3001_REG_CNFG_RTOR2, max_regs_val.cnfg_rtor2.all);
 
 }
 
@@ -250,9 +252,9 @@ void max300001_get_status(void)
 	int32_t ecg_val;
 	float ecg_mv;
 	max_regs_val.status.all = _readReg(0x01);
-	// INFO("MAX30001_STATUS_REG reg read:     %08" PRIx32"\n",max_regs_val.status.all);
+	// INFO("MAX3001_REG_STATUS reg read:     %08" PRIx32"\n",max_regs_val.status.all);
 	if (max_regs_val.status.bit.eint == 1) {
-		max_regs_val.ecg_fifo.all = _readReg(MAX30001_ECG_FIFO_REG);
+		max_regs_val.ecg_fifo.all = _readReg(MAX3001_REG_ECG_FIFO);
 		ecg_val = max_regs_val.ecg_fifo.all & 0xFFFFFF30;
 		ecg_val = ecg_val << 8;
 		ecg_val = ecg_val / 16384;
@@ -305,11 +307,7 @@ static void _init(void)
 	ESP_ERROR_CHECK(ret);
 
 	max_regs_val.status.all = _readReg(0x01);
-	INFO("MAX30001_STATUS_REG reg read:     %08" PRIx32"\n", max_regs_val.status.all);
-
-	max30001_start_ecg();
-	_writeReg(MAX30001_FIFO_RST_REG, 0x00000000);
-	_writeReg(MAX30001_SYNCH_REG, 0x00000000);
+	INFO("MAX3001_REG_STATUS reg read:     %08" PRIx32"\n", max_regs_val.status.all);
 }
 
 static bool dbgRd(uint8_t argc, char** argv)
@@ -324,6 +322,64 @@ static bool dbgRd(uint8_t argc, char** argv)
 	reg = strtoul(argv[1], NULL, 16);
 	val = _readReg(reg);
 	PRINT("%x\n", val);
+
+	switch (reg) {
+		case MAX3001_REG_STATUS:
+			max30001_status_u* status = (max30001_status_u*)&val;
+			PRINT("EINT     : %d\n", status->bit.eint);
+			PRINT("EOVF     : %d\n", status->bit.eovf);
+			PRINT("FSTINT   : %d\n", status->bit.fstint);
+			PRINT("DCLOFFINT: %d\n", status->bit.dcloffint);
+			PRINT("BINT     : %d\n", status->bit.bint);
+			PRINT("BOVF     : %d\n", status->bit.bovf);
+			PRINT("BOVER    : %d\n", status->bit.bover);
+			PRINT("BUNDR    : %d\n", status->bit.bundr);
+			PRINT("BCGMON   : %d\n", status->bit.bcgmon);
+			PRINT("PINT     : %d\n", status->bit.pint);
+			PRINT("POVF     : %d\n", status->bit.povf);
+			PRINT("PEDGE    : %d\n", status->bit.pedge);
+			PRINT("LONINT   : %d\n", status->bit.lonint);
+			PRINT("RRINT    : %d\n", status->bit.rrint);
+			PRINT("SAMP     : %d\n", status->bit.samp);
+			PRINT("PLLINT   : %d\n", status->bit.pllint);
+			PRINT("BCGMN    : %d\n", status->bit.bcgmn);
+			PRINT("BCGMP    : %d\n", status->bit.bcgmp);
+			PRINT("BCGMN    : %d\n", status->bit.bcgmn);
+			PRINT("LDOFF_PH : %d\n", status->bit.ldoff_ph);
+			PRINT("LDOFF_PL : %d\n", status->bit.ldoff_pl);
+			PRINT("LDOFF_NH : %d\n", status->bit.ldoff_nh);
+			PRINT("LDOFF_NL : %d\n", status->bit.ldoff_nl);
+			break;
+
+		case MAX3001_REG_MNGR_INT:
+			max30001_mngr_int_u* mngr = (max30001_mngr_int_u*)&val;
+			PRINT("EFIT      : %x\n", mngr->bit.efit);
+			PRINT("BFIT      : %x\n", mngr->bit.bfit);
+			PRINT("CLR_FAST  : %x\n", mngr->bit.clr_fast);
+			PRINT("CLR_RRINT : %x\n", mngr->bit.clr_rrint);
+			PRINT("CLR_PEDGE : %x\n", mngr->bit.clr_pedge);
+			PRINT("CLR_SAMP  : %x\n", mngr->bit.clr_samp);
+			PRINT("SAMP_IT   : %x\n", mngr->bit.samp_it);
+			break;
+
+		case MAX3001_REG_CNFG_GEN:
+			max30001_cnfg_gen_u* cnfg = (max30001_cnfg_gen_u*)&val;
+			PRINT("CNFG_GEN    : %x\n", cnfg->bit.en_ulp_lon);
+			PRINT("FMSTR       : %x\n", cnfg->bit.fmstr);
+			PRINT("EN_ECG      : %x\n", cnfg->bit.en_ecg);
+			PRINT("EN_BIOZ     : %x\n", cnfg->bit.en_bioz);
+			PRINT("EN_PACE     : %x\n", cnfg->bit.en_pace);
+			PRINT("EN_BLOFF    : %x\n", cnfg->bit.en_bloff);
+			PRINT("EN_DCLOFF   : %x\n", cnfg->bit.en_dcloff);
+			PRINT("DCLOFF_IPOL : %x\n", cnfg->bit.dcloff_ipol);
+			PRINT("IMAG        : %x\n", cnfg->bit.imag);
+			PRINT("VTH         : %x\n", cnfg->bit.vth);
+			PRINT("EN_RBIAS    : %x\n", cnfg->bit.en_rbias);
+			PRINT("RBIASV      : %x\n", cnfg->bit.rbiasv);
+			PRINT("RBIASP      : %x\n", cnfg->bit.rbiasp);
+			PRINT("RBIASN      : %x\n", cnfg->bit.rbiasn);
+			break;
+	}
 
 	return true;
 }
@@ -344,9 +400,72 @@ static bool dbgWr(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgEcgStart(uint8_t argc, char** argv)
+{
+	max30001_start_ecg();
+	return true;
+}
+
+static bool dbgReset(uint8_t argc, char** argv)
+{
+	_writeReg(MAX3001_REG_SW_RST, 0);
+	return true;
+}
+
+static bool dbgSync(uint8_t argc, char** argv)
+{
+	_writeReg(MAX3001_REG_SYNCH, 0);
+	return true;
+}
+
+static bool dbgFifoEcg(uint8_t argc, char** argv)
+{
+	max30001_ecg_fifo_u val;
+	uint8_t count = 0;
+
+	do {
+		val.all = _readReg(MAX3001_REG_ECG_FIFO);
+		INFO("%06x %x %x", val.bit.ecg_data, val.bit.ptag, val.bit.etag);
+
+		if (val.bit.etag == 2) {
+			INFO(" EOF");
+			break;
+		}
+
+		if (val.bit.etag == 3) {
+			INFO(" FAULT_EOF");
+			break;
+		}
+
+		if (val.bit.etag == 6) {
+			INFO(" EMPTY");
+			break;
+		}
+
+		if (val.bit.etag == 7) {
+			INFO(" OVERFLOW");
+			_writeReg(MAX3001_REG_FIFO_RST, 0);
+			break;
+		}
+
+		INFO("\n");
+
+		count++;
+	} while (count < 40);
+
+	if (count >= 40) {
+		ERROR("failed to detect EOF\n");
+	}
+	return true;
+}
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-	PRINT("status\n");
+	uint32_t	val;
+
+	val = _readReg(MAX3001_REG_INFO);
+	PRINT("%x\n", val);
+
 	return true;
 }
 
@@ -356,6 +475,10 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("r",			NULL,		NULL, dbgRd)
 		DEBUG_MENU_CMD("w",			NULL,		NULL, dbgWr)
+		DEBUG_MENU_CMD("ecgStart",	NULL,		NULL, dbgEcgStart)
+		DEBUG_MENU_CMD("reset",		NULL,		NULL, dbgReset)
+		DEBUG_MENU_CMD("sync",		NULL,		NULL, dbgSync)
+		DEBUG_MENU_CMD("fifoEcg",	NULL,		NULL, dbgFifoEcg)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
@@ -366,5 +489,7 @@ void max30001_init(void)
 	DBG_TREE_add("/", g_menu);
 
 	_init();
+
+	max30001_start_ecg();
 }
 

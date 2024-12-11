@@ -2,6 +2,33 @@
 
 #include <sys_def.h>
 
+#define MAX30001_WREG   0x00
+#define MAX30001_RREG  0x01
+
+#define MAX3001_REG_STATUS             0x01
+#define MAX3001_REG_EN_INT             0x02
+#define MAX3001_REG_EN_INT2            0x03
+#define MAX3001_REG_MNGR_INT           0x04
+#define MAX3001_REG_MNGR_DYN           0x05
+#define MAX3001_REG_SW_RST             0x08
+#define MAX3001_REG_SYNCH              0x09
+#define MAX3001_REG_FIFO_RST           0x0A
+#define MAX3001_REG_INFO               0x0F
+#define MAX3001_REG_CNFG_GEN           0x10
+#define MAX3001_REG_CNFG_CAL           0x12
+#define MAX3001_REG_CNFG_EMUX          0x14
+#define MAX3001_REG_CNFG_ECG           0x15
+#define MAX3001_REG_CNFG_BMUX          0x17
+#define MAX3001_REG_CNFG_BIOZ          0x18
+#define MAX3001_REG_CNFG_BIOZ_LC       0x1A
+#define MAX3001_REG_CNFG_RTOR1         0x1D
+#define MAX3001_REG_CNFG_RTOR2         0x1E
+#define MAX3001_REG_ECG_FIFO_BURST     0x20
+#define MAX3001_REG_ECG_FIFO           0x21
+#define MAX3001_REG_BIOZ_FIFO_BURST    0x22
+#define MAX3001_REG_BIOZ_FIFO          0x23
+#define MAX3001_REG_RTOR               0x25
+#define MAX3001_REG_NO_OP              0x7F
 
 #define CES_CMDIF_PKT_START_1 0x0A
 #define CES_CMDIF_PKT_START_2 0xFA
@@ -17,10 +44,10 @@ typedef union max30001_status_reg {
 	uint32_t all;
 
 	struct {
-		uint32_t loff_nl : 1;
-		uint32_t loff_nh : 1;
-		uint32_t loff_pl : 1;
-		uint32_t loff_ph : 1;
+		uint32_t ldoff_nl : 1;
+		uint32_t ldoff_nh : 1;
+		uint32_t ldoff_pl : 1;
+		uint32_t ldoff_ph : 1;
 
 		uint32_t bcgmn     : 1;
 		uint32_t bcgmp     : 1;
@@ -48,11 +75,8 @@ typedef union max30001_status_reg {
 		uint32_t eint      : 1;
 
 		uint32_t reserved : 8;
-
 	} bit;
-
 } max30001_status_u;
-
 
 /**
  * @brief EN_INT (0x02)
@@ -149,18 +173,17 @@ typedef union max30001_mngr_int_reg {
 	struct {
 		uint32_t samp_it   : 2;
 		uint32_t clr_samp  : 1;
-		uint32_t reserved0 : 1;
+		uint32_t clr_pedge : 1;
 		uint32_t clr_rrint : 2;
 		uint32_t clr_fast  : 1;
 		uint32_t reserved1 : 1;
 		uint32_t reserved2 : 4;
 		uint32_t reserved3 : 4;
-		uint32_t b_fit     : 3;
-		uint32_t e_fit     : 5;
+		uint32_t bfit      : 3;
+		uint32_t efit      : 5;
 
 		uint32_t reserved : 8;
 	} bit;
-
 } max30001_mngr_int_u;
 
 /**
@@ -218,17 +241,17 @@ typedef union max30001_cnfg_gen_reg {
 		uint32_t en_rbias   : 2;
 		uint32_t vth        : 2;
 		uint32_t imag       : 3;
-		uint32_t ipol       : 1;
+		uint32_t dcloff_ipol: 1;
 		uint32_t en_dcloff  : 2;
 		uint32_t en_bloff   : 2;
-		uint32_t reserved1  : 2;
+		uint32_t reserved1	: 1;
+		uint32_t en_pace    : 1;
 		uint32_t en_bioz    : 1;
 		uint32_t en_ecg     : 1;
 		uint32_t fmstr      : 2;
 		uint32_t en_ulp_lon : 2;
-		uint32_t reserved : 8;
+		uint32_t reserved   : 8;
 	} bit;
-
 } max30001_cnfg_gen_u;
 
 
@@ -399,41 +422,11 @@ typedef union max30001_cnfg_rtor2_reg {
 typedef union max30001_ecg_fifo_reg {
 	uint32_t all;
 	struct {
-		uint32_t ecg_data  : 18;
-		uint32_t etag      : 3;
-		uint32_t ptag      : 3;
-		uint32_t reserved : 8;
+		uint32_t ptag     : 3;
+		uint32_t etag     : 3;
+		uint32_t ecg_data : 18;
 	} bit;
-
 } max30001_ecg_fifo_u;
-
-#define MAX30001_WREG   0x00
-#define MAX30001_RREG  0x01
-
-#define MAX30001_STATUS_REG             0x01
-#define MAX30001_EN_INT_REG             0x02
-#define MAX30001_EN_INT2_REG            0x03
-#define MAX30001_MNGR_INT_REG           0x04
-#define MAX30001_MNGR_DYN_REG           0x05
-#define MAX30001_SW_RST_REG             0x08
-#define MAX30001_SYNCH_REG              0x09
-#define MAX30001_FIFO_RST_REG           0x0A
-#define MAX30001_INFO_REG               0x0F
-#define MAX30001_CNFG_GEN_REG           0x10
-#define MAX30001_CNFG_CAL_REG           0x12
-#define MAX30001_CNFG_EMUX_REG          0x14
-#define MAX30001_CNFG_ECG_REG           0x15
-#define MAX30001_CNFG_BMUX_REG          0x17
-#define MAX30001_CNFG_BIOZ_REG          0x18
-#define MAX30001_CNFG_BIOZ_LC_REG       0x1A
-#define MAX30001_CNFG_RTOR1_REG         0x1D
-#define MAX30001_CNFG_RTOR2_REG         0x1E
-#define MAX30001_ECG_FIFO_BURST_REG     0x20
-#define MAX30001_ECG_FIFO_REG           0x21
-#define MAX30001_BIOZ_FIFO_BURST_REG    0x22
-#define MAX30001_BIOZ_FIFO_REG          0x23
-#define MAX30001_RTOR_REG               0x25
-#define MAX30001_NO_OP_REG              0x7F
 
 typedef struct max30001_registers {
 	max30001_en_int_u enInt;
