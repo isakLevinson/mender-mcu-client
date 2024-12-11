@@ -33,10 +33,6 @@
 #define HW_VERSION_MINOR		0
 #define HW_VERSION_BUILD		0
 
-
-#define SPI_DEVICES         2
-#define MODULES_PER_SPI     8
-
 #define HTTPD_PORT              8000
 #define UDP_SERVER_PORT		    5000
 #define UDP_TIME_SERVER_PORT	5001
@@ -49,8 +45,6 @@
 
 #define UART_PORT_NUM_CMD  (1)
 #define UART_BAUD_CMD      (115200)
-
-#define LED_SPI_HOST     SPI2_HOST
 
 #define GPIO_UART_RXD   5
 #define GPIO_UART_TXD   6
@@ -88,6 +82,9 @@
 #define SPI_PIN_NUM_MOSI 11
 #define SPI_PIN_NUM_CLK  12
 #define SPI_PIN_NUM_CS   7
+
+#define SPI_MAX30001_HOST    SPI2_HOST
+
 #endif
 
 #define NVS_NAMESPACE_WIFI      "wifi"
