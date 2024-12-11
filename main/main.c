@@ -22,7 +22,6 @@
 
 #include "driver/uart.h"
 #include "driver/gpio.h"
-#include "sdkconfig.h"
 #include "main.h"
 #include "cli.h"
 #include "cmd.h"
@@ -88,8 +87,6 @@ void app_main(void)
 
 	PMP_init();
 	APP_init();
-
-
 
 	esp_log_level_set("*", ESP_LOG_ERROR);
 

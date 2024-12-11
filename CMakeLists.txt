@@ -12,7 +12,8 @@ project(pnu)
 
 
 add_custom_target(format
-    COMMAND astyle --suffix=none --formatted --options=${CMAKE_SOURCE_DIR}/.astyle --recursive "${CMAKE_SOURCE_DIR}/main/*.c,.h"
+    COMMAND astyle --suffix=none --formatted --options=${CMAKE_SOURCE_DIR}/.astyle --recursive "${CMAKE_SOURCE_DIR}/main/*.c,.h" "${CMAKE_SOURCE_DIR}/components/*.c,.h"
+
     COMMENT "Running Astyle for code formatting"
 )
 

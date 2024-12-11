@@ -11,7 +11,6 @@
 #include "esp_log.h"
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
-#include "esp_partition.h"
 
 #include "soc/soc_caps.h"
 #include "driver/mcpwm_timer.h"
@@ -544,52 +543,22 @@ static bool dbgCfg(uint8_t argc, char** argv)
 	return true;
 }
 
-static void find_partition(esp_partition_type_t type, esp_partition_subtype_t subtype, const char* name)
-{
-	//    INFO("Find partition with type %s, subtype %s, label %s...", get_type_str(type), get_subtype_str(subtype),
-	//                    name == NULL ? "NULL (unspecified)" : name);
-
-	const esp_partition_t* part  = esp_partition_find_first(type, subtype, name);
-
-	if (part != NULL) {
-		INFO("found partition '%s' at offset 0x%" PRIx32 " with size 0x%\n" PRIx32, part->label, part->address, part->size);
-	} else {
-		ERROR("partition not found\n");
-	}
-}
-
-static bool dbgFinfPartition(uint8_t argc, char** argv)
-{
-	uint8_t type;
-	uint8_t subType;
-
-	if (argc < 3) {
-		return false;
-	}
-
-	type = strtol(argv[1], NULL, 16);
-	subType = strtol(argv[2], NULL, 16);
-
-	find_partition(type, subType, NULL);
-
-	return true;
-}
-
+// *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-DEBUG_MENU_DIR("app", NULL)
-DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
-DEBUG_MENU_CMD("cfg",   	NULL,		NULL, dbgCfg)
-DEBUG_MENU_CMD("valve",		NULL,		NULL, dbgValve)
-DEBUG_MENU_CMD("gpio",		NULL,		NULL, dbgGpio)
-DEBUG_MENU_CMD("led",    	NULL,		NULL, dbgLed)
-DEBUG_MENU_CMD("cuff",		NULL,		NULL, dbgCuff)
-DEBUG_MENU_CMD("target",    NULL,		NULL, dbgTarget)
-DEBUG_MENU_CMD("loop",    	NULL,		NULL, dbgLoopEnable)
-DEBUG_MENU_CMD("piezoCfg", 	NULL,		NULL, dbgPiezoCtrl)
-DEBUG_MENU_CMD("findPart",	NULL,		NULL, dbgFinfPartition)
-DEBUG_MENU_DIR_END
+	DEBUG_MENU_DIR("app", NULL)
+		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
+		DEBUG_MENU_CMD("cfg",   	NULL,		NULL, dbgCfg)
+		DEBUG_MENU_CMD("valve",		NULL,		NULL, dbgValve)
+		DEBUG_MENU_CMD("gpio",		NULL,		NULL, dbgGpio)
+		DEBUG_MENU_CMD("led",    	NULL,		NULL, dbgLed)
+		DEBUG_MENU_CMD("cuff",		NULL,		NULL, dbgCuff)
+		DEBUG_MENU_CMD("target",    NULL,		NULL, dbgTarget)
+		DEBUG_MENU_CMD("loop",    	NULL,		NULL, dbgLoopEnable)
+		DEBUG_MENU_CMD("piezoCfg", 	NULL,		NULL, dbgPiezoCtrl)
+		DEBUG_MENU_CMD("findPart",	NULL,		NULL, dbgFinfPartition)
+	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
-
+// *INDENT-ON*
 
 void APP_init(void)
 {

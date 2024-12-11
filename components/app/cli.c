@@ -47,11 +47,11 @@ static bool _puts(uint8_t devBitmap, char* i_pStr, uint16_t size)
 	bool	retVal;
 	char	decodedBuf[256];
 	uint16_t	decodedSize;
-	
+
 	if (devBitmap & DBG_OUT_STREAM_DEVICE_MASK_CLI) {
 		retVal = DBG_PRINT_decode(&g_cliDb.decoder, (uint8_t*)i_pStr, size, decodedBuf, &decodedSize, NULL);
 		if (retVal) {
-            uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, decodedBuf, decodedSize);
+			uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, decodedBuf, decodedSize);
 		}
 	}
 
@@ -75,28 +75,28 @@ uint64_t _getTime(void)
 	return esp_timer_get_time();
 }
 
-static void _task(void *arg)
+static void _task(void* arg)
 {
-    char c;
-    size_t length;
+	char c;
+	size_t length;
 
-    PRINT("Ready.\n");
+	PRINT("Ready.\n");
 
-    while(true) {
-        length = uart_read_bytes(CONFIG_ESP_CONSOLE_UART_NUM, &c, 1, 1);
-        if (length) {
-            DBG_MENU_handler(c);
-        }
-    }
+	while (true) {
+		length = uart_read_bytes(CONFIG_ESP_CONSOLE_UART_NUM, &c, 1, 1);
+		if (length) {
+			DBG_MENU_handler(c);
+		}
+	}
 
-    vTaskDelete(NULL);
+	vTaskDelete(NULL);
 }
 
 bool CLI_getc(char* o_pChar)
 {
-    size_t length;
+	size_t length;
 
-    length = uart_read_bytes(CONFIG_ESP_CONSOLE_UART_NUM, o_pChar, 1, 1);
+	length = uart_read_bytes(CONFIG_ESP_CONSOLE_UART_NUM, o_pChar, 1, 1);
 
 	return (length > 0);
 }
@@ -104,19 +104,19 @@ bool CLI_getc(char* o_pChar)
 
 static bool dbgVer(uint8_t argc, char** argv)
 {
-    PRINT("sw:%d.%d.%d\n",
-		SW_VERSION_MAJOR,
-		SW_VERSION_MINOR,
-		SW_VERSION_BUILD);
+	PRINT("sw:%d.%d.%d\n",
+	    SW_VERSION_MAJOR,
+	    SW_VERSION_MINOR,
+	    SW_VERSION_BUILD);
 
-    PRINT("hw:%d.%d.%d\n",
-		HW_VERSION_MAJOR,
-		HW_VERSION_MINOR,
-		HW_VERSION_BUILD);
+	PRINT("hw:%d.%d.%d\n",
+	    HW_VERSION_MAJOR,
+	    HW_VERSION_MINOR,
+	    HW_VERSION_BUILD);
 
 	//PRINT_BUF("hash",	PRINT_BUF_STYLE_HEX_NL, i_pBuf, size);
 
-    return true;
+	return true;
 }
 
 static bool dbgPs(uint8_t argc, char** argv)
@@ -130,7 +130,7 @@ static bool dbgPs(uint8_t argc, char** argv)
 	unsigned long pulTotalRunTime;
 
 	uxArraySize = uxTaskGetNumberOfTasks();
-//	PRINT("%d tasks\n", uxArraySize);
+	//	PRINT("%d tasks\n", uxArraySize);
 	if (uxArraySize > 32) {
 		PRINT("too many tasks to print\n");
 		return true;
@@ -138,7 +138,7 @@ static bool dbgPs(uint8_t argc, char** argv)
 
 	uxTaskGetSystemState(taskStatusArray, uxArraySize, &pulTotalRunTime);
 
-	for (i=0; i<uxArraySize; i++) {
+	for (i = 0; i < uxArraySize; i++) {
 		TaskStatus_t* pTask = &taskStatusArray[i];
 		valid[pTask->xTaskNumber] = true;
 		dt[pTask->xTaskNumber] = pTask->ulRunTimeCounter - g_cliDb.taskStatusArray[pTask->xTaskNumber].ulRunTimeCounter;
@@ -152,7 +152,7 @@ static bool dbgPs(uint8_t argc, char** argv)
 	PRINT("id name             S B  P  counter   Stk base stack remaining\n");
 	PRINT("-- ---------------- - -- -- --------- -------- ---------------\n");
 
-	for (i=0; i<32; i++) {
+	for (i = 0; i < 32; i++) {
 		if (!valid[i]) {
 			memset(&g_cliDb.taskStatusArray[i], 0, sizeof(g_cliDb.taskStatusArray[0]));
 		}
@@ -164,20 +164,33 @@ static bool dbgPs(uint8_t argc, char** argv)
 
 		char	cState = ' ';
 		switch (pTask->eCurrentState) {
-			case eRunning:		cState = 'x';	break;
-			case eReady:		cState = 'r';	break;
-			case eBlocked:		cState = 'b';	break;
-			case eSuspended:	cState = 's';	break;
-			case eDeleted:		cState = 'd';	break;
-			case eInvalid:		cState = 'n';	break;
+			case eRunning:
+				cState = 'x';
+				break;
+			case eReady:
+				cState = 'r';
+				break;
+			case eBlocked:
+				cState = 'b';
+				break;
+			case eSuspended:
+				cState = 's';
+				break;
+			case eDeleted:
+				cState = 'd';
+				break;
+			case eInvalid:
+				cState = 'n';
+				break;
 			default:
-				cState = ' ';	break;
+				cState = ' ';
+				break;
 		}
 
 		PRINT("%2d %-16s ", pTask->xTaskNumber, pTask->pcTaskName);
 		PRINT("%c %2d %2d %9d ", cState, pTask->uxCurrentPriority, pTask->uxBasePriority, dt[i]);
 		PRINT("%08x ", pTask->pxStackBase);
-    	PRINT("%d", pTask->usStackHighWaterMark);
+		PRINT("%d", pTask->usStackHighWaterMark);
 		if (stackReduced[i]) {
 			PRINT("*");
 		}
@@ -187,16 +200,18 @@ static bool dbgPs(uint8_t argc, char** argv)
 	return true;
 }
 
+// *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_CMD("ver",			NULL,		NULL, dbgVer)
 	DEBUG_MENU_CMD("ps",			NULL,		NULL, dbgPs)
 DEBUG_MENU_END
+// *INDENT-ON*
 
 bool	CLI_init(void)
 {
 	DBG_PRINT_CONFIG	dbgPrintCfg = {
 		.cbPuts				= _puts,
-		.cbMutexGet			=_mutexGet,
+		.cbMutexGet			= _mutexGet,
 		.cbMutexRelease		= _mutexPost,
 		.cbGetTime64		= _getTime,
 	};
@@ -219,20 +234,20 @@ bool	CLI_init(void)
 
 	DBG_PRINT_addMenu();
 	DBG_TREE_add("/etc",		g_menu);
-	
+
 	FIFO_addMenu();
 
-    int ret;
-    char str[256];
+	int ret;
+	char str[256];
 
-    strcpy(str, "\r\nCLI Ready\r\n");
-    uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
-    uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, str, strlen(str));
+	strcpy(str, "\r\nCLI Ready\r\n");
+	uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
+	uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, str, strlen(str));
 
-    ret = xTaskCreate(_task, "cli", 8192, NULL, 8, NULL);
-    if (ret != pdPASS) {
-        //ERROR
-        return false;
-    }
-    return true;
+	ret = xTaskCreate(_task, "cli", 8192, NULL, 8, NULL);
+	if (ret != pdPASS) {
+		//ERROR
+		return false;
+	}
+	return true;
 }

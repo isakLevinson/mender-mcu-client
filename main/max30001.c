@@ -351,14 +351,15 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	return true;
 }
 
-
+// *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-DEBUG_MENU_DIR("max30001",  NULL)
-DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
-DEBUG_MENU_CMD("r",	      NULL,		NULL, dbgRd)
-DEBUG_MENU_CMD("w",	      NULL,		NULL, dbgWr)
-DEBUG_MENU_DIR_END
+	DEBUG_MENU_DIR("max30001",	NULL)
+		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
+		DEBUG_MENU_CMD("r",			NULL,		NULL, dbgRd)
+		DEBUG_MENU_CMD("w",			NULL,		NULL, dbgWr)
+	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
+// *INDENT-ON*
 
 
 void max30001_init(void)
