@@ -43,14 +43,15 @@
 
 #define LED_SPI_HOST     SPI2_HOST
 
+#define GPIO_UART_RXD   5
+#define GPIO_UART_TXD   6
+
 #define GPIO_ADC1_CHAN0          ADC_CHANNEL_0   /* gpio 1*/
 #define GPIO_ADC1_CHAN1          ADC_CHANNEL_2   /* gpio 3*/
 #define GPIO_ADC1_CHAN2          ADC_CHANNEL_1   /* gpio 2*/
 #define GPIO_ADC1_CHAN3          ADC_CHANNEL_3   /* gpio 4*/
 
-#define GPIO_UART_RXD   5
-#define GPIO_UART_TXD   6
-
+#if CONFIG_BUILD_TYPE_PNU
 #define GPIO_VALVE_0    9
 #define GPIO_VALVE_1    10
 #define GPIO_VALVE_2    11
@@ -69,6 +70,16 @@
 #define GPIO_24EN       14
 #define GPIO_12EN       15
 #define GPIO_PIEZO_CTRL 16
+#endif
+
+#if CONFIG_BUILD_TYPE_GSR
+#define GPIO_LED        13
+
+#define SPI_PIN_NUM_MISO 13
+#define SPI_PIN_NUM_MOSI 11
+#define SPI_PIN_NUM_CLK  12
+#define SPI_PIN_NUM_CS   7
+#endif
 
 #define NVS_NAMESPACE_WIFI      "wifi"
 #define NVS_KEY_WIFI_SSID       "ssid"
