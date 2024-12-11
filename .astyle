@@ -1,0 +1,24 @@
+# Braces
+--style=kr
+--add-braces
+
+# Indentation
+--indent=tab
+--indent-switches
+--indent-preproc-define
+--indent-col1-comments
+--indent-after-parens
+
+# Padding
+--pad-oper
+--pad-comma
+--pad-header
+--unpad-paren
+
+# Formatting
+--align-pointer=type
+--align-reference=name
+--align-method-colon
+# Line Breaking
+--attach-closing-while
+

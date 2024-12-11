@@ -8,8 +8,20 @@
 #include "conventions.h"
 #include <string.h>
 #include "memory.h"
+#include "sdkconfig.h"
 
-#define PROMPT     "eeg"
+#if CONFIG_BUILD_TYPE_PNU
+#define PROMPT     "pnu"
+#define AP_SSID     "PNU"
+#endif
+
+#if CONFIG_BUILD_TYPE_GSR
+#define PROMPT     "gsr"
+#define AP_SSID     "GSR"
+#endif
+
+#define AP_PASSWD   "12345678"
+
 
 #define SIMULATION_MODE     true
 
@@ -24,9 +36,6 @@
 
 #define SPI_DEVICES         2
 #define MODULES_PER_SPI     8
-
-#define AP_SSID     "PNU"
-#define AP_PASSWD   "12345678"
 
 #define HTTPD_PORT              8000
 #define UDP_SERVER_PORT		    5000

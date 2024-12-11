@@ -9,3 +9,11 @@ set(EXTRA_COMPONENT_DIRS $ENV{IDF_PATH}/examples/system/console/advanced/compone
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(pnu)
+
+
+add_custom_target(format
+    COMMAND astyle --suffix=none --formatted --options=${CMAKE_SOURCE_DIR}/.astyle --recursive "${CMAKE_SOURCE_DIR}/main/*.c,.h"
+    COMMENT "Running Astyle for code formatting"
+)
+
+# add_dependencies(app format)

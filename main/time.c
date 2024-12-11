@@ -22,11 +22,11 @@ static struct {
 
 uint64_t TIME_set64(int64_t time)
 {
-    int64_t t;
+	int64_t t;
 
 	t = esp_timer_get_time();
 
-    g_timerDb.offset64		= t - time;
+	g_timerDb.offset64		= t - time;
 	g_timerDb.lastUpdated	= time;
 
 	return t;
@@ -39,7 +39,7 @@ void TIME_getUpdateTime(int64_t* o_pTime)
 
 void TIME_get64(int64_t* o_pTime)
 {
-    int64_t t;
+	int64_t t;
 
 	t = esp_timer_get_time();
 	*o_pTime = (t - g_timerDb.offset64) / 1000;
@@ -49,7 +49,7 @@ int32_t TIME_get32(void)
 {
 	int64_t t;
 
-    TIME_get64(&t);
+	TIME_get64(&t);
 
 	return (int32_t)(t & 0xffffffff);
 }

@@ -1,6 +1,7 @@
 #ifndef PUMP_H_
 #define PUMP_H_
 
+#include <sys_def.h>
 
 #if CONFIG_BUILD_TYPE_PNU
 void PMP_init(void);

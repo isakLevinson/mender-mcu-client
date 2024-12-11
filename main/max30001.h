@@ -1,5 +1,4 @@
-#ifndef MAX30001_H_
-#define MAX30001_H_
+#pragma once
 
 #include <sys_def.h>
 
@@ -16,4 +15,3 @@ void max300001_get_status(void);
 #define max300001_get_status()
 #endif
 
-#endif

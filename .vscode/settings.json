@@ -6,7 +6,8 @@
         "main.h": "c",
         "dbgprint.h": "c",
         "dbgprintcustom.h": "c",
-        "sys_def.h": "c"
+        "sys_def.h": "c",
+        "sdkconfig.h": "c"
     },
     "idf.port": "/dev/ttyACM3",
     "idf.flashType": "JTAG"

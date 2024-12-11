@@ -13,244 +13,244 @@ extern const uint8_t server_cert_pem_start[] asm("_binary_ca_cert_pem_start");
 extern const uint8_t server_cert_pem_end[] asm("_binary_ca_cert_pem_end");
 
 static struct {
-    esp_https_ota_handle_t  handle;
+	esp_https_ota_handle_t  handle;
 } g_ota;
 
-esp_err_t _http_event_handler(esp_http_client_event_t *evt)
+esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 {
-    TRACE("_http_event_handler: ");
+	TRACE("_http_event_handler: ");
 
-    switch (evt->event_id) {
-    case HTTP_EVENT_ERROR:
-        TRACE("HTTP_EVENT_ERROR");
-        break;
-    case HTTP_EVENT_ON_CONNECTED:
-        TRACE("HTTP_EVENT_ON_CONNECTED");
-        break;
-    case HTTP_EVENT_HEADER_SENT:
-        TRACE("HTTP_EVENT_HEADER_SENT");
-        break;
-    case HTTP_EVENT_ON_HEADER:
-        TRACE("HTTP_EVENT_ON_HEADER");
-        TRACE_BUF("key", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_key, 10);
-        TRACE_BUF("val", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_value, 10);
-        break;
-    case HTTP_EVENT_ON_DATA:
-        TRACE("HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
-        break;
-    case HTTP_EVENT_ON_FINISH:
-        TRACE("HTTP_EVENT_ON_FINISH");
-        break;
-    case HTTP_EVENT_DISCONNECTED:
-        TRACE("HTTP_EVENT_DISCONNECTED");
-        break;
-    case HTTP_EVENT_REDIRECT:
-        TRACE("HTTP_EVENT_REDIRECT");
-        break;
-    default:
-        TRACE("%d", evt->event_id);
-    }
+	switch (evt->event_id) {
+		case HTTP_EVENT_ERROR:
+			TRACE("HTTP_EVENT_ERROR");
+			break;
+		case HTTP_EVENT_ON_CONNECTED:
+			TRACE("HTTP_EVENT_ON_CONNECTED");
+			break;
+		case HTTP_EVENT_HEADER_SENT:
+			TRACE("HTTP_EVENT_HEADER_SENT");
+			break;
+		case HTTP_EVENT_ON_HEADER:
+			TRACE("HTTP_EVENT_ON_HEADER");
+			TRACE_BUF("key", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_key, 10);
+			TRACE_BUF("val", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_value, 10);
+			break;
+		case HTTP_EVENT_ON_DATA:
+			TRACE("HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
+			break;
+		case HTTP_EVENT_ON_FINISH:
+			TRACE("HTTP_EVENT_ON_FINISH");
+			break;
+		case HTTP_EVENT_DISCONNECTED:
+			TRACE("HTTP_EVENT_DISCONNECTED");
+			break;
+		case HTTP_EVENT_REDIRECT:
+			TRACE("HTTP_EVENT_REDIRECT");
+			break;
+		default:
+			TRACE("%d", evt->event_id);
+	}
 
-    TRACE("\n");
+	TRACE("\n");
 
-    return ESP_OK;
+	return ESP_OK;
 }
 
 
 static bool dbgAuto(uint8_t argc, char** argv)
 {
-    char    url[64];
+	char    url[64];
 
-    if (argc < 3) {
-        return false;
-    }
+	if (argc < 3) {
+		return false;
+	}
 
-    esp_http_client_config_t config = {
+	esp_http_client_config_t config = {
 #ifdef CONFIG_EXAMPLE_USE_CERT_BUNDLE
-        .crt_bundle_attach = esp_crt_bundle_attach,
+		.crt_bundle_attach = esp_crt_bundle_attach,
 #else
-        .cert_pem = (char *)server_cert_pem_start,
+		.cert_pem = (char*)server_cert_pem_start,
 #endif /* CONFIG_EXAMPLE_USE_CERT_BUNDLE */
-        .event_handler = _http_event_handler,
-        .keep_alive_enable = true,
+		.event_handler = _http_event_handler,
+		.keep_alive_enable = true,
 #ifdef CONFIG_EXAMPLE_FIRMWARE_UPGRADE_BIND_IF
-        .if_name = &ifr,
+		.if_name = &ifr,
 #endif
-    };
+	};
 
 #ifdef CONFIG_EXAMPLE_SKIP_COMMON_NAME_CHECK
-    config.skip_cert_common_name_check = true;
+	config.skip_cert_common_name_check = true;
 #endif
 
-    esp_https_ota_config_t ota_config = {
-        .http_config = &config,
-    };
+	esp_https_ota_config_t ota_config = {
+		.http_config = &config,
+	};
 
-    sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
+	sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
 
-    config.url = url;
+	config.url = url;
 
-    INFO("Attempting to download update from %s\n", config.url);
-    esp_err_t ret = esp_https_ota(&ota_config);
-    if (ret == ESP_OK) {
-        INFO("OTA Succeed\n");
-    } else {
-        ERROR("Firmware upgrade failed %d\n", ret);
-    }
+	INFO("Attempting to download update from %s\n", config.url);
+	esp_err_t ret = esp_https_ota(&ota_config);
+	if (ret == ESP_OK) {
+		INFO("OTA Succeed\n");
+	} else {
+		ERROR("Firmware upgrade failed %d\n", ret);
+	}
 
-    return true;
+	return true;
 }
 
 static bool dbgBegin(uint8_t argc, char** argv)
 {
-    esp_err_t   err;
-    char    url[64];
+	esp_err_t   err;
+	char    url[64];
 
-    if (argc < 3) {
-        return false;
-    }
+	if (argc < 3) {
+		return false;
+	}
 
-    esp_http_client_config_t config = {
-        .cert_pem = (char *)server_cert_pem_start,
-        .event_handler = _http_event_handler,
-        .keep_alive_enable = true,
-        .skip_cert_common_name_check = true,
-    };
+	esp_http_client_config_t config = {
+		.cert_pem = (char*)server_cert_pem_start,
+		.event_handler = _http_event_handler,
+		.keep_alive_enable = true,
+		.skip_cert_common_name_check = true,
+	};
 
-    esp_https_ota_config_t ota_config = {
-        .http_config = &config,
-    };
+	esp_https_ota_config_t ota_config = {
+		.http_config = &config,
+	};
 
-    sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
+	sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
 
-    config.url = url;
+	config.url = url;
 
-    INFO("begin OTA from %s\n", config.url);
+	INFO("begin OTA from %s\n", config.url);
 
-    err = esp_https_ota_begin(&ota_config, &g_ota.handle);
-    if (ESP_OK != err) {
-        ERROR("esp_https_ota_begin failed %d\n", err);
-    }
+	err = esp_https_ota_begin(&ota_config, &g_ota.handle);
+	if (ESP_OK != err) {
+		ERROR("esp_https_ota_begin failed %d\n", err);
+	}
 
-    return true;
+	return true;
 }
 
 static bool dbgPerform(uint8_t argc, char** argv)
 {
-    esp_err_t   err;
-    int         size;
-    bool        complete;
-    int         prevSize = 0;
+	esp_err_t   err;
+	int         size;
+	bool        complete;
+	int         prevSize = 0;
 
-    do {
-        err = esp_https_ota_perform(g_ota.handle);
-        size = esp_https_ota_get_image_len_read(g_ota.handle);
-        complete = esp_https_ota_is_complete_data_received(g_ota.handle);
-        PRINT("read: %d %d\n", size, complete);
-        
-//        if (ESP_ERR_HTTPS_OTA_IN_PROGRESS != err) {
-//            PRINT("err=0x%xd\n", err);
-//            break;
-//        }
+	do {
+		err = esp_https_ota_perform(g_ota.handle);
+		size = esp_https_ota_get_image_len_read(g_ota.handle);
+		complete = esp_https_ota_is_complete_data_received(g_ota.handle);
+		PRINT("read: %d %d\n", size, complete);
 
-        if (complete) {
-            PRINT("complete==true\n");
-//            break;
-        }
+		//        if (ESP_ERR_HTTPS_OTA_IN_PROGRESS != err) {
+		//            PRINT("err=0x%xd\n", err);
+		//            break;
+		//        }
 
-        if (size == prevSize) {
-            PRINT("size not incremented\n");
-//            break;
-        }
+		if (complete) {
+			PRINT("complete==true\n");
+			//            break;
+		}
 
-        prevSize = size;
-    } while (ESP_ERR_HTTPS_OTA_IN_PROGRESS == err);
+		if (size == prevSize) {
+			PRINT("size not incremented\n");
+			//            break;
+		}
 
-    if ((ESP_OK != err) && (ESP_ERR_HTTPS_OTA_IN_PROGRESS != err)) {
-        ERROR("esp_https_ota_perform failed %d\n", err);
-    } else {
-        PRINT("err=0x%x\n", err);
-    }
+		prevSize = size;
+	} while (ESP_ERR_HTTPS_OTA_IN_PROGRESS == err);
 
-    return true;
+	if ((ESP_OK != err) && (ESP_ERR_HTTPS_OTA_IN_PROGRESS != err)) {
+		ERROR("esp_https_ota_perform failed %d\n", err);
+	} else {
+		PRINT("err=0x%x\n", err);
+	}
+
+	return true;
 }
 
 static bool dbgFinish(uint8_t argc, char** argv)
 {
-    esp_err_t   err;
+	esp_err_t   err;
 
-    err =  esp_https_ota_finish(g_ota.handle);
-    if (ESP_OK != err) {
-        ERROR("esp_https_ota_finish failed %d\n", err);
-    }
+	err =  esp_https_ota_finish(g_ota.handle);
+	if (ESP_OK != err) {
+		ERROR("esp_https_ota_finish failed %d\n", err);
+	}
 
-    return true;
+	return true;
 }
 
 static bool dbgAbort(uint8_t argc, char** argv)
 {
-    esp_err_t   err;
+	esp_err_t   err;
 
-    err =  esp_https_ota_abort(g_ota.handle);
-    if (ESP_OK != err) {
-        ERROR("esp_https_ota_abort failed %d\n", err);
-    }
+	err =  esp_https_ota_abort(g_ota.handle);
+	if (ESP_OK != err) {
+		ERROR("esp_https_ota_abort failed %d\n", err);
+	}
 
-    return true;
+	return true;
 }
 
 static bool dbgRestart(uint8_t argc, char** argv)
 {
-    esp_restart();
-    return true;
+	esp_restart();
+	return true;
 }
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-    esp_err_t       err;
-    int             size;
-    esp_app_desc_t  new_app_info;
+	esp_err_t       err;
+	int             size;
+	esp_app_desc_t  new_app_info;
 
-    err = esp_https_ota_get_status_code(g_ota.handle);
-    if (err < 0) {
-        ERROR("esp_https_ota_get_status_code failed %d\n", err);
-    } else {
-        PRINT("esp_https_ota_get_status_code %d\n", err);
-    }
+	err = esp_https_ota_get_status_code(g_ota.handle);
+	if (err < 0) {
+		ERROR("esp_https_ota_get_status_code failed %d\n", err);
+	} else {
+		PRINT("esp_https_ota_get_status_code %d\n", err);
+	}
 
-    size = esp_https_ota_get_image_size(g_ota.handle);
-    PRINT("image size: %d\n", size);
+	size = esp_https_ota_get_image_size(g_ota.handle);
+	PRINT("image size: %d\n", size);
 
-    err = esp_https_ota_get_img_desc(g_ota.handle, &new_app_info);
-    if (ESP_OK != err) {
-        ERROR("esp_https_ota_get_img_desc failed %d\n", err);
-    } else {
-        PRINT("magic_word     : 0x%x\n", new_app_info.magic_word);
-        PRINT("secure_version : %d\n", new_app_info.secure_version);
-        PRINT_BUF("ver", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.version, sizeof(new_app_info.version));
-        PRINT_BUF("proj", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.project_name, sizeof(new_app_info.project_name));
-        PRINT_BUF("time", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.time, sizeof(new_app_info.time));
-        PRINT_BUF("date", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.date, sizeof(new_app_info.date));
-        PRINT_BUF("idf", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.idf_ver, sizeof(new_app_info.idf_ver));
-    }
+	err = esp_https_ota_get_img_desc(g_ota.handle, &new_app_info);
+	if (ESP_OK != err) {
+		ERROR("esp_https_ota_get_img_desc failed %d\n", err);
+	} else {
+		PRINT("magic_word     : 0x%x\n", new_app_info.magic_word);
+		PRINT("secure_version : %d\n", new_app_info.secure_version);
+		PRINT_BUF("ver", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.version, sizeof(new_app_info.version));
+		PRINT_BUF("proj", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.project_name, sizeof(new_app_info.project_name));
+		PRINT_BUF("time", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.time, sizeof(new_app_info.time));
+		PRINT_BUF("date", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.date, sizeof(new_app_info.date));
+		PRINT_BUF("idf", PRINT_BUF_STYLE_ASC_SIZE_NL, new_app_info.idf_ver, sizeof(new_app_info.idf_ver));
+	}
 
-    return true;
+	return true;
 }
 
 DEBUG_MENU_START(g_menu)
-    DEBUG_MENU_DIR("ota", NULL)
-	    DEBUG_MENU_CMD("status",	NULL,		    NULL, dbgStatus)
-	    DEBUG_MENU_CMD("auto",		NULL,		    NULL, dbgAuto)
-	    DEBUG_MENU_CMD("restart",	NULL,		    NULL, dbgRestart)
-	    DEBUG_MENU_CMD("begin",		"<ip> <file>",	NULL, dbgBegin)
-	    DEBUG_MENU_CMD("perform",	NULL,		    NULL, dbgPerform)
-	    DEBUG_MENU_CMD("finish",	NULL,		    NULL, dbgFinish)
-	    DEBUG_MENU_CMD("abort", 	NULL,		    NULL, dbgAbort)
-    DEBUG_MENU_DIR_END
+DEBUG_MENU_DIR("ota", NULL)
+DEBUG_MENU_CMD("status",	NULL,		    NULL, dbgStatus)
+DEBUG_MENU_CMD("auto",		NULL,		    NULL, dbgAuto)
+DEBUG_MENU_CMD("restart",	NULL,		    NULL, dbgRestart)
+DEBUG_MENU_CMD("begin",		"<ip> <file>",	NULL, dbgBegin)
+DEBUG_MENU_CMD("perform",	NULL,		    NULL, dbgPerform)
+DEBUG_MENU_CMD("finish",	NULL,		    NULL, dbgFinish)
+DEBUG_MENU_CMD("abort", 	NULL,		    NULL, dbgAbort)
+DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 
 
 void OTA_init(void)
 {
-    DBG_TREE_add("/",		g_menu);
+	DBG_TREE_add("/",		g_menu);
 }

@@ -1,6 +1,7 @@
 #ifndef APP_H_
 #define APP_H_
 
+#include <sys_def.h>
 
 #if CONFIG_BUILD_TYPE_PNU
 void APP_init(void);
