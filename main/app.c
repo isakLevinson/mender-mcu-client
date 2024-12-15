@@ -555,7 +555,6 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("target",    NULL,		NULL, dbgTarget)
 		DEBUG_MENU_CMD("loop",    	NULL,		NULL, dbgLoopEnable)
 		DEBUG_MENU_CMD("piezoCfg", 	NULL,		NULL, dbgPiezoCtrl)
-		DEBUG_MENU_CMD("findPart",	NULL,		NULL, dbgFinfPartition)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

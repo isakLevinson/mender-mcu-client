@@ -333,7 +333,6 @@ typedef union max30001_cnfg_bmux_reg {
 		uint32_t reserved4 : 2;
 		uint32_t reserved : 8;
 	} bit;
-
 } max30001_cnfg_bmux_u;
 
 /**
@@ -349,15 +348,13 @@ typedef union max30001_bioz_reg {
 		uint32_t dlpf      : 2;
 		uint32_t dhpf      : 2;
 		uint32_t gain      : 2;
-		uint32_t inapow_mode : 1;
+		uint32_t ln_bioz   : 1;
 		uint32_t ext_rbias : 1;
 		uint32_t ahpf      : 3;
 		uint32_t rate      : 1;
-		uint32_t reserved : 8;
+		uint32_t reserved  : 8;
 	} bit;
-
 } max30001_cnfg_bioz_u;
-
 
 /**
 * @brief CNFG_BIOZ_LC  (0x1A)
@@ -424,9 +421,18 @@ typedef union max30001_ecg_fifo_reg {
 	struct {
 		uint32_t ptag     : 3;
 		uint32_t etag     : 3;
-		uint32_t ecg_data : 18;
+		uint32_t data : 18;
 	} bit;
 } max30001_ecg_fifo_u;
+
+typedef union max30001_bioz_fifo_reg {
+	uint32_t all;
+	struct {
+		uint32_t btag     : 3;
+		uint32_t reserved1: 1;
+		uint32_t data : 20;
+	} bit;
+} max30001_bioz_fifo_u;
 
 typedef struct max30001_registers {
 	max30001_en_int_u enInt;
