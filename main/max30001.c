@@ -203,7 +203,7 @@ static void _task(void* arg)
 	while (true) {
 		vTaskDelay(10);
 		//_handleEcg();
-		_handleBioz();
+		//_handleBioz();
 	}
 }
 
