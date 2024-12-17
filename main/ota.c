@@ -73,6 +73,7 @@ static bool dbgAuto(uint8_t argc, char** argv)
 #endif /* CONFIG_EXAMPLE_USE_CERT_BUNDLE */
 		.event_handler = _http_event_handler,
 		.keep_alive_enable = true,
+		.skip_cert_common_name_check = true,
 #ifdef CONFIG_EXAMPLE_FIRMWARE_UPGRADE_BIND_IF
 		.if_name = &ifr,
 #endif
