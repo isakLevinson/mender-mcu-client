@@ -34,6 +34,7 @@
 #include "config.h"
 #include "ota.h"
 #include "max30001.h"
+#include "max17049.h"
 
 #define BUF_SIZE    1024
 
@@ -84,6 +85,7 @@ void app_main(void)
 	WIFI_init();
 
 	max30001_init();
+	max17049_init();
 
 	PMP_init();
 	APP_init();
