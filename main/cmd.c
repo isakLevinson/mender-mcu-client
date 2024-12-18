@@ -30,6 +30,7 @@
 #include "time.h"
 #include "wifi.h"
 #include "app.h"
+#include "max17049.h"
 
 // *INDENT-OFF*
 
@@ -276,6 +277,9 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 #if CONFIG_BUILD_TYPE_PNU
 
 	CMD_RSPBUF_STATUS	rsp;
+	bool	ret;
+	uint16_t	soc;
+	uint16_t	voltage;
 	int16_t	press[4];
 	bool	valves[5];
 	bool	pumps[4];
@@ -299,8 +303,14 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 	}
 
 	// TODO: use real values
-	rsp.voltage = 36;
-	rsp.soc		= 90;
+	ret = fg_get_soc(&soc);
+	if (ret) {
+		rsp.soc = soc;
+	} else {
+		rsp.soc = 0;
+	}
+
+	rsp.voltage	= 7500;
 
 	_sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
 #endif

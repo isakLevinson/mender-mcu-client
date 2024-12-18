@@ -27,7 +27,7 @@
 #define MAX17049_REG_SOC	0x04
 #define MAX17049_REG_MODE	0x06
 
-static bool _read(uint8_t reg_addr, uint8_t *data, size_t len)
+static bool _read(uint8_t reg_addr, void *data, size_t len)
 {
 	int32_t	err;
     err = i2c_master_write_read_device(I2C_MASTER_NUM, MAX17049_ADDR, &reg_addr, 1, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
@@ -40,17 +40,50 @@ static bool _read(uint8_t reg_addr, uint8_t *data, size_t len)
 	return true;
 }
 
-static bool _write(uint8_t reg_addr, uint8_t data)
+static bool _write(uint8_t reg_addr, void *data, size_t len)
 {
     int err;
-    uint8_t write_buf[2] = {reg_addr, data};
+    uint8_t write_buf[32];
+	write_buf[0] = reg_addr;
+	memcpy(write_buf+1, data, len);
 
-    err = i2c_master_write_to_device(I2C_MASTER_NUM, MAX17049_ADDR, write_buf, sizeof(write_buf), I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+    err = i2c_master_write_to_device(I2C_MASTER_NUM, MAX17049_ADDR, write_buf, len+1, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 	if (ESP_OK != err) {
 		ERROR("i2c_master_write_to_device\n");
 		ESP_printErr(err);
 		return false;
 	}
+	return true;
+}
+
+static bool _rdReg(uint8_t reg, uint16_t* val)
+{
+	bool	ret;
+	uint8_t buf[2];
+
+	ret = _read(reg, buf, 2);
+	if (!ret) {
+		return false;
+	}
+
+	*val = ((uint16_t)buf[0])<<8 | buf[1];
+
+	return true;
+}
+
+static bool _wrReg(uint8_t reg, uint16_t val)
+{
+	bool	ret;
+	uint8_t	buf[2];
+
+	buf[0] = val >> 8;
+	buf[1] = val & 0xff;
+
+	ret = _write(reg, buf, 2);
+	if (!ret) {
+		return false;
+	}
+
 	return true;
 }
 
@@ -85,17 +118,31 @@ static void _init(void)
 	_i2c_master_init();
 }
 
-bool fg_get_soc(uint8_t* o_pSoc)
+bool fg_get_soc(uint16_t* o_pVal)
 {
 	bool	ret;
-    uint8_t soc[2];
+	uint16_t	val;
 
-    ret = _read(MAX17049_REG_SOC, soc, 2);
+    ret = _rdReg(MAX17049_REG_SOC, &val);
 	if (!ret) {
 		return false;
 	}
 
-	*o_pSoc = soc[0];
+	*o_pVal = val / 256;
+    return true;
+}
+
+bool fg_get_vbat(uint16_t* o_pVal)
+{
+	bool	ret;
+	uint16_t	val;
+
+    ret = _rdReg(MAX17049_REG_VCELL, &val);
+	if (!ret) {
+		return false;
+	}
+
+	*o_pVal = (uint32_t)val * 78125 / 1000000 * 2;
     return true;
 }
 
@@ -103,19 +150,24 @@ static bool dbgRd(uint8_t argc, char** argv)
 {
 	bool	ret;
 	uint8_t	reg;
-	uint8_t	val;
+	uint8_t	len = 2;
+	uint8_t	val[32];
 
 	if (argc < 2) {
 		return false;
 	}
 
-	reg    = strtoul(argv[1], NULL, 16);
-	ret = _read(reg, &val, 1);
+	if (argc >= 3) {
+		len = strtoul(argv[2], NULL, 16);
+	}
+
+	reg = strtoul(argv[1], NULL, 16);
+	ret = _read(reg, &val, len);
 	if (!ret) {
 		ERROR("_read failed\n");
 		return true;
 	}
-	PRINT("%02x\n", val);
+	INFO_BUF("wss_send packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, val, len);
 
 	return true;
 }
@@ -132,7 +184,7 @@ static bool dbgWr(uint8_t argc, char** argv)
 
 	reg	= strtoul(argv[1], NULL, 16);
 	val	= strtoul(argv[2], NULL, 16);
-	ret = _write(reg, val);
+	ret = _write(reg, &val, 1);
 	if (!ret) {
 		ERROR("_write failed\n");
 	}
@@ -143,15 +195,19 @@ static bool dbgWr(uint8_t argc, char** argv)
 static bool dbgStatus(uint8_t argc, char** argv)
 {
 	bool ret;
-	uint8_t	soc;
+	uint16_t	soc;
+	uint16_t	vbat;
 
-	ret = fg_get_soc(&soc);
+	ret  = fg_get_soc(&soc);
+	ret &= fg_get_vbat(&vbat);
+	
 	if (!ret) {
-		ERROR("fg_get_soc failed\n");
+		ERROR("failed\n");
 		return true;
 	}
 
-	PRINT("soc: %d\n", soc);
+	PRINT("vbat : %d mV\n", vbat);
+	PRINT("soc  : %d %%\n", soc);
 
 	return true;
 }
