@@ -12,6 +12,7 @@
 #include "nvs.h"
 #include "mdns.h"
 #include "wifi.h"
+#include "max30001.h"
 
 static const esp_partition_t* g_partition = NULL;
 static char*    g_pBuf;
@@ -108,6 +109,7 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 
 				if (reg && val && cJSON_IsNumber(reg) && cJSON_IsNumber(val)) {
 					INFO("reg:%f, val:%f\n", reg->valuedouble, val->valuedouble);
+					max30001_write_reg(reg->valuedouble, val->valuedouble);
 				}
 			}
 		}

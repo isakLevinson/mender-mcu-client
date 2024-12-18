@@ -207,6 +207,50 @@ static void _task(void* arg)
 	}
 }
 
+static void _init(void)
+{
+	uint32_t regVal;
+	esp_err_t ret;
+	// spi_device_handle_t spi;
+	spi_bus_config_t buscfg = {
+		.miso_io_num = SPI_PIN_NUM_MISO,
+		.mosi_io_num = SPI_PIN_NUM_MOSI,
+		.sclk_io_num = SPI_PIN_NUM_CLK,
+		.quadwp_io_num = -1,
+		.quadhd_io_num = -1,
+		.max_transfer_sz = 0
+	};
+	spi_device_interface_config_t devcfg = {
+#ifdef CONFIG_LCD_OVERCLOCK
+		.clock_speed_hz = 26 * 1000 * 1000,     //Clock out at 26 MHz
+#else
+		.clock_speed_hz = 1 * 1000 * 1000,     //Clock out at 10 MHz
+#endif
+		.mode = 0,                              //SPI mode 0
+		.spics_io_num = SPI_PIN_NUM_CS,             //CS pin
+		.queue_size = 7,                        //We want to be able to queue 7 transactions at a time
+		//.pre_cb=lcd_spi_pre_transfer_callback,  //Specify pre-transfer callback to handle D/C line
+	};
+	//Initialize the SPI bus
+	ret = spi_bus_initialize(SPI_MAX30001_HOST, &buscfg, SPI_DMA_CH_AUTO);
+	ESP_ERROR_CHECK(ret);
+	//Attach the MAX30001 to the SPI bus
+	ret = spi_bus_add_device(SPI_MAX30001_HOST, &devcfg, &g_max.spi_handle);
+	ESP_ERROR_CHECK(ret);
+
+	g_max.semaphore = xSemaphoreCreateBinary();
+	xSemaphoreGive(g_max.semaphore);
+
+	g_max.regs.status.all = _readReg(0x01);
+	INFO("MAX3001_REG_STATUS reg read:     %08" PRIx32"\n", g_max.regs.status.all);
+
+	ret = xTaskCreate(_task, "max30001", 8192, NULL, 3, NULL);
+	if (ret != pdPASS) {
+		ERROR("create task %s failed\n", "max30001");
+		return;
+	}
+}
+
 void max30001_start_ecg(void)
 {
 	uint32_t max30001_timeout = 0;
@@ -385,6 +429,21 @@ void max30001_get_ecg(void)
 
 }
 
+void max30001_write_reg(uint8_t reg, uint32_t val)
+{
+	_writeReg(reg, val);
+}
+
+uint32_t max30001_read_reg(uint8_t reg)
+{
+	uint32_t	val;
+	
+	val = _readReg(reg);
+	
+	return val;
+}
+
+
 void max300001_get_status(void)
 {
 	int32_t ecg_val;
@@ -411,50 +470,6 @@ void max300001_get_status(void)
 		//INFO("%d\n",(int)ecg_val);
 	}
 	//max30001_get_ecg();
-}
-
-static void _init(void)
-{
-	uint32_t regVal;
-	esp_err_t ret;
-	// spi_device_handle_t spi;
-	spi_bus_config_t buscfg = {
-		.miso_io_num = SPI_PIN_NUM_MISO,
-		.mosi_io_num = SPI_PIN_NUM_MOSI,
-		.sclk_io_num = SPI_PIN_NUM_CLK,
-		.quadwp_io_num = -1,
-		.quadhd_io_num = -1,
-		.max_transfer_sz = 0
-	};
-	spi_device_interface_config_t devcfg = {
-#ifdef CONFIG_LCD_OVERCLOCK
-		.clock_speed_hz = 26 * 1000 * 1000,     //Clock out at 26 MHz
-#else
-		.clock_speed_hz = 1 * 1000 * 1000,     //Clock out at 10 MHz
-#endif
-		.mode = 0,                              //SPI mode 0
-		.spics_io_num = SPI_PIN_NUM_CS,             //CS pin
-		.queue_size = 7,                        //We want to be able to queue 7 transactions at a time
-		//.pre_cb=lcd_spi_pre_transfer_callback,  //Specify pre-transfer callback to handle D/C line
-	};
-	//Initialize the SPI bus
-	ret = spi_bus_initialize(SPI_MAX30001_HOST, &buscfg, SPI_DMA_CH_AUTO);
-	ESP_ERROR_CHECK(ret);
-	//Attach the MAX30001 to the SPI bus
-	ret = spi_bus_add_device(SPI_MAX30001_HOST, &devcfg, &g_max.spi_handle);
-	ESP_ERROR_CHECK(ret);
-
-	g_max.semaphore = xSemaphoreCreateBinary();
-	xSemaphoreGive(g_max.semaphore);
-
-	g_max.regs.status.all = _readReg(0x01);
-	INFO("MAX3001_REG_STATUS reg read:     %08" PRIx32"\n", g_max.regs.status.all);
-
-	ret = xTaskCreate(_task, "max30001", 8192, NULL, 3, NULL);
-	if (ret != pdPASS) {
-		ERROR("create task %s failed\n", "max30001");
-		return;
-	}
 }
 
 static bool dbgRd(uint8_t argc, char** argv)
