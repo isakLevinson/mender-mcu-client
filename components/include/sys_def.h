@@ -73,6 +73,10 @@
 #define GPIO_24EN       14
 #define GPIO_12EN       15
 #define GPIO_PIEZO_CTRL 16
+
+#define GPIO_SCL_FG		8
+#define GPIO_SDA_FG		7
+
 #endif
 
 #if CONFIG_BUILD_TYPE_GSR

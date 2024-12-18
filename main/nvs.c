@@ -8,45 +8,13 @@
 
 #include <errno.h>
 #include <nvs_flash.h>
+#include "main.h"
 
 #define   WIFI_MAX_NVS_LENGTH    128
 
 static struct {
 	nvs_handle_t nvsHandle;
 } g_nvs;
-
-static void _printErr(int err)
-{
-	char* pStr = NULL;
-	if (err == ESP_OK) {
-		return;
-	}
-
-	switch (err) {
-		case ESP_ERR_NVS_NOT_FOUND:
-			pStr = "ESP_ERR_NVS_NOT_FOUND";
-			break;
-		case ESP_ERR_NVS_NOT_INITIALIZED:
-			pStr = "ESP_ERR_NVS_NOT_INITIALIZED";
-			break;
-		case ESP_ERR_NO_MEM:
-			pStr = "ESP_ERR_NO_MEM";
-			break;
-		case ESP_ERR_INVALID_ARG:
-			pStr = "ESP_ERR_INVALID_ARG";
-			break;
-		case ESP_ERR_NVS_INVALID_LENGTH:
-			pStr = "ESP_ERR_NVS_INVALID_LENGTH";
-			break;
-	}
-
-	if (pStr) {
-		PRINT("failed %s\n", pStr);
-	} else {
-		PRINT("failed 0x%x\n", err);
-	}
-
-}
 
 static bool _get(char* key,  char* val)
 {
@@ -71,7 +39,7 @@ static bool _get(char* key,  char* val)
 
 exit:
 	nvs_close(handle);
-	_printErr(err);
+	ESP_printErr(err);
 
 	return ret;
 }
@@ -258,7 +226,7 @@ static bool dbgOpen(uint8_t argc, char** argv)
 	}
 
 	err = nvs_open(argv[1], NVS_READWRITE, &g_nvs.nvsHandle);
-	_printErr(err);
+	ESP_printErr(err);
 
 	return true;
 }
@@ -276,7 +244,7 @@ static bool dbgCommit(uint8_t argc, char** argv)
 	esp_err_t   err = ESP_OK;
 
 	err = nvs_commit(g_nvs.nvsHandle);
-	_printErr(err);
+	ESP_printErr(err);
 
 	return true;
 }
@@ -292,7 +260,7 @@ static bool dbgGet(uint8_t argc, char** argv)
 	}
 
 	err =  nvs_get_str(g_nvs.nvsHandle, argv[1], str, &length);
-	_printErr(err);
+	ESP_printErr(err);
 
 	if (err == ESP_OK) {
 		str[length] = '\0';
@@ -311,7 +279,7 @@ static bool dbgSet(uint8_t argc, char** argv)
 	}
 
 	err = nvs_set_str(g_nvs.nvsHandle, argv[1], argv[2]);
-	_printErr(err);
+	ESP_printErr(err);
 
 	return true;
 }

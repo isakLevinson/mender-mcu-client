@@ -4,10 +4,10 @@
 
 #if CONFIG_BUILD_TYPE_PNU
 
-void max17049_init(void);
+void fg_init(void);
 
 #else
 
-#define max17049_init
+#define fg_init
 
 #endif

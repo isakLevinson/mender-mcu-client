@@ -38,6 +38,48 @@
 
 #define BUF_SIZE    1024
 
+
+void ESP_printErr(int err)
+{
+	char* pStr = NULL;
+	if (err == ESP_OK) {
+		return;
+	}
+
+	switch (err) {
+		case ESP_ERR_NVS_NOT_FOUND:
+			pStr = "ESP_ERR_NVS_NOT_FOUND";
+			break;
+		case ESP_ERR_NVS_NOT_INITIALIZED:
+			pStr = "ESP_ERR_NVS_NOT_INITIALIZED";
+			break;
+		case ESP_ERR_NO_MEM:
+			pStr = "ESP_ERR_NO_MEM";
+			break;
+		case ESP_ERR_INVALID_ARG:
+			pStr = "ESP_ERR_INVALID_ARG";
+			break;
+		case ESP_ERR_NVS_INVALID_LENGTH:
+			pStr = "ESP_ERR_NVS_INVALID_LENGTH";
+			break;
+
+		case ESP_ERR_TIMEOUT:
+			pStr = "ESP_ERR_TIMEOUT";
+			break;
+
+		case ESP_ERR_INVALID_STATE:
+			pStr = "ESP_ERR_INVALID_STATE";
+			break;
+	}
+
+	if (pStr) {
+		ERROR("failed %s\n", pStr);
+	} else {
+		ERROR("failed 0x%x\n", err);
+	}
+}
+
+
 void uart_init(void)
 {
 	uart_config_t uart_config = {
@@ -85,7 +127,7 @@ void app_main(void)
 	WIFI_init();
 
 	max30001_init();
-	max17049_init();
+	fg_init();
 
 	PMP_init();
 	APP_init();
