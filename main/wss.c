@@ -302,46 +302,6 @@ static esp_err_t events_handler(httpd_req_t* req)
 	return ESP_OK;
 }
 
-static bool _parseJson(char* i_pStr, char* pItem, char* o_pVal)
-{
-	char item[32];
-	int itemLen = strlen(pItem);
-	char* pStr;
-	char* pVal = o_pVal;
-	char  c;
-
-	if (!itemLen) {
-		return false;
-	}
-
-	strcpy(item, pItem);
-	strcat(item, ":");
-
-	pStr = strstr(i_pStr, item);
-	if (!pStr) {
-		return false;
-	}
-
-	pStr += strlen(item);
-
-	while (*pStr) {
-		if ((',' == *pStr) || ('}' == *pStr)) {
-			*pVal = '\0';
-			return true;
-			break;
-		}
-
-		if (' ' == *pStr) {
-			pStr++;
-			continue;
-		}
-
-		*pVal++ = *pStr;
-		pStr++;
-	}
-	return false;
-}
-
 static esp_err_t _config_handler(httpd_req_t* req)
 {
 	//esp_err_t ret;
@@ -362,48 +322,6 @@ static esp_err_t _config_handler(httpd_req_t* req)
 	//INFO("POST: %.*s\n", ret, buf);
 	INFO_BUF("/config POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
 	CFG_parseWssCommand(buf, req->content_len);
-
-	char ssid[32];
-	char passwd[32];
-
-	validSsid = _parseJson(buf, "ssid", ssid);
-	if (validSsid) {
-		INFO("ssid: <%s>\n", ssid);
-	}
-
-	validPasswd = _parseJson(buf, "passwd", passwd);
-	if (validPasswd) {
-		INFO("passwd: <%s>\n", passwd);
-	}
-
-	if (validSsid && validPasswd) {
-		INFO("setting ssid and passwd\n");
-		sta_connect(ssid, passwd);
-	}
-
-	ret = _parseJson(buf, "cert", buf);
-	if (ret) {
-		INFO("setting certificate <%s>\n", buf);
-		NVS_set_certificate(buf);
-	}
-
-	ret = _parseJson(buf, "sync_dns", buf);
-	if (ret) {
-		INFO("setting dns <%s>\n", buf);
-		NVS_set_sync_dns(buf);
-	}
-
-	ret = _parseJson(buf, "sync_port", buf);
-	if (ret) {
-		INFO("setting port <%s>\n", buf);
-		NVS_set_sync_port(buf);
-	}
-
-	ret = _parseJson(buf, "mdns", buf);
-	if (ret) {
-		INFO("setting mdns <%s>\n", buf);
-		WIFI_setMdns(buf);
-	}
 
 	/* Send response with body set as the
 	 * string passed in user context*/

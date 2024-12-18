@@ -82,6 +82,37 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 		mdns_hostname_set(object->valuestring);
 	}
 
+
+	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");
+	if (object) {
+		if (cJSON_IsArray(object)) {
+			const cJSON* element;
+			PRINT("array:\n");
+			PRINT("number: %f\n", object->valuedouble);
+			cJSON_ArrayForEach(element, object) {
+				const cJSON* reg;
+				const cJSON* val;
+
+				reg = cJSON_GetObjectItemCaseSensitive(element, "reg");
+				if (!reg) {
+					PRINT("reg not found\n");
+				} else if (cJSON_IsNumber(reg)) {
+					PRINT("reg: %f\n", reg->valuedouble);
+				}
+				val = cJSON_GetObjectItemCaseSensitive(element, "val");
+				if (!val) {
+					PRINT("reg not found\n");
+				} else if (cJSON_IsNumber(val)) {
+					PRINT("val: %f\n", val->valuedouble);
+				}
+
+				if (reg && val && cJSON_IsNumber(reg) && cJSON_IsNumber(val)) {
+					INFO("reg:%f, val:%f\n", reg->valuedouble, val->valuedouble);
+				}
+			}
+		}
+	}
+
 	return true;
 }
 
@@ -319,15 +350,33 @@ static bool dbgJson(uint8_t argc, char** argv)
 	}
 
 	if (cJSON_IsString(object)) {
-		PRINT("string:\n");
 		PRINT("string: %s\n", object->valuestring);
-
 	}
 
 	if (cJSON_IsNumber(object)) {
-		PRINT("number:\n");
 		PRINT("number: %f\n", object->valuedouble);
 	}
+
+	if (cJSON_IsArray(object)) {
+		const cJSON* element;
+		int i=0;
+		PRINT("array:\n");
+		PRINT("number: %f\n", object->valuedouble);
+		cJSON_ArrayForEach(element, object) {
+			PRINT("%d: \n", i);
+			if (argc >= 3) {
+				const cJSON* val1;
+				val1 = cJSON_GetObjectItemCaseSensitive(element, argv[3]);
+				if (!val1) {
+					PRINT("object not found %s\n", argv[3]);
+				} else if (cJSON_IsNumber(val1)) {
+					PRINT("number: %f\n", val1->valuedouble);
+				}
+			}
+			i++;
+		}
+	}
+
 
 	return true;
 }
@@ -416,6 +465,17 @@ static bool dbgFreeObject(uint8_t argc, char** argv)
 	return true;
 }
 
+
+static bool dbgConfig(uint8_t argc, char** argv)
+{
+	if (argc < 2) {
+		return false;
+	}
+
+	CFG_parseWssCommand(argv[1], strlen(argv[1]));
+	return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("config", NULL)
@@ -425,6 +485,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("json",	    NULL,		NULL, dbgJson)
 		DEBUG_MENU_CMD("getObject", NULL,		NULL, dbgGetObject)
 		DEBUG_MENU_CMD("freeObject",NULL,		NULL, dbgFreeObject)
+		DEBUG_MENU_CMD("config",	"<json>",	NULL, dbgConfig)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
