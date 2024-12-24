@@ -12,12 +12,10 @@
 
 #if CONFIG_BUILD_TYPE_PNU
 #define PROMPT     "pnu"
-#define AP_SSID     "PNU"
 #endif
 
 #if CONFIG_BUILD_TYPE_GSR
 #define PROMPT     "gsr"
-#define AP_SSID     "GSR"
 #endif
 
 #define AP_PASSWD   "12345678"
