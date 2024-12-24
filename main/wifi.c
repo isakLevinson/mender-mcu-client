@@ -22,6 +22,7 @@
 #include "esp_timer.h"
 #include "esp_coexist.h"
 #include "mdns.h"
+#include "esp_mac.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -76,8 +77,17 @@ static bool _mdnsInit(void)
 
 	ret = NVS_get_mdns(mdns);
 	if (!ret) {
-		strcpy(mdns, "pnu");
+		uint8_t mac[6];
+		err = esp_efuse_mac_get_default(mac);
+		if (err) {
+			ERROR("esp_efuse_mac_get_default: %d\n", err);
+			strcpy(mdns, "pnu");
+		} else {
+			sprintf(mdns, "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+		}
 		INFO("no MDNS name in NVS. using default %s\n", mdns);
+	} else {
+		INFO("read MDNS from VVM %s\n", mdns);
 	}
 
 	//set hostname
