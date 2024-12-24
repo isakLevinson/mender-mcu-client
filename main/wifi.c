@@ -22,6 +22,7 @@
 #include "esp_timer.h"
 #include "esp_coexist.h"
 #include "mdns.h"
+#include "esp_mac.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
@@ -76,8 +77,17 @@ static bool _mdnsInit(void)
 
 	ret = NVS_get_mdns(mdns);
 	if (!ret) {
-		strcpy(mdns, "pnu");
+		uint8_t mac[6];
+		err = esp_efuse_mac_get_default(mac);
+		if (err) {
+			ERROR("esp_efuse_mac_get_default: %d\n", err);
+			strcpy(mdns, "pnu");
+		} else {
+			sprintf(mdns, "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+		}
 		INFO("no MDNS name in NVS. using default %s\n", mdns);
+	} else {
+		INFO("read MDNS from VVM %s\n", mdns);
 	}
 
 	//set hostname
@@ -401,12 +411,12 @@ static void _init(void)
 
 	wifi_config_t wifi_ap_config = {
 		.ap = {
-			.ssid = AP_SSID,
+			//.ssid = "",
 			.ssid_len = 3,
-			.password = AP_PASSWD,
+			.password = "",
 			.channel = 5,
 			.max_connection = 1,
-			.authmode = WIFI_AUTH_WPA2_PSK,
+			.authmode = WIFI_AUTH_OPEN,
 			.pmf_cfg = {
 				.required = false,
 			},
@@ -418,6 +428,14 @@ static void _init(void)
 	}
 
 	LED_set(255, 0, 0);
+
+	uint8_t mac[6];
+	err = esp_efuse_mac_get_default(mac);
+	sprintf((char*)wifi_ap_config.ap.ssid, "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	wifi_ap_config.ap.ssid_len = strlen((char*)wifi_ap_config.ap.ssid);
+
+	//INFO("ap SSID: %d\n", wifi_ap_config.ap.ssid);
+
 	//strcpy((char*)wifi_ap_config.ap.ssid, ap_ssid);
 	//wifi_ap_config.ap.ssid_len = strlen(ap_ssid);
 	//strcpy((char*)wifi_ap_config.ap.password, ap_passwd);
