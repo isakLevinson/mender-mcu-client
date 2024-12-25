@@ -10,7 +10,10 @@
 #include <stdio.h>
 
 #include "time.h"
+#include "nvs.h"
+#include "wifi.h"
 #include "led_strip.h"
+#include "max17049.h"
 
 static struct {
     led_strip_handle_t led_strip;
@@ -21,6 +24,7 @@ static struct {
     uint16_t onTime;
     bool     on;
     int32_t  switchTime;
+    bool     isConfigurated;
 } g_led;
 
 
@@ -32,31 +36,97 @@ static bool _update(int8_t r, int8_t g, int8_t b)
     return true;
 }
 
+static void  _handleBlink(int32_t time)
+{
+    if (!g_led.interval) {
+        g_led.on = true;
+    } else {
+        if (g_led.on)  {
+            if (time - g_led.switchTime > g_led.onTime) {
+                g_led.on = false;
+            }
+        } else {
+            if (time - g_led.switchTime > g_led.interval) {
+                g_led.on = true;
+                g_led.switchTime = time;
+            }
+        }
+    }
+    if (g_led.on) {
+        _update(g_led.r, g_led.g, g_led.g);
+    } else {
+        _update(0, 0, 0);
+    }
+}
+
 static void _task(void* arg)
 {
+    bool    ret;
     int32_t time;
 	while (true) {
 		vTaskDelay(10);
         time = TIME_get32();
-        if (!g_led.interval) {
-            g_led.on = true;
-        } else {
-            if (g_led.on)  {
-                if (time - g_led.switchTime > g_led.onTime) {
-                    g_led.on = false;
-                }
-            } else {
-                if (time - g_led.switchTime > g_led.interval) {
-                    g_led.on = true;
-                    g_led.switchTime = time;
-                }
+        _handleBlink(time);
+
+#if CONFIG_BUILD_TYPE_PNU
+        if (!g_led.isConfigurated) {
+            char    ssid[32];
+            char    passwd[32];
+    		ret = NVS_get_ssid(ssid, passwd);
+            if (ret) {
+                g_led.isConfigurated = true;
             }
         }
-        if (g_led.on) {
-            _update(g_led.r, g_led.g, g_led.g);
+
+        if (!g_led.isConfigurated) {
+            g_led.r = 100;
+            g_led.g = 100;
+            g_led.b = 100;
+            g_led.interval = 0;
         } else {
-            _update(0, 0, 0);
+            bool isConnected = WIFI_isConnected();
+            if (isConnected) {
+                bool     err = false;
+                uint16_t soc;
+
+                ret = fg_get_soc(&soc);
+                if (!ret) {
+                    soc = 0;
+                    err = true;
+                }
+
+                if (err) {
+                    g_led.r = 100;
+                    g_led.g = 0;
+                    g_led.b = 0;
+                    g_led.interval  = 0;
+                } else if (soc < 15)  {
+                    g_led.r = 100;
+                    g_led.g = 0;
+                    g_led.b = 0;
+                    g_led.interval  = 500;
+                    g_led.onTime    = 100;
+                } else if (soc < 30) {
+                    g_led.r = 100;
+                    g_led.g = 0;
+                    g_led.b = 0;
+                    g_led.interval  = 1000;
+                    g_led.onTime    = 200;
+                } else {
+                    g_led.r = 0;
+                    g_led.g = 100;
+                    g_led.b = 0;
+                    g_led.interval = 0;
+                }
+            } else {
+                g_led.r = 0;
+                g_led.g = 100;
+                g_led.b = 0;
+                g_led.interval  = 1000;
+                g_led.onTime    = 200;
+            }
         }
+#endif        
     }
 }
 

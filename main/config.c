@@ -54,7 +54,7 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 		if (objectPasswd) {
 			INFO("passwd: %s\n", objectPasswd->valuestring);
 			INFO("setting ssid and passwd\n");
-			sta_connect(objectSsid->valuestring, objectPasswd->valuestring);
+			WIFI_sta_connect(objectSsid->valuestring, objectPasswd->valuestring);
 		}
 	}
 
