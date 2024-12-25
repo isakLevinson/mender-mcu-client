@@ -190,12 +190,13 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	return true;
 }
 
+// *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-DEBUG_MENU_DIR("adc", NULL)
-DEBUG_MENU_CMD("status",			NULL,		NULL, dbgStatus)
-DEBUG_MENU_DIR_END
+	DEBUG_MENU_DIR("adc", NULL)
+		DEBUG_MENU_CMD("status",			NULL,		NULL, dbgStatus)
+	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
-
+// *INDENT-ON*
 
 void ADC_init(void)
 {
