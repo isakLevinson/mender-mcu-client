@@ -259,6 +259,14 @@ bool CFG_factoryGetModel(char* o_pStr)
 	return true;
 }
 
+bool CFG_default(void)
+{
+	NVS_eraseAll();
+	WIFI_sta_disconnect();
+	WIFI_startAp();
+
+	return true;
+}
 
 static bool dbgFindPart(uint8_t argc, char** argv)
 {
@@ -384,7 +392,6 @@ static bool dbgJson(uint8_t argc, char** argv)
 
 	return true;
 }
-
 
 static bool dbgGetObject(uint8_t argc, char** argv)
 {
@@ -525,8 +532,7 @@ static bool dbgDefault(uint8_t argc, char** argv)
 		return false;
 	}
 
-	NVS_eraseAll();
-	WIFI_sta_disconnect();
+	CFG_default();
 
 	return true;
 }

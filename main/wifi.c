@@ -137,7 +137,7 @@ static void got_ip_handler(void* arg, esp_event_base_t event_base,
 
 	NVS_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
 	_mdnsInit();
-	//LED_set(0, 255, 0);
+	WIFI_stopAp();
 }
 
 static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
@@ -204,7 +204,6 @@ static void disconnect_handler(void* arg, esp_event_base_t event_base, int32_t e
 	xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_TCP);
 	xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_UDP);
 	xEventGroupClearBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
-	//LED_set(255, 0, 0);
 }
 
 static void _udp_time_server(void)
@@ -366,17 +365,12 @@ static int _startServer(void)
 	return ESP_OK;
 }
 
-static void _init(void)
+static bool _startSta(void)
 {
-	static bool initialized = false;
 	esp_err_t err;
-
-	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
 
 	wifi_config_t wifi_sta_config = {
 		.sta = {
-			.ssid = "Levinson",
-			.password = "camelot5",
 			.scan_method = WIFI_ALL_CHANNEL_SCAN,
 			.failure_retry_cnt = 5,
 			/* Authmode threshold resets to WPA2 as default if password matches WPA2 standards (password len => 8).
@@ -388,6 +382,22 @@ static void _init(void)
 			.sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
 		},
 	};
+
+	g_server.netif_sta = esp_netif_create_default_wifi_sta();
+	assert(g_server.netif_sta);
+
+	err = esp_wifi_set_config(WIFI_IF_STA, &wifi_sta_config);
+	if (ESP_OK != err) {
+		ERROR("esp_wifi_set_config WIFI_IF_STA %d 0x%x\n", err, err);
+		return false;
+	}
+
+	return true;
+}
+
+static bool _startAp(void)
+{
+	esp_err_t err;
 
 	wifi_config_t wifi_ap_config = {
 		.ap = {
@@ -403,22 +413,38 @@ static void _init(void)
 		},
 	};
 
-	if (initialized) {
-		return;
-	}
-
-//	LED_set(255, 0, 0);
+	g_server.netif_ap  = esp_netif_create_default_wifi_ap();
+	assert(g_server.netif_ap);
 
 	uint8_t mac[6];
 	err = esp_efuse_mac_get_default(mac);
 	sprintf((char*)wifi_ap_config.ap.ssid, "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 	wifi_ap_config.ap.ssid_len = strlen((char*)wifi_ap_config.ap.ssid);
+	INFO_BUF("ssid", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.ssid, wifi_ap_config.ap.ssid_len);
 
-	//INFO("ap SSID: %d\n", wifi_ap_config.ap.ssid);
+	err = esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config);
+	if (ESP_OK != err) {
+		ERROR("esp_wifi_set_config WIFI_IF_AP %d 0x%x\n", err, err);
+		return false;
+	}
 
-	//strcpy((char*)wifi_ap_config.ap.ssid, ap_ssid);
-	//wifi_ap_config.ap.ssid_len = strlen(ap_ssid);
-	//strcpy((char*)wifi_ap_config.ap.password, ap_passwd);
+	return true;
+}
+
+static void _init(void)
+{
+	static bool initialized = false;
+	esp_err_t err;
+	bool    ret = true;
+	char    ssid[32];
+	char    passwd[32];
+
+
+	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+
+	if (initialized) {
+		return;
+	}
 
 	ESP_ERROR_CHECK(esp_netif_init());
 	g_server.event_group = xEventGroupCreate();
@@ -447,52 +473,23 @@ static void _init(void)
 	        NULL));
 
 	ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
 
-	g_server.netif_ap  = esp_netif_create_default_wifi_ap();
-	assert(g_server.netif_ap);
-	g_server.netif_sta = esp_netif_create_default_wifi_sta();
-	assert(g_server.netif_sta);
-
-	//if (strlen(EXAMPLE_ESP_WIFI_AP_PASSWD) == 0) {
-	//    wifi_ap_config.ap.authmode = WIFI_AUTH_OPEN;
-	//}
-
-	err = esp_wifi_set_config(WIFI_IF_STA, &wifi_sta_config);
-	if (ESP_OK != err) {
-		ERROR("esp_wifi_set_config WIFI_IF_STA %d 0x%x\n", err, err);
-		return;
-	}
-
-	err = esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config);
-	if (ESP_OK != err) {
-		ERROR("esp_wifi_set_config WIFI_IF_AP %d 0x%x\n", err, err);
-		return;
-	}
+	_startAp();
+	_startSta();
 
 	ESP_ERROR_CHECK(esp_wifi_start());
-
 	esp_netif_set_default_netif(g_server.netif_sta);
-
-#if 0
-	/* Enable napt on the AP netif */
-	if (esp_netif_napt_enable(esp_netif_ap) != ESP_OK) {
-		ESP_LOGE(TAG_STA, "NAPT not enabled on the netif: %p", esp_netif_ap);
-	}
-#endif
-
 	_startServer();
 
 	{
-		bool    ret = true;
-		char    ssid[32];
-		char    passwd[32];
-
 		ret = NVS_get_ssid(ssid, passwd);
 		if (ret) {
 			INFO("ssid  : %s\n", ssid);
 			INFO("passwd: %s\n", passwd);
+			WIFI_stopAp();
 			WIFI_sta_connect(ssid, passwd);
+		} else {
+			WIFI_startAp();
 		}
 	}
 
@@ -562,6 +559,18 @@ bool	WIFI_isConnected(void)
 	} else {
 		return false;
 	}
+}
+
+bool WIFI_startAp(void)
+{
+	esp_wifi_set_mode(WIFI_MODE_APSTA);
+	return true;
+}
+
+bool WIFI_stopAp(void)
+{
+	esp_wifi_set_mode(WIFI_MODE_STA);
+	return true;
 }
 
 static bool dbgConnect(uint8_t argc, char** argv)
@@ -678,6 +687,23 @@ static bool dbgMdns(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgAp(uint8_t argc, char** argv)
+{
+	if (argc < 2) {
+		return false;
+	}
+
+	if ('0' == argv[1][0]) {
+		WIFI_stopAp();
+	}
+
+	if ('1' == argv[1][0]) {
+		WIFI_startAp();
+	}
+
+	return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("wifi", NULL)
@@ -687,6 +713,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("wssSend",           NULL,		NULL, dbgWssSend)
 		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
 		DEBUG_MENU_CMD("mdns",          	"[name]",   NULL, dbgMdns)
+		DEBUG_MENU_CMD("ap",	          	"<0/1>",    NULL, dbgAp)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

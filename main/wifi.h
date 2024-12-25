@@ -14,6 +14,8 @@ bool WIFI_sta_connect(const char* ssid, const char* pass);
 bool WIFI_sta_disconnect(void);
 bool WIFI_setMdns(char* pName);
 bool WIFI_isConnected(void);
+bool WIFI_startAp(void);
+bool WIFI_stopAp(void);
 
 #ifdef __cplusplus
 }

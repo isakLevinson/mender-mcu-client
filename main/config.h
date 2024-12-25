@@ -12,3 +12,4 @@ bool CFG_factoryGetManufacturingDate(char* o_pStr);
 bool CFG_factoryGetSn(char* o_pStr);
 bool CFG_factoryGetHwRevision(char* o_pStr);
 bool CFG_factoryGetModel(char* o_pStr);
+bool CFG_default(void);

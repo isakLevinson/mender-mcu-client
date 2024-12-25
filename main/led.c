@@ -11,8 +11,8 @@
 
 #include "driver/gpio.h"
 #include "time.h"
-#include "nvs.h"
 #include "wifi.h"
+#include "config.h"
 #include "led_strip.h"
 #include "max17049.h"
 
@@ -141,8 +141,7 @@ static void _task(void* arg)
             if (trig) {
                 if (time - pressTime > 10000) {
                     INFO("resetting to default\n");
-                    NVS_eraseAll();
-                    WIFI_sta_disconnect();
+                    CFG_default();
                     g_led.isConfigurated = false;
                     trig = false;
                 }
