@@ -302,12 +302,18 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 		rsp.pump[i] = pumps[i];
 	}
 
-	// TODO: use real values
 	ret = fg_get_soc(&soc);
 	if (ret) {
 		rsp.soc = soc;
 	} else {
 		rsp.soc = 0;
+	}
+
+	ret = fg_get_vbat(&voltage);
+	if (ret) {
+		rsp.voltage = voltage;
+	} else {
+		rsp.voltage = 0;
 	}
 
 	rsp.voltage	= 7500;
