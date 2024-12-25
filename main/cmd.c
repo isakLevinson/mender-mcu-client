@@ -29,7 +29,7 @@
 #include "cli.h"
 #include "time.h"
 #include "wifi.h"
-#include "app.h"
+#include "ctrl.h"
 #include "max17049.h"
 
 // *INDENT-OFF*
@@ -96,11 +96,11 @@
 	return true;
 
 
-#define APP_RSP_PRINT_SWITCH(cmd, op, fields)									\
+#define CTRL_RSP_PRINT_SWITCH(cmd, op, fields)									\
 	case CMD_RSP_ ## cmd:	PRINT("%s(0x%x) ", STR(RSP_ ## cmd), op);	break;	\
 
 
-#define APP_CMD_LIST_ARRAY(cmd, op, fields)	CMD_REQ_ ## cmd,
+#define CTRL_CMD_LIST_ARRAY(cmd, op, fields)	CMD_REQ_ ## cmd,
 #define CMD_NONE(cmd, op, fields)
 
 #define CMD_DECLARE_RSP_BUF(x, aditionalSize)					\
@@ -201,7 +201,7 @@ static void _taskStreamer(void* arg)
 
 		g_cmd.streamSentTime += g_cmd.streamPeriod;
 
-		APP_getPressure(press);
+		CTRL_getPressure(press);
 		TRACE("stream %d: %3d %3d %3d %3d\n", t, press[0], press[1], press[2], press[3]);
 
 		rsp.time = t;
@@ -287,17 +287,17 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 
 	INFO("STATUS\n");
 
-	APP_getPressure(press);
+	CTRL_getPressure(press);
 	for (i = 0; i < 4; i++) {
 		rsp.pressure[i] = press[i];
 	}
 
-	APP_getValves(valves);
+	CTRL_getValves(valves);
 	for (i = 0; i < 4; i++) {
 		rsp.valve[i] = valves[i];
 	}
 
-	APP_getPump(pumps);
+	CTRL_getPump(pumps);
 	for (i = 0; i < 4; i++) {
 		rsp.pump[i] = pumps[i];
 	}
@@ -335,7 +335,7 @@ static bool	_req_SET_PRESSURE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PRESS
 		press[i] = i_pReq->pressure[i];
 	}
 
-	APP_setTarget(press);
+	CTRL_setTarget(press);
 
 	rsp.ok = 1;
 	_sendResp(i_pContext, CMD_RSP_SET_PRESSURE, &rsp, sizeof(rsp));
@@ -389,7 +389,7 @@ static bool	_req_CONTROL_ENABLE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_CONTROL
 
 	CMD_RSPBUF_CONTROL_ENABLE	rsp;
 
-	APP_loopEnable(i_pReq->on);
+	CTRL_loopEnable(i_pReq->on);
 
 	rsp.ok = 1;
 	_sendResp(i_pContext, CMD_RSP_CONTROL_ENABLE, &rsp, sizeof(rsp));
@@ -409,10 +409,10 @@ static bool	_req_SET_PUMPS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PUMPS* i
 	for (i = 0; i < 4; i++) {
 		switch (i_pReq->on[i]) {
 			case 0:
-				ret = APP_setPump(i, false);
+				ret = CTRL_setPump(i, false);
 				break;
 			case 1:
-				ret = APP_setPump(i, true);
+				ret = CTRL_setPump(i, true);
 				break;
 			default:
 				ret = true;
@@ -441,10 +441,10 @@ static bool	_req_SET_VALVES_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_VALVES*
 	for (i = 0; i < 4; i++) {
 		switch (i_pReq->on[i]) {
 			case 0:
-				ret = APP_setValve(i, false);
+				ret = CTRL_setValve(i, false);
 				break;
 			case 1:
-				ret = APP_setValve(i, true);
+				ret = CTRL_setValve(i, true);
 				break;
 			default:
 				ret = true;

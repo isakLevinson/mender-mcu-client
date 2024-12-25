@@ -27,7 +27,7 @@
 #include "cmd.h"
 #include "wifi.h"
 #include "pump.h"
-#include "app.h"
+#include "ctrl.h"
 #include "adc.h"
 #include "led.h"
 #include "nvs.h"
@@ -130,7 +130,7 @@ void app_main(void)
 	fg_init();
 
 	PMP_init();
-	APP_init();
+	CTRL_init();
 
 	esp_log_level_set("*", ESP_LOG_ERROR);
 

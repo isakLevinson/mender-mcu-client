@@ -1,6 +1,6 @@
 
 if (CONFIG_BUILD_TYPE_PNU)
-	set(SPECIFIC_SRC "pump.c" "app.c" "max17049.c")
+	set(SPECIFIC_SRC "ctrl.c" "pump.c" "max17049.c")
 endif()
 
 if (CONFIG_BUILD_TYPE_GSR)

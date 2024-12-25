@@ -23,7 +23,7 @@
 #include "argtable3/argtable3.h"
 #include "freertos/task.h"
 
-#include "app.h"
+#include "ctrl.h"
 #include "pump.h"
 #include "adc.h"
 #include "led.h"
@@ -108,7 +108,7 @@ bool _pumpOn(uint8_t v, bool on)
 	return true;
 }
 
-bool APP_setPump(uint8_t n, bool on)
+bool CTRL_setPump(uint8_t n, bool on)
 {
 	bool    ret;
 
@@ -120,7 +120,7 @@ bool APP_setPump(uint8_t n, bool on)
 	return ret;
 }
 
-bool APP_setValve(uint8_t n, bool on)
+bool CTRL_setValve(uint8_t n, bool on)
 {
 	bool    ret;
 
@@ -284,7 +284,7 @@ static void _clearFsm(uint8_t ch)
 	_pressurize(ch, PRESS_STATE_IDLE);
 }
 
-bool APP_loopEnable(bool on)
+bool CTRL_loopEnable(bool on)
 {
 	uint32_t    i;
 
@@ -296,11 +296,11 @@ bool APP_loopEnable(bool on)
 	return true;
 }
 
-bool APP_setTarget(uint16_t* pPressure)
+bool CTRL_setTarget(uint16_t* pPressure)
 {
 	uint8_t i;
 
-	INFO("APP_setTarget %d %d %d %d\n", pPressure[0], pPressure[1], pPressure[2], pPressure[3]);
+	INFO("CTRL_setTarget %d %d %d %d\n", pPressure[0], pPressure[1], pPressure[2], pPressure[3]);
 
 	for (i = 0; i < 4; i++) {
 		if (pPressure[i] == g_app.channels[i].target) {
@@ -313,7 +313,7 @@ bool APP_setTarget(uint16_t* pPressure)
 	return true;
 }
 
-bool APP_getPressure(int16_t* pPressure)
+bool CTRL_getPressure(int16_t* pPressure)
 {
 	int i;
 
@@ -324,7 +324,7 @@ bool APP_getPressure(int16_t* pPressure)
 	return true;
 }
 
-bool APP_getValves(bool* pValves)
+bool CTRL_getValves(bool* pValves)
 {
 	int i;
 
@@ -335,7 +335,7 @@ bool APP_getValves(bool* pValves)
 	return true;
 }
 
-bool APP_getPump(bool* pPumpsOn)
+bool CTRL_getPump(bool* pPumpsOn)
 {
 	int i;
 
@@ -450,7 +450,7 @@ static bool dbgTarget(uint8_t argc, char** argv)
 		target[1] = strtol(argv[1], NULL, 10);
 		target[2] = strtol(argv[1], NULL, 10);
 		target[3] = strtol(argv[1], NULL, 10);
-		APP_setTarget(target);
+		CTRL_setTarget(target);
 
 		return true;
 	}
@@ -463,7 +463,7 @@ static bool dbgTarget(uint8_t argc, char** argv)
 	target[1] = strtol(argv[2], NULL, 10);
 	target[2] = strtol(argv[3], NULL, 10);
 	target[3] = strtol(argv[4], NULL, 10);
-	APP_setTarget(target);
+	CTRL_setTarget(target);
 
 	return true;
 }
@@ -473,12 +473,12 @@ static bool dbgLoopEnable(uint8_t argc, char** argv)
 	bool    on;
 
 	if (argc < 2) {
-		APP_loopEnable(true);
+		CTRL_loopEnable(true);
 		return true;
 	}
 
 	on = strtol(argv[1], NULL, 10);
-	APP_loopEnable(on);
+	CTRL_loopEnable(on);
 
 	return true;
 }
@@ -545,7 +545,7 @@ static bool dbgCfg(uint8_t argc, char** argv)
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-	DEBUG_MENU_DIR("app", NULL)
+	DEBUG_MENU_DIR("ctrl", NULL)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("cfg",   	NULL,		NULL, dbgCfg)
 		DEBUG_MENU_CMD("valve",		NULL,		NULL, dbgValve)
@@ -559,7 +559,7 @@ DEBUG_MENU_START(g_menu)
 DEBUG_MENU_END
 // *INDENT-ON*
 
-void APP_init(void)
+void CTRL_init(void)
 {
 	DBG_TREE_add("/",		g_menu);
 
