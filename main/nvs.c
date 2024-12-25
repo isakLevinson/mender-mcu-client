@@ -217,6 +217,28 @@ bool NVS_set_mdns(char* val)
 	return ret;
 }
 
+bool NVS_eraseAll(void)
+{
+	bool    ret = true;
+	esp_err_t err = ESP_OK;
+	nvs_handle_t handle;
+
+	err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READWRITE, &handle);
+	if (err != ESP_OK) {
+		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE_WIFI, err);
+		return false;
+	}
+
+	err = nvs_erase_all(handle);
+	if (err != ESP_OK) {
+		ERROR("nvs_erase_all failed %x\n",  err);
+		ESP_printErr(err);
+		return false;
+	}
+
+	return true;
+}
+
 static bool dbgOpen(uint8_t argc, char** argv)
 {
 	esp_err_t   err = ESP_OK;

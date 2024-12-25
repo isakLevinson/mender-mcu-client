@@ -18,9 +18,6 @@
 #define PROMPT     "gsr"
 #endif
 
-#define AP_PASSWD   "12345678"
-
-
 #define SIMULATION_MODE     true
 
 #define SW_VERSION_MAJOR		1
@@ -44,8 +41,9 @@
 #define UART_PORT_NUM_CMD  (1)
 #define UART_BAUD_CMD      (115200)
 
-#define GPIO_UART_RXD   5
-#define GPIO_UART_TXD   6
+#define GPIO_UART_RXD       5
+#define GPIO_UART_TXD       6
+#define GPIO_BOOT_BUTTON    0
 
 #define GPIO_ADC1_CHAN0          ADC_CHANNEL_0   /* gpio 1*/
 #define GPIO_ADC1_CHAN1          ADC_CHANNEL_2   /* gpio 3*/
