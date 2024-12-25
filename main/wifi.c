@@ -446,7 +446,6 @@ static void _init(void)
 	        NULL,
 	        NULL));
 
-
 	ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
 
@@ -510,6 +509,16 @@ static bool _sta_scan(const char* ssid)
 	return true;
 }
 
+bool WIFI_sta_disconnect(void)
+{
+	g_server.reconnect = false;
+	xEventGroupClearBits(g_server.event_group, FLAG_CONNECTED);
+	ESP_ERROR_CHECK(esp_wifi_disconnect());
+	xEventGroupWaitBits(g_server.event_group, FLAG_DISCONNECT, 0, 1, portTICK_PERIOD_MS);
+
+	return true;
+}
+
 bool WIFI_sta_connect(const char* ssid, const char* pass)
 {
 	strcpy(g_server.wifi.currentSsid, ssid);
@@ -525,10 +534,7 @@ bool WIFI_sta_connect(const char* ssid, const char* pass)
 	}
 
 	if (bits & FLAG_CONNECTED) {
-		g_server.reconnect = false;
-		xEventGroupClearBits(g_server.event_group, FLAG_CONNECTED);
-		ESP_ERROR_CHECK(esp_wifi_disconnect());
-		xEventGroupWaitBits(g_server.event_group, FLAG_DISCONNECT, 0, 1, portTICK_PERIOD_MS);
+		WIFI_sta_disconnect();
 	}
 
 	g_server.reconnect = true;

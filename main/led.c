@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 
+#include "driver/gpio.h"
 #include "time.h"
 #include "nvs.h"
 #include "wifi.h"
@@ -52,8 +53,9 @@ static void  _handleBlink(int32_t time)
             }
         }
     }
+
     if (g_led.on) {
-        _update(g_led.r, g_led.g, g_led.g);
+        _update(g_led.r, g_led.g, g_led.b);
     } else {
         _update(0, 0, 0);
     }
@@ -126,7 +128,26 @@ static void _task(void* arg)
                 g_led.onTime    = 200;
             }
         }
-#endif        
+#endif
+        // TODO: find better place
+        static int32_t  pressTime;
+        static bool     trig = false;
+        gpio_set_direction(GPIO_BOOT_BUTTON, GPIO_MODE_INPUT);
+        bool val = gpio_get_level(GPIO_BOOT_BUTTON);
+        if (val) {
+            pressTime = time;
+            trig = true;
+        } else {
+            if (trig) {
+                if (time - pressTime > 10000) {
+                    INFO("resetting to default\n");
+                    NVS_eraseAll();
+                    WIFI_sta_disconnect();
+                    g_led.isConfigurated = false;
+                    trig = false;
+                }
+            }
+        }
     }
 }
 
@@ -171,10 +192,18 @@ static bool dbgSet(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgStatus(uint8_t argc, char** argv)
+{
+    PRINT("rgb: %d %d %d\n", g_led.r, g_led.g, g_led.b);
+    PRINT("interval: %d / %d\n", g_led.onTime, g_led.interval);
+    return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("led", NULL)
-		DEBUG_MENU_CMD("set",	NULL,		NULL, dbgSet)
+		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
+		DEBUG_MENU_CMD("set",	    NULL,		NULL, dbgSet)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

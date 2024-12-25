@@ -8,6 +8,8 @@
 
 #include "esp_partition.h"
 #include "esp_flash.h"
+#include "driver/gpio.h"
+
 #include "cJSON.h"
 #include "nvs.h"
 #include "mdns.h"
@@ -467,7 +469,6 @@ static bool dbgFreeObject(uint8_t argc, char** argv)
 	return true;
 }
 
-
 static bool dbgConfig(uint8_t argc, char** argv)
 {
 	if (argc < 2) {
@@ -475,6 +476,58 @@ static bool dbgConfig(uint8_t argc, char** argv)
 	}
 
 	CFG_parseWssCommand(argv[1], strlen(argv[1]));
+	return true;
+}
+
+static bool dbgGpio(uint8_t argc, char** argv)
+{
+	uint8_t gpio;
+	char    val;
+
+	if (argc < 3) {
+		return false;
+	}
+
+	gpio = strtoul(argv[1], NULL, 10);
+	val = argv[2][0];
+
+	switch (val) {
+		case '0':
+			gpio_set_direction(gpio, GPIO_MODE_OUTPUT);
+			gpio_set_level(gpio, 0);
+			break;
+
+		case '1':
+			gpio_set_direction(gpio, GPIO_MODE_OUTPUT);
+			gpio_set_level(gpio, 1);
+			break;
+
+		case 'i':
+			gpio_set_direction(gpio, GPIO_MODE_INPUT);
+			val = gpio_get_level(gpio);
+			PRINT("%d\n", val);
+			break;
+
+		default:
+	}
+
+	return true;
+}
+
+static bool dbgDefault(uint8_t argc, char** argv)
+{
+	if (argc < 2) {
+		PRINT("please do default 1\n");
+		return false;
+	}
+
+	if ('1' != argv[1][0]) {
+		return false;
+	}
+
+	NVS_eraseAll();
+	WIFI_sta_disconnect();
+
 	return true;
 }
 
@@ -488,6 +541,8 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("getObject", NULL,		NULL, dbgGetObject)
 		DEBUG_MENU_CMD("freeObject",NULL,		NULL, dbgFreeObject)
 		DEBUG_MENU_CMD("config",	"<json>",	NULL, dbgConfig)
+		DEBUG_MENU_CMD("gpio",		NULL,		NULL, dbgGpio)
+		DEBUG_MENU_CMD("default",	NULL,		NULL, dbgDefault)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

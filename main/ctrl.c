@@ -364,39 +364,6 @@ static bool dbgValve(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgGpio(uint8_t argc, char** argv)
-{
-	uint8_t gpio;
-	char    val;
-
-	if (argc < 3) {
-		return false;
-	}
-
-	gpio = strtoul(argv[1], NULL, 10);
-	val = argv[2][0];
-
-	switch (val) {
-		case '0':
-			gpio_set_direction(gpio, GPIO_MODE_OUTPUT);
-			gpio_set_level(gpio, 0);
-			break;
-
-		case '1':
-			gpio_set_direction(gpio, GPIO_MODE_OUTPUT);
-			gpio_set_level(gpio, 1);
-			break;
-
-		case 'i':
-			gpio_set_direction(gpio, GPIO_MODE_INPUT);
-			break;
-
-		default:
-	}
-
-	return true;
-}
-
 static bool dbgCuff(uint8_t argc, char** argv)
 {
 	bool    ret;
@@ -532,7 +499,6 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("cfg",   	NULL,		NULL, dbgCfg)
 		DEBUG_MENU_CMD("valve",		NULL,		NULL, dbgValve)
-		DEBUG_MENU_CMD("gpio",		NULL,		NULL, dbgGpio)
 		DEBUG_MENU_CMD("cuff",		NULL,		NULL, dbgCuff)
 		DEBUG_MENU_CMD("target",    NULL,		NULL, dbgTarget)
 		DEBUG_MENU_CMD("loop",    	NULL,		NULL, dbgLoopEnable)

@@ -70,6 +70,14 @@ void ESP_printErr(int err)
 		case ESP_ERR_INVALID_STATE:
 			pStr = "ESP_ERR_INVALID_STATE";
 			break;
+
+		case ESP_ERR_NVS_INVALID_HANDLE:
+			pStr = "ESP_ERR_NVS_INVALID_HANDLE";
+			break;
+
+		case ESP_ERR_NVS_READ_ONLY:
+			pStr = "ESP_ERR_NVS_READ_ONLY";
+			break;
 	}
 
 	if (pStr) {
