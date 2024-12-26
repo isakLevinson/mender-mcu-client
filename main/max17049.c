@@ -27,10 +27,10 @@
 #define MAX17049_REG_SOC	0x04
 #define MAX17049_REG_MODE	0x06
 
-static bool _read(uint8_t reg_addr, void *data, size_t len)
+static bool _read(uint8_t reg_addr, void* data, size_t len)
 {
 	int32_t	err;
-    err = i2c_master_write_read_device(I2C_MASTER_NUM, MAX17049_ADDR, &reg_addr, 1, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+	err = i2c_master_write_read_device(I2C_MASTER_NUM, MAX17049_ADDR, &reg_addr, 1, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 	if (ESP_OK != err) {
 		ERROR("i2c_master_write_read_device\n");
 		ESP_printErr(err);
@@ -40,14 +40,14 @@ static bool _read(uint8_t reg_addr, void *data, size_t len)
 	return true;
 }
 
-static bool _write(uint8_t reg_addr, void *data, size_t len)
+static bool _write(uint8_t reg_addr, void* data, size_t len)
 {
-    int err;
-    uint8_t write_buf[32];
+	int err;
+	uint8_t write_buf[32];
 	write_buf[0] = reg_addr;
-	memcpy(write_buf+1, data, len);
+	memcpy(write_buf + 1, data, len);
 
-    err = i2c_master_write_to_device(I2C_MASTER_NUM, MAX17049_ADDR, write_buf, len+1, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+	err = i2c_master_write_to_device(I2C_MASTER_NUM, MAX17049_ADDR, write_buf, len + 1, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 	if (ESP_OK != err) {
 		ERROR("i2c_master_write_to_device\n");
 		ESP_printErr(err);
@@ -66,7 +66,7 @@ static bool _rdReg(uint8_t reg, uint16_t* val)
 		return false;
 	}
 
-	*val = ((uint16_t)buf[0])<<8 | buf[1];
+	*val = ((uint16_t)buf[0]) << 8 | buf[1];
 
 	return true;
 }
@@ -91,21 +91,21 @@ static bool _i2c_master_init(void)
 {
 	int err;
 
-    i2c_config_t conf = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = GPIO_SDA_FG,
-        .scl_io_num = GPIO_SCL_FG,
-        .sda_pullup_en = GPIO_PULLUP_DISABLE, //The board has a built-in pullup resistor
-        .scl_pullup_en = GPIO_PULLUP_DISABLE, //The board has a built-in pullup resistor
-        .master.clk_speed = I2C_MASTER_FREQ_HZ,
-    };
+	i2c_config_t conf = {
+		.mode = I2C_MODE_MASTER,
+		.sda_io_num = GPIO_SDA_FG,
+		.scl_io_num = GPIO_SCL_FG,
+		.sda_pullup_en = GPIO_PULLUP_DISABLE, //The board has a built-in pullup resistor
+		.scl_pullup_en = GPIO_PULLUP_DISABLE, //The board has a built-in pullup resistor
+		.master.clk_speed = I2C_MASTER_FREQ_HZ,
+	};
 
-    err = i2c_param_config(I2C_MASTER_NUM, &conf);
+	err = i2c_param_config(I2C_MASTER_NUM, &conf);
 	if (ESP_OK != err) {
 		ERROR("i2c_param_config %d\n", err);
 	}
 
-    err = i2c_driver_install(I2C_MASTER_NUM, conf.mode, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
+	err = i2c_driver_install(I2C_MASTER_NUM, conf.mode, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
 	if (ESP_OK != err) {
 		ERROR("i2c_driver_install %d\n", err);
 	}
@@ -123,13 +123,13 @@ bool fg_get_soc(uint16_t* o_pVal)
 	bool	ret;
 	uint16_t	val;
 
-    ret = _rdReg(MAX17049_REG_SOC, &val);
+	ret = _rdReg(MAX17049_REG_SOC, &val);
 	if (!ret) {
 		return false;
 	}
 
 	*o_pVal = val / 256;
-    return true;
+	return true;
 }
 
 bool fg_get_vbat(uint16_t* o_pVal)
@@ -137,13 +137,13 @@ bool fg_get_vbat(uint16_t* o_pVal)
 	bool	ret;
 	uint16_t	val;
 
-    ret = _rdReg(MAX17049_REG_VCELL, &val);
+	ret = _rdReg(MAX17049_REG_VCELL, &val);
 	if (!ret) {
 		return false;
 	}
 
 	*o_pVal = (uint32_t)val * 78125 / 1000000 * 2;
-    return true;
+	return true;
 }
 
 static bool dbgRd(uint8_t argc, char** argv)
@@ -200,7 +200,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 	ret  = fg_get_soc(&soc);
 	ret &= fg_get_vbat(&vbat);
-	
+
 	if (!ret) {
 		ERROR("failed\n");
 		return true;

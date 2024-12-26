@@ -14,6 +14,7 @@
 #include "nvs.h"
 #include "mdns.h"
 #include "wifi.h"
+#include "wss.h"
 #include "max30001.h"
 
 static const esp_partition_t* g_partition = NULL;
@@ -264,6 +265,7 @@ bool CFG_default(void)
 	NVS_eraseAll();
 	WIFI_sta_disconnect();
 	WIFI_startAp();
+	wss_start_config();
 
 	return true;
 }
@@ -371,7 +373,7 @@ static bool dbgJson(uint8_t argc, char** argv)
 
 	if (cJSON_IsArray(object)) {
 		const cJSON* element;
-		int i=0;
+		int i = 0;
 		PRINT("array:\n");
 		PRINT("number: %f\n", object->valuedouble);
 		cJSON_ArrayForEach(element, object) {

@@ -160,7 +160,7 @@ static void _handleBioz(void)
 			case 2:
 				//TRACE("%2d: %06x %x %x EOF\n", count, val.bit.ecg_data, val.bit.ptag, val.bit.etag);
 				TRACE("%2d: %8d %x EOF\n", count, data, val.bit.btag);
-//				g_max.boiz.rcvCount++;
+				//				g_max.boiz.rcvCount++;
 				exitLoop = true;
 				break;
 
@@ -184,7 +184,7 @@ static void _handleBioz(void)
 			default:
 				//TRACE("%2d: %06x %x %x\n", count, val.bit.ecg_data, val.bit.ptag, val.bit.etag);
 				TRACE("%2d: %8d %x\n", count, data, val.bit.btag);
-//				g_max.bioz.rcvCount++;
+				//				g_max.bioz.rcvCount++;
 		}
 
 		count++;
@@ -365,7 +365,7 @@ void max30001_set_ecg_bioz_r2r_cfg(void)
 	g_max.regs.cnfgGen.bit.en_bioz  = 0x01;
 	g_max.regs.cnfgGen.bit.en_ecg   = 0x01;
 
-	g_max.regs.cnfgCal.bit.en_vcal= 0x01;
+	g_max.regs.cnfgCal.bit.en_vcal = 0x01;
 	g_max.regs.cnfgCal.bit.vmode  = 0x01;
 	g_max.regs.cnfgCal.bit.fifty  = 0x01;
 	g_max.regs.cnfgCal.bit.fcal   = 0x04;
@@ -437,9 +437,9 @@ void max30001_write_reg(uint8_t reg, uint32_t val)
 uint32_t max30001_read_reg(uint8_t reg)
 {
 	uint32_t	val;
-	
+
 	val = _readReg(reg);
-	
+
 	return val;
 }
 
@@ -597,7 +597,7 @@ static bool dbgWrBits(uint8_t argc, char** argv)
 
 	val = _readReg(reg);
 
-	mask = ~(((1<<size)-1) << bit);
+	mask = ~(((1 << size) - 1) << bit);
 	PRINT("current: %x, mas:%x\n", val, mask);
 
 	val &= mask;

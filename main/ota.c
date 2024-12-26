@@ -87,8 +87,8 @@ static bool dbgAuto(uint8_t argc, char** argv)
 		.http_config = &config,
 	};
 
-//	sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
-//	config.url = url;
+	//	sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
+	//	config.url = url;
 	config.url = argv[1];
 
 	INFO("Attempting to download update from %s\n", config.url);
@@ -122,8 +122,8 @@ static bool dbgBegin(uint8_t argc, char** argv)
 		.http_config = &config,
 	};
 
-//	sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
-//	config.url = url;
+	//	sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
+	//	config.url = url;
 	config.url = argv[1];
 
 	INFO("begin OTA from %s\n", config.url);
