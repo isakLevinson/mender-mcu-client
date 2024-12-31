@@ -27,16 +27,34 @@
 #define MAX17049_REG_SOC	0x04
 #define MAX17049_REG_MODE	0x06
 
+
+#define MAX_FAIL_COUNT	3
+static struct {
+	uint8_t	failCount;
+} g_fg = {
+	.failCount = MAX_FAIL_COUNT,
+};
+
 static bool _read(uint8_t reg_addr, void* data, size_t len)
 {
 	int32_t	err;
+
+	if (!g_fg.failCount) {
+		return false;
+	}
+
 	err = i2c_master_write_read_device(I2C_MASTER_NUM, MAX17049_ADDR, &reg_addr, 1, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 	if (ESP_OK != err) {
 		ERROR("i2c_master_write_read_device\n");
 		ESP_printErr(err);
+		g_fg.failCount--;
+		if (!g_fg.failCount) {
+			ERROR("last attenp. will not try to use FG anymore\n");
+		}
 		return false;
 	}
 
+	g_fg.failCount = MAX_FAIL_COUNT;
 	return true;
 }
 
@@ -45,14 +63,24 @@ static bool _write(uint8_t reg_addr, void* data, size_t len)
 	int err;
 	uint8_t write_buf[32];
 	write_buf[0] = reg_addr;
-	memcpy(write_buf + 1, data, len);
 
+	if (!g_fg.failCount) {
+		return false;
+	}
+
+	memcpy(write_buf + 1, data, len);
 	err = i2c_master_write_to_device(I2C_MASTER_NUM, MAX17049_ADDR, write_buf, len + 1, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 	if (ESP_OK != err) {
 		ERROR("i2c_master_write_to_device\n");
 		ESP_printErr(err);
+		g_fg.failCount--;
+		if (!g_fg.failCount) {
+			ERROR("last attenp. will not try to use FG anymore\n");
+		}
 		return false;
 	}
+
+	g_fg.failCount = MAX_FAIL_COUNT;
 	return true;
 }
 
@@ -211,7 +239,6 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 	return true;
 }
-
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)

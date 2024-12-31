@@ -601,14 +601,23 @@ static bool dbgWssSend(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-	wifi_config_t cfg;
-	wifi_mode_t mode;
+	int				err;
+	wifi_config_t	cfg;
+	wifi_mode_t		mode;
 	esp_netif_ip_info_t ip;
 
 	esp_wifi_get_mode(&mode);
 
 	bool    useSTA = ((WIFI_MODE_APSTA == mode) || ((WIFI_MODE_STA == mode)));
 	bool    useAP = ((WIFI_MODE_APSTA == mode) || ((WIFI_MODE_AP == mode)));
+
+	uint8_t mac[6];
+	err = esp_efuse_mac_get_default(mac);
+	if (err) {
+		ERROR("esp_efuse_mac_get_default failed %d\n", err);
+	} else {
+		PRINT("default MAC %02x%02x%02x%02x%02x%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	}
 
 	if (useAP) {
 		esp_wifi_get_config(WIFI_IF_AP, &cfg);

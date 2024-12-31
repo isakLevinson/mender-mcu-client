@@ -14,6 +14,7 @@
 
 #include "driver/uart.h"
 #include "esp_timer.h"
+#include "esp_mac.h"
 
 #include "main.h"
 
@@ -104,6 +105,8 @@ bool CLI_getc(char* o_pChar)
 
 static bool dbgVer(uint8_t argc, char** argv)
 {
+	int err;
+
 	PRINT("sw:%d.%d.%d\n",
 	    SW_VERSION_MAJOR,
 	    SW_VERSION_MINOR,
@@ -115,6 +118,15 @@ static bool dbgVer(uint8_t argc, char** argv)
 	    HW_VERSION_BUILD);
 
 	//PRINT_BUF("hash",	PRINT_BUF_STYLE_HEX_NL, i_pBuf, size);
+
+	uint8_t mac[6];
+	err = esp_efuse_mac_get_default(mac);
+	if (err) {
+		ERROR("esp_efuse_mac_get_default failed %d\n", err);
+	} else {
+		PRINT("default MAC %02x%02x%02x%02x%02x%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	}
+
 
 	return true;
 }
