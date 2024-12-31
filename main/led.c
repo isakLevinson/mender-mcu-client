@@ -15,6 +15,7 @@
 #include "config.h"
 #include "led_strip.h"
 #include "max17049.h"
+#include "nvs.h"
 
 static struct {
 	led_strip_handle_t led_strip;
