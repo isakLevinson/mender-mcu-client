@@ -87,7 +87,6 @@ void ESP_printErr(int err)
 	}
 }
 
-
 void uart_init(void)
 {
 	uart_config_t uart_config = {

@@ -31,6 +31,7 @@
 #include "wifi.h"
 #include "ctrl.h"
 #include "max17049.h"
+#include "ota.h"
 
 // *INDENT-OFF*
 
@@ -62,8 +63,11 @@
 	rsp(SET_PUMPS,					0x10,	uint8_t		ok;)			\
 	req(SET_VALVES,					0x11,	int8_t		on[4];)			\
 	rsp(SET_VALVES,					0x12,	uint8_t		ok;)			\
-	rsp(STREAM,						0x13,	uint64_t	time;			\
+	rsp(EVT_STREAM,					0x13,	uint64_t	time;			\
 											uint16_t	pressure[4];)	\
+	req(OTA_START,					0x14,	char		url[0];)		\
+	rsp(OTA_START,					0x15,	uint8_t		ok;)			\
+	rsp(EVT_OTA_STATUS,				0x16,	uint8_t		ok;)			\
 
 // *INDENT-ON*
 
@@ -183,7 +187,7 @@ static void _taskStreamer(void* arg)
 	bool	ret;
 	int32_t	t;
 	int16_t	press[4];
-	CMD_RSPBUF_STREAM	rsp;
+	CMD_RSPBUF_EVT_STREAM	rsp;
 	uint32_t	i;
 #endif
 
@@ -208,7 +212,7 @@ static void _taskStreamer(void* arg)
 		for (i = 0; i < 4; i++) {
 			rsp.pressure[i] = press[i];
 		}
-		ret = _sendResp(&g_cmd.streamContext, CMD_RSP_STREAM, &rsp, sizeof(rsp));
+		ret = _sendResp(&g_cmd.streamContext, CMD_RSP_EVT_STREAM, &rsp, sizeof(rsp));
 		if (!ret) {
 			ERROR("failed to send. stopping streaming\n");
 			_streamPeriod(0);
@@ -325,19 +329,21 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 
 static bool	_req_SET_PRESSURE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PRESSURE* i_pReq, uint16_t size)
 {
-	INFO("SET_PRESSURE\n");
+	bool		ret;
 	uint16_t	press[4];
-	uint8_t i;
+	uint8_t		i;
 
 	CMD_RSPBUF_SET_PRESSURE	rsp;
+
+	INFO("SET_PRESSURE\n");
 
 	for (i = 0; i < 4; i++) {
 		press[i] = i_pReq->pressure[i];
 	}
 
-	CTRL_setTarget(press);
+	ret = CTRL_setTarget(press);
 
-	rsp.ok = 1;
+	rsp.ok = ret;
 	_sendResp(i_pContext, CMD_RSP_SET_PRESSURE, &rsp, sizeof(rsp));
 
 	return true;
@@ -461,6 +467,48 @@ static bool	_req_SET_VALVES_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_VALVES*
 	return true;
 }
 
+static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i_pReq, uint16_t size)
+{
+	INFO("SET_VALVES\n");
+	bool	ret = 0;
+	uint8_t	i;
+	uint8_t	ok = true;
+
+	CMD_RSPBUF_OTA_START		rsp;
+	CMD_RSPBUF_EVT_OTA_STATUS	evt;
+
+	rsp.ok = 1;
+
+	INFO_BUF("OTA_START", PRINT_BUF_STYLE_ASC_SIZE_NL, i_pReq->url, size);
+	if (i_pReq->url[size-1] != '\0') {
+		WARN("unexpected last char %02x. expecting 0x00\n", i_pReq->url[size-1]);
+		rsp.ok = 0;
+	}
+
+	_sendResp(i_pContext, CMD_RSP_OTA_START, &rsp, sizeof(rsp));
+	if (!rsp.ok) {
+		return true;
+	}
+
+	ret = OTA_begin(i_pReq->url);
+	if (!ret) {
+		evt.ok = 0;
+		_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
+		return true;
+	}
+
+	ret = OTA_perform();
+	if (!ret) {
+		evt.ok = 0;
+		_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
+		return true;
+	}
+
+	evt.ok = 1;
+	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
+	return true;
+}
+
 void CMD_parseInit(void)
 {
 	TRACE1("CMD_parseInit\n");
@@ -487,7 +535,7 @@ void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 		return;
 	}
 
-	TRACE_BUF("cmd",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+	TRACE_BUF("cmd", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
 	switch (t) {
 			CMD(CMD_SWITCH, CMD_NONE)
@@ -593,7 +641,6 @@ DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
-
 
 bool  CMD_init(CMD_CONTEXT* i_pDefaultContext)
 {

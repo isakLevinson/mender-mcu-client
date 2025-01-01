@@ -56,16 +56,11 @@ esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 	return ESP_OK;
 }
 
-
-static bool dbgAuto(uint8_t argc, char** argv)
+int OTA_auto(char* pUrl)
 {
-	char    url[64];
-
-	if (argc < 2) {
-		return false;
-	}
-
+	\
 	esp_http_client_config_t config = {
+		.url = pUrl,
 #ifdef CONFIG_EXAMPLE_USE_CERT_BUNDLE
 		.crt_bundle_attach = esp_crt_bundle_attach,
 #else
@@ -87,10 +82,6 @@ static bool dbgAuto(uint8_t argc, char** argv)
 		.http_config = &config,
 	};
 
-	//	sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
-	//	config.url = url;
-	config.url = argv[1];
-
 	INFO("Attempting to download update from %s\n", config.url);
 	esp_err_t ret = esp_https_ota(&ota_config);
 	if (ret == ESP_OK) {
@@ -98,6 +89,81 @@ static bool dbgAuto(uint8_t argc, char** argv)
 	} else {
 		ERROR("Firmware upgrade failed %d\n", ret);
 	}
+
+	return ret;
+}
+
+bool OTA_begin(char* pUrl)
+{
+	esp_err_t   err;
+
+	esp_http_client_config_t config = {
+		.url = pUrl,
+		.cert_pem = (char*)server_cert_pem_start,
+		.event_handler = _http_event_handler,
+		.keep_alive_enable = true,
+		.skip_cert_common_name_check = true,
+	};
+
+	esp_https_ota_config_t ota_config = {
+		.http_config = &config,
+	};
+
+	INFO("begin OTA from %s\n", config.url);
+
+	err = esp_https_ota_begin(&ota_config, &g_ota.handle);
+	if (ESP_OK != err) {
+		ERROR("esp_https_ota_begin failed %d\n", err);
+		return false;
+	}
+
+	return true;
+}
+
+bool OTA_perform(void)
+{
+	esp_err_t   err;
+	int         size;
+	bool		complete;
+
+	do {
+		err = esp_https_ota_perform(g_ota.handle);
+		size = esp_https_ota_get_image_len_read(g_ota.handle);
+		complete = esp_https_ota_is_complete_data_received(g_ota.handle);
+		INFO("read: %d %d\n", size, complete);
+	} while (ESP_ERR_HTTPS_OTA_IN_PROGRESS == err);
+
+	if (ESP_OK != err) {
+		ERROR("esp_https_ota_perform failed %d\n", err);
+		return false;
+	}
+
+	err =  esp_https_ota_finish(g_ota.handle);
+	if (ESP_OK != err) {
+		ERROR("esp_https_ota_finish failed %d\n", err);
+		return false;
+	}
+
+	return true;
+}
+
+void OTA_restart(void)
+{
+	esp_restart();
+}
+
+static bool dbgAuto(uint8_t argc, char** argv)
+{
+	char    url[64];
+
+	if (argc < 2) {
+		return false;
+	}
+
+	//	sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
+	//	config.url = url;
+
+	OTA_auto(argv[1]);
 
 	return true;
 }
@@ -111,67 +177,14 @@ static bool dbgBegin(uint8_t argc, char** argv)
 		return false;
 	}
 
-	esp_http_client_config_t config = {
-		.cert_pem = (char*)server_cert_pem_start,
-		.event_handler = _http_event_handler,
-		.keep_alive_enable = true,
-		.skip_cert_common_name_check = true,
-	};
-
-	esp_https_ota_config_t ota_config = {
-		.http_config = &config,
-	};
-
-	//	sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
-	//	config.url = url;
-	config.url = argv[1];
-
-	INFO("begin OTA from %s\n", config.url);
-
-	err = esp_https_ota_begin(&ota_config, &g_ota.handle);
-	if (ESP_OK != err) {
-		ERROR("esp_https_ota_begin failed %d\n", err);
-	}
+	OTA_begin(argv[1]);
 
 	return true;
 }
 
 static bool dbgPerform(uint8_t argc, char** argv)
 {
-	esp_err_t   err;
-	int         size;
-	bool        complete;
-	int         prevSize = 0;
-
-	do {
-		err = esp_https_ota_perform(g_ota.handle);
-		size = esp_https_ota_get_image_len_read(g_ota.handle);
-		complete = esp_https_ota_is_complete_data_received(g_ota.handle);
-		PRINT("read: %d %d\n", size, complete);
-
-		//        if (ESP_ERR_HTTPS_OTA_IN_PROGRESS != err) {
-		//            PRINT("err=0x%xd\n", err);
-		//            break;
-		//        }
-
-		if (complete) {
-			PRINT("complete==true\n");
-			//            break;
-		}
-
-		if (size == prevSize) {
-			PRINT("size not incremented\n");
-			//            break;
-		}
-
-		prevSize = size;
-	} while (ESP_ERR_HTTPS_OTA_IN_PROGRESS == err);
-
-	if ((ESP_OK != err) && (ESP_ERR_HTTPS_OTA_IN_PROGRESS != err)) {
-		ERROR("esp_https_ota_perform failed %d\n", err);
-	} else {
-		PRINT("err=0x%x\n", err);
-	}
+	OTA_perform();
 
 	return true;
 }
@@ -202,7 +215,7 @@ static bool dbgAbort(uint8_t argc, char** argv)
 
 static bool dbgRestart(uint8_t argc, char** argv)
 {
-	esp_restart();
+	OTA_restart();
 	return true;
 }
 

@@ -27,8 +27,8 @@
 #define MAX17049_REG_SOC	0x04
 #define MAX17049_REG_MODE	0x06
 
+#define MAX_FAIL_COUNT	5
 
-#define MAX_FAIL_COUNT	3
 static struct {
 	uint8_t	failCount;
 } g_fg = {

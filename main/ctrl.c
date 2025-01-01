@@ -303,6 +303,12 @@ bool CTRL_setTarget(uint16_t* pPressure)
 	INFO("CTRL_setTarget %d %d %d %d\n", pPressure[0], pPressure[1], pPressure[2], pPressure[3]);
 
 	for (i = 0; i < 4; i++) {
+		if (pPressure[i] > MAX_PRESSURE_LIMIT) {
+			return false;
+		}
+	}
+
+	for (i = 0; i < 4; i++) {
 		if (pPressure[i] == g_app.channels[i].target) {
 			continue;
 		}
