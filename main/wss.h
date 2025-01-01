@@ -9,7 +9,9 @@ struct async_resp_arg {
 	int fd;
 };
 
-httpd_handle_t wss_start_server(void);
-bool wss_send(struct async_resp_arg* i_pAsync, void* pBuf, size_t len);
+bool	wss_start_server(void);
+bool	wss_start_config(void);
+bool	wss_stop_config(void);
+bool	wss_send(struct async_resp_arg* i_pAsync, void* pBuf, size_t len);
 
 

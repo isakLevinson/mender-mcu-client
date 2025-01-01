@@ -282,8 +282,8 @@ static esp_ip4_addr_t  wifi_getSelfIp(void)
 
 static void task_tcp_server(void* arg)
 {
+	bool	ret;
 	esp_ip4_addr_t  ip  = {0};
-	httpd_handle_t  wssHandle = NULL;
 
 	INFO("TCP started\n");
 
@@ -303,14 +303,6 @@ static void task_tcp_server(void* arg)
 			continue;
 		}
 
-		if (!wssHandle) {
-			wssHandle = wss_start_server();
-
-			if (wssHandle) {
-				INFO("WSS server started!\n");
-			}
-
-		}
 		vTaskDelay(1000);
 		ip = wifi_getSelfIp();
 	}
@@ -349,6 +341,8 @@ static int _startServer(void)
 	BaseType_t ret;
 
 	INFO("starting listener tasks\n");
+
+	wss_start_server();
 
 	ret = xTaskCreate(task_tcp_server, "tcp_server", 8192, NULL, 4, NULL);
 	if (ret != pdPASS) {
@@ -481,17 +475,18 @@ static void _init(void)
 	esp_netif_set_default_netif(g_server.netif_sta);
 	_startServer();
 
-	{
-		ret = NVS_get_ssid(ssid, passwd);
-		if (ret) {
-			INFO("ssid  : %s\n", ssid);
-			INFO("passwd: %s\n", passwd);
-			WIFI_stopAp();
-			WIFI_sta_connect(ssid, passwd);
-		} else {
-			WIFI_startAp();
-		}
+	ret = NVS_get_ssid(ssid, passwd);
+	if (ret) {
+		INFO("ssid  : %s\n", ssid);
+		INFO("passwd: %s\n", passwd);
+		WIFI_stopAp();
+		WIFI_sta_connect(ssid, passwd);
+	} else {
+		WIFI_startAp();
 	}
+
+	// TODO: use conditional config enable
+	wss_start_config();
 
 	initialized = true;
 }
@@ -606,14 +601,23 @@ static bool dbgWssSend(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-	wifi_config_t cfg;
-	wifi_mode_t mode;
+	int				err;
+	wifi_config_t	cfg;
+	wifi_mode_t		mode;
 	esp_netif_ip_info_t ip;
 
 	esp_wifi_get_mode(&mode);
 
 	bool    useSTA = ((WIFI_MODE_APSTA == mode) || ((WIFI_MODE_STA == mode)));
 	bool    useAP = ((WIFI_MODE_APSTA == mode) || ((WIFI_MODE_AP == mode)));
+
+	uint8_t mac[6];
+	err = esp_efuse_mac_get_default(mac);
+	if (err) {
+		ERROR("esp_efuse_mac_get_default failed %d\n", err);
+	} else {
+		PRINT("default MAC %02x%02x%02x%02x%02x%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	}
 
 	if (useAP) {
 		esp_wifi_get_config(WIFI_IF_AP, &cfg);
@@ -704,6 +708,23 @@ static bool dbgAp(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgConfig(uint8_t argc, char** argv)
+{
+	if (argc < 2) {
+		return false;
+	}
+
+	if ('0' == argv[1][0]) {
+		wss_stop_config();
+	}
+
+	if ('1' == argv[1][0]) {
+		wss_start_config();
+	}
+
+	return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("wifi", NULL)
@@ -714,6 +735,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
 		DEBUG_MENU_CMD("mdns",          	"[name]",   NULL, dbgMdns)
 		DEBUG_MENU_CMD("ap",	          	"<0/1>",    NULL, dbgAp)
+		DEBUG_MENU_CMD("config",          	"<0/1>",    NULL, dbgConfig)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

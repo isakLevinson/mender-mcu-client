@@ -40,8 +40,11 @@ struct async_resp_arg events_async_resp;
 static const size_t max_clients = 4;
 
 static struct {
-	int mallocCount;
-} g_dbg;
+	httpd_handle_t handle;
+	struct {
+		int mallocCount;
+	} dbg;
+} g_server;
 
 static void send_ping(void* arg)
 {
@@ -87,7 +90,7 @@ static void send_binary_frame(void* arg)
 
 	httpd_ws_send_frame_async(resp_arg->hd, resp_arg->fd, &ws_pkt);
 	free(resp_arg);
-	g_dbg.mallocCount--;
+	g_server.dbg.mallocCount--;
 }
 
 bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
@@ -96,15 +99,15 @@ bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
 	TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
 	struct send_arg_t* arg = malloc(sizeof(struct send_arg_t) + size);
 
-	if (g_dbg.mallocCount) {
-		INFO("count: %d\n", g_dbg.mallocCount);
+	if (g_server.dbg.mallocCount) {
+		INFO("count: %d\n", g_server.dbg.mallocCount);
 	}
 
 	if (!arg) {
 		ERROR("send_binary: failed to allocate %d\n", sizeof(struct send_arg_t) + size);
 		return false;
 	}
-	g_dbg.mallocCount++;
+	g_server.dbg.mallocCount++;
 
 	arg->hd     = hd;
 	arg->fd     = fd;
@@ -115,7 +118,7 @@ bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
 	if (ESP_OK != status) {
 		ERROR("send_binary: failed to queue packet %d\n", status);
 		free(arg);
-		g_dbg.mallocCount--;
+		g_server.dbg.mallocCount--;
 		return false;
 	}
 	return true;
@@ -380,19 +383,14 @@ static const httpd_uri_t uri_events = {
 	.handle_ws_control_frames = true
 };
 
-static const httpd_uri_t uri_config = {
-	.uri        = "/config",
-	.method     = HTTP_POST,
-	.handler    = _config_handler,
-	.user_ctx   = NULL,
-	.is_websocket = true,
-	.handle_ws_control_frames = true
-};
-
-httpd_handle_t wss_start_server(void)
+bool wss_start_server(void)
 {
+
+	if (g_server.handle) {
+		WARN("wss already started\n");
+		return false;
+	}
 	// Start the httpd server
-	httpd_handle_t server = NULL;
 	INFO("Starting server");
 
 	// Create and initialize the keep-alive configuration
@@ -425,7 +423,7 @@ httpd_handle_t wss_start_server(void)
 
 	conf.httpd.keep_alive_enable = false;
 
-	esp_err_t ret = httpd_ssl_start(&server, &conf);
+	esp_err_t ret = httpd_ssl_start(&g_server.handle, &conf);
 	if (ESP_OK != ret) {
 		ERROR("Error starting server!\n");
 		return NULL;
@@ -443,10 +441,32 @@ httpd_handle_t wss_start_server(void)
 
 	// Set URI handlers
 	INFO("Registering URI handlers");
-	httpd_register_uri_handler(server, &uri_ws);
-	httpd_register_uri_handler(server, &uri_events);
-	httpd_register_uri_handler(server, &uri_config);
-	wss_keep_alive_set_user_ctx(keep_alive, server);
+	httpd_register_uri_handler(g_server.handle, &uri_ws);
+	httpd_register_uri_handler(g_server.handle, &uri_events);
+	wss_keep_alive_set_user_ctx(keep_alive, g_server.handle);
 
-	return server;
+	return true;
+}
+
+bool wss_start_config(void)
+{
+	static const httpd_uri_t uri_config = {
+		.uri        = "/config",
+		.method     = HTTP_POST,
+		.handler    = _config_handler,
+		.user_ctx   = NULL,
+		.is_websocket = true,
+		.handle_ws_control_frames = true
+	};
+
+	httpd_register_uri_handler(g_server.handle, &uri_config);
+
+	return true;
+}
+
+bool wss_stop_config(void)
+{
+	httpd_unregister_uri(g_server.handle, "/config");
+
+	return true;
 }
