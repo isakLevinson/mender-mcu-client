@@ -127,7 +127,7 @@ static void _freeObject(void)
 	g_pBuf = NULL;
 }
 
-static const cJSON* _getFactoryObject(char* pObject)
+static const cJSON* _getFactoryObjectStr(char* pObject, char** ppVal)
 {
 	esp_err_t               err;
 	const cJSON*            json = NULL;
@@ -172,15 +172,19 @@ static const cJSON* _getFactoryObject(char* pObject)
 
 	INFO("%s: %s\n", pObject, object->valuestring);
 
+	if (ppVal) {
+		*ppVal = object->valuestring;
+	}
+
 	return object;
 }
 
 
-bool CFG_factoryGetPrivateKey(char* o_pStr)
+bool CFG_factoryGetPrivateKey(char** o_ppStr)
 {
 	const cJSON*  object;
 
-	object = _getFactoryObject("private_key");
+	object = _getFactoryObjectStr("private_key", o_ppStr);
 	if (!object) {
 		return false;
 	}
@@ -188,11 +192,11 @@ bool CFG_factoryGetPrivateKey(char* o_pStr)
 	return true;
 }
 
-bool CFG_factoryGetPublicKey(char* o_pStr)
+bool CFG_factoryGetPublicKey(char** o_ppStr)
 {
 	const cJSON*  object;
 
-	object = _getFactoryObject("public_key");
+	object = _getFactoryObjectStr("public_key", o_ppStr);
 	if (!object) {
 		return false;
 	}
@@ -200,11 +204,11 @@ bool CFG_factoryGetPublicKey(char* o_pStr)
 	return true;
 }
 
-bool CFG_factoryGetCertificate(char* o_pStr)
+bool CFG_factoryGetCertificate(char** o_ppStr)
 {
 	const cJSON*  object;
 
-	object = _getFactoryObject("certificate");
+	object = _getFactoryObjectStr("certificate", o_ppStr);
 	if (!object) {
 		return false;
 	}
@@ -212,11 +216,11 @@ bool CFG_factoryGetCertificate(char* o_pStr)
 	return true;
 }
 
-bool CFG_factoryGetManufacturingDate(char* o_pStr)
+bool CFG_factoryGetManufacturingDate(char** o_ppStr)
 {
 	const cJSON*  object;
 
-	object = _getFactoryObject("manufacturing_date");
+	object = _getFactoryObjectStr("manufacturing_date", o_ppStr);
 	if (!object) {
 		return false;
 	}
@@ -224,11 +228,11 @@ bool CFG_factoryGetManufacturingDate(char* o_pStr)
 	return true;
 }
 
-bool CFG_factoryGetSn(char* o_pStr)
+bool CFG_factoryGetSn(char** o_ppStr)
 {
 	const cJSON*  object;
 
-	object = _getFactoryObject("sn");
+	object = _getFactoryObjectStr("sn", o_ppStr);
 	if (!object) {
 		return false;
 	}
@@ -236,11 +240,11 @@ bool CFG_factoryGetSn(char* o_pStr)
 	return true;
 }
 
-bool CFG_factoryGetHwRevision(char* o_pStr)
+bool CFG_factoryGetHwRevision(char** o_ppStr)
 {
 	const cJSON*  object;
 
-	object = _getFactoryObject("hw_revision");
+	object = _getFactoryObjectStr("hw_revision", o_ppStr);
 	if (!object) {
 		return false;
 	}
@@ -248,11 +252,11 @@ bool CFG_factoryGetHwRevision(char* o_pStr)
 	return true;
 }
 
-bool CFG_factoryGetModel(char* o_pStr)
+bool CFG_factoryGetModel(char** o_ppStr)
 {
 	const cJSON*  object;
 
-	object = _getFactoryObject("model");
+	object = _getFactoryObjectStr("model", o_ppStr);
 	if (!object) {
 		return false;
 	}
@@ -460,7 +464,7 @@ static bool dbgGetObject(uint8_t argc, char** argv)
 		CFG_factoryGetModel(NULL);
 	}
 	if (pStr) {
-		object = _getFactoryObject(argv[1]);
+		object = _getFactoryObjectStr(argv[1], NULL);
 		if (!object) {
 			PRINT("failed to get object\n");
 			return true;

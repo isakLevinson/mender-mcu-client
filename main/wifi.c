@@ -34,6 +34,7 @@
 #include "cmd.h"
 #include "time.h"
 #include "wss.h"
+#include "config.h"
 
 #define FLAG_CONNECTED            BIT0
 #define FLAG_DISCONNECT           BIT1
@@ -75,22 +76,20 @@ static bool _mdnsInit(void)
 	}
 
 	ret = NVS_get_mdns(mdns);
-	if (!ret) {
-		uint8_t mac[6];
-		err = esp_efuse_mac_get_default(mac);
-		if (err) {
-			ERROR("esp_efuse_mac_get_default: %d\n", err);
-			strcpy(mdns, "pnu");
-		} else {
-			sprintf(mdns, "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-		}
-		INFO("no MDNS name in NVS. using default %s\n", mdns);
+	if (ret) {
+		INFO("setting MDNS to SN %s\n", mdns);
+		mdns_hostname_set(mdns);
 	} else {
-		INFO("read MDNS from VVM %s\n", mdns);
+		char* sn;
+		ret = CFG_factoryGetSn(&sn);
+		if (ret) {
+			INFO("setting MDNS to SN %s\n", sn);
+			mdns_hostname_set(sn);
+		} else {
+			ERROR("MDNS not defined, and no SN in configuration\n");
+		}
 	}
 
-	//set hostname
-	mdns_hostname_set(mdns);
 	//set default instance
 	mdns_instance_name_set("Jhon's ESP32 Thing");
 
@@ -392,6 +391,7 @@ static bool _startSta(void)
 static bool _startAp(void)
 {
 	esp_err_t err;
+	char*	sn;
 
 	wifi_config_t wifi_ap_config = {
 		.ap = {
@@ -410,9 +410,8 @@ static bool _startAp(void)
 	g_server.netif_ap  = esp_netif_create_default_wifi_ap();
 	assert(g_server.netif_ap);
 
-	uint8_t mac[6];
-	err = esp_efuse_mac_get_default(mac);
-	sprintf((char*)wifi_ap_config.ap.ssid, "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	CFG_factoryGetSn(&sn);
+	sprintf((char*)wifi_ap_config.ap.ssid, "%s", sn);
 	wifi_ap_config.ap.ssid_len = strlen((char*)wifi_ap_config.ap.ssid);
 	INFO_BUF("ssid", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.ssid, wifi_ap_config.ap.ssid_len);
 
