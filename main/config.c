@@ -79,14 +79,6 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 		NVS_set_sync_port(object->valuestring);
 	}
 
-	object = cJSON_GetObjectItemCaseSensitive(json, "mdns");
-	if (object) {
-		INFO("mdns: %s\n", object->valuestring);
-		NVS_set_mdns(object->valuestring);
-		mdns_hostname_set(object->valuestring);
-	}
-
-
 	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");
 	if (object) {
 		if (cJSON_IsArray(object)) {

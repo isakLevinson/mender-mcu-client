@@ -66,7 +66,7 @@ static struct {
 static bool _mdnsInit(void)
 {
 	bool    ret;
-	char    mdns[32];
+	char*	sn;
 
 	INFO("mDNS init\n");
 	esp_err_t err = mdns_init();
@@ -75,19 +75,12 @@ static bool _mdnsInit(void)
 		return false;
 	}
 
-	ret = NVS_get_mdns(mdns);
+	ret = CFG_factoryGetSn(&sn);
 	if (ret) {
-		INFO("setting MDNS to SN %s\n", mdns);
-		mdns_hostname_set(mdns);
+		INFO("setting MDNS to SN %s\n", sn);
+		mdns_hostname_set(sn);
 	} else {
-		char* sn;
-		ret = CFG_factoryGetSn(&sn);
-		if (ret) {
-			INFO("setting MDNS to SN %s\n", sn);
-			mdns_hostname_set(sn);
-		} else {
-			ERROR("MDNS not defined, and no SN in configuration\n");
-		}
+		ERROR("MDNS not defined, and no SN in configuration\n");
 	}
 
 	//set default instance
@@ -537,14 +530,6 @@ bool WIFI_sta_connect(const char* ssid, const char* pass)
 	return true;
 }
 
-bool WIFI_setMdns(char* pName)
-{
-	NVS_set_mdns(pName);
-	mdns_hostname_set(pName);
-
-	return true;
-}
-
 bool	WIFI_isConnected(void)
 {
 	int bits = xEventGroupWaitBits(g_server.event_group, FLAG_CONNECTED, 0, 1, 0);
@@ -676,20 +661,6 @@ static bool dbgBroadcastTime(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgMdns(uint8_t argc, char** argv)
-{
-	char str[32];
-
-	if (argc < 2) {
-		NVS_get_mdns(str);
-		PRINT("%s\n", str);
-		return true;
-	}
-
-	WIFI_setMdns(argv[1]);
-	return true;
-}
-
 static bool dbgAp(uint8_t argc, char** argv)
 {
 	if (argc < 2) {
@@ -732,7 +703,6 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("scan",	            NULL,		NULL, dbgScan)
 		DEBUG_MENU_CMD("wssSend",           NULL,		NULL, dbgWssSend)
 		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
-		DEBUG_MENU_CMD("mdns",          	"[name]",   NULL, dbgMdns)
 		DEBUG_MENU_CMD("ap",	          	"<0/1>",    NULL, dbgAp)
 		DEBUG_MENU_CMD("config",          	"<0/1>",    NULL, dbgConfig)
 	DEBUG_MENU_DIR_END

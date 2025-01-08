@@ -203,30 +203,6 @@ bool NVS_set_sync_port(char* val)
 	return ret;
 }
 
-bool NVS_get_mdns(char* val)
-{
-	bool    ret = true;
-
-	ret = _get(NVS_KEY_WIFI_MDNS, val);
-	if (!ret)  {
-		ERROR("get mdns failed\n");
-	}
-
-	return ret;
-}
-
-bool NVS_set_mdns(char* val)
-{
-	bool    ret = true;
-
-	ret = _set(NVS_KEY_WIFI_MDNS, val);
-	if (!ret)  {
-		ERROR("set mdns failed\n");
-	}
-
-	return ret;
-}
-
 bool NVS_eraseAll(void)
 {
 	bool    ret = true;
