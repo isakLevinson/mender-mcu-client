@@ -128,14 +128,14 @@ void app_main(void)
 	OTA_init();
 	CMD_init(NULL);
 	ADC_init();
-	WIFI_init();
 
 	max30001_init();
 	fg_init();
+	LED_init();
+	WIFI_init();
 
 	PMP_init();
 	CTRL_init();
-	LED_init();
 
 	esp_log_level_set("*", ESP_LOG_ERROR);
 
