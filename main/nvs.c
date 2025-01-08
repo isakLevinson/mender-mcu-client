@@ -93,12 +93,22 @@ bool NVS_get_ssid(char* ssid, char* passwd)
 	ret = _get(NVS_KEY_WIFI_SSID, ssid);
 	if (!ret)  {
 		ERROR("get ssid failed\n");
+		_set(NVS_KEY_WIFI_SSID, "");
+		return false;
+	}
+
+	if (ssid[0] == '\0') {
 		return false;
 	}
 
 	ret = _get(NVS_KEY_WIFI_PASSWD, passwd);
 	if (!ret)  {
 		ERROR("get passwd failed\n");
+		_set(NVS_KEY_WIFI_PASSWD, "");
+		return false;
+	}
+
+	if (passwd[0] == '\0') {
 		return false;
 	}
 

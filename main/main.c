@@ -127,10 +127,7 @@ void app_main(void)
 	NVS_init();
 	OTA_init();
 	CMD_init(NULL);
-
 	ADC_init();
-	LED_init();
-
 	WIFI_init();
 
 	max30001_init();
@@ -138,6 +135,7 @@ void app_main(void)
 
 	PMP_init();
 	CTRL_init();
+	LED_init();
 
 	esp_log_level_set("*", ESP_LOG_ERROR);
 
@@ -145,6 +143,4 @@ void app_main(void)
 	PRINT(" ==================================================\n");
 	PRINT("  Ready.\n");
 	PRINT(" =================================================\n\n");
-
-
 }
