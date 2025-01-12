@@ -143,23 +143,23 @@ static const cJSON* _getFactoryObjectStr(char* pObject, char** ppVal)
 		err = esp_partition_read(partition, 0, g_pBuf, partition->size);
 		if (ESP_OK != err) {
 			ERROR("read failed %d\n", err);
-			return NULL;
+			goto error;
 		}
 	}
 
-	TRACE_BUF(NULL, PRINT_BUF_STYLE_ASC_SIZE_NL, g_pBuf, partition->size);
+	//TRACE_BUF(NULL, PRINT_BUF_STYLE_ASC_SIZE_NL, g_pBuf, partition->size);
 
 	json = cJSON_ParseWithLength(g_pBuf, partition->size);
 	if (!json) {
 		ERROR("json parse error\n");
-		return NULL;
+		goto error;
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, pObject);
 	if (!object) {
 		WARN("%s not found\n", pObject);
 		INFO_BUF(NULL, PRINT_BUF_STYLE_ASC_SIZE_NL, g_pBuf, partition->size);
-		return NULL;
+		goto error;
 	}
 
 	INFO("%s: %s\n", pObject, object->valuestring);
@@ -169,6 +169,9 @@ static const cJSON* _getFactoryObjectStr(char* pObject, char** ppVal)
 	}
 
 	return object;
+
+error:
+	return NULL;
 }
 
 

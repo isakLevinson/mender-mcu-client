@@ -128,7 +128,6 @@ static void got_ip_handler(void* arg, esp_event_base_t event_base,
 	xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 
 	NVS_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
-	_mdnsInit();
 	WIFI_stopAp();
 }
 
@@ -383,6 +382,7 @@ static bool _startSta(void)
 
 static bool _startAp(void)
 {
+	bool	ret;
 	esp_err_t err;
 	char*	sn;
 
@@ -403,10 +403,12 @@ static bool _startAp(void)
 	g_server.netif_ap  = esp_netif_create_default_wifi_ap();
 	assert(g_server.netif_ap);
 
-	CFG_factoryGetSn(&sn);
-	sprintf((char*)wifi_ap_config.ap.ssid, "%s", sn);
-	wifi_ap_config.ap.ssid_len = strlen((char*)wifi_ap_config.ap.ssid);
-	INFO_BUF("ssid", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.ssid, wifi_ap_config.ap.ssid_len);
+	ret = CFG_factoryGetSn(&sn);
+	if (ret) {
+		sprintf((char*)wifi_ap_config.ap.ssid, "%s", sn);
+		wifi_ap_config.ap.ssid_len = strlen((char*)wifi_ap_config.ap.ssid);
+		INFO_BUF("ssid", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.ssid, wifi_ap_config.ap.ssid_len);
+	}
 
 	err = esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config);
 	if (ESP_OK != err) {
@@ -474,11 +476,16 @@ static void _init(void)
 		WIFI_stopAp();
 		WIFI_sta_connect(ssid, passwd);
 	} else {
-		WIFI_startAp();
+		ret = CFG_factoryGetSn(NULL);
+		if (ret) {
+			WIFI_startAp();
+		}
 	}
 
 	// TODO: use conditional config enable
 	wss_start_config();
+
+	_mdnsInit();
 
 	initialized = true;
 }
@@ -621,10 +628,13 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	memset(&ip, 0, sizeof(esp_netif_ip_info_t));
 
 	if (esp_netif_get_ip_info(g_server.netif_sta, &ip) == 0) {
-		INFO("IP:" IPSTR "\n", IP2STR(&ip.ip));
-		INFO("MASK:" IPSTR "\n", IP2STR(&ip.netmask));
-		INFO("GW:" IPSTR "\n", IP2STR(&ip.gw));
+		INFO("STA:" IPSTR " " IPSTR " " IPSTR"\n", IP2STR(&ip.ip), IP2STR(&ip.netmask), IP2STR(&ip.gw));
 	}
+
+	if (esp_netif_get_ip_info(g_server.netif_ap, &ip) == 0) {
+		INFO("AP:" IPSTR " " IPSTR " " IPSTR"\n", IP2STR(&ip.ip), IP2STR(&ip.netmask), IP2STR(&ip.gw));
+	}
+
 	return true;
 }
 

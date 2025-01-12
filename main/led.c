@@ -1,5 +1,5 @@
 
-#define DEF_DBG_MODULE	DBG_MODULE_ADC
+#define DEF_DBG_MODULE	DBG_MODULE_LED
 
 #include <sys_def.h>
 #include "dbgMenus.h"
@@ -66,6 +66,21 @@ static void _task(void* arg)
 {
 	bool    ret;
 	int32_t time;
+
+	ret = CFG_factoryGetSn(NULL);
+	if (!ret) {
+		ERROR("no SN in factory storage. Halting on error\n");
+		g_led.r = 100;
+		g_led.g = 0;
+		g_led.b = 0;
+		g_led.interval = 0;
+		time = TIME_get32();
+		_handleBlink(time);
+		while (true) {
+			vTaskDelay(10);
+		}
+	}
+
 	while (true) {
 		vTaskDelay(10);
 		time = TIME_get32();
