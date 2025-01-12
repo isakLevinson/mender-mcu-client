@@ -128,7 +128,6 @@ static void got_ip_handler(void* arg, esp_event_base_t event_base,
 	xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 
 	NVS_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
-	_mdnsInit();
 	WIFI_stopAp();
 }
 
@@ -485,6 +484,8 @@ static void _init(void)
 
 	// TODO: use conditional config enable
 	wss_start_config();
+
+	_mdnsInit();
 
 	initialized = true;
 }
