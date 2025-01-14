@@ -53,11 +53,12 @@ static mender_err_t network_connect_cb(void)
     /* This callback only indicates the mender-client requests network access now */
     /* In this example this helper function configures Wi-Fi or Ethernet, as selected in menuconfig */
     /* Read "Establishing Wi-Fi or Ethernet Connection" section in examples/protocols/README.md for more information */
+#if 0
     if (ESP_OK != example_connect()) {
         ERROR("Unable to connect network\n");
         return MENDER_FAIL;
     }
-
+#endif
     return MENDER_OK;
 }
 
@@ -69,11 +70,13 @@ static mender_err_t network_release_cb(void)
     /* Note that the application can keep network activated if required */
     /* This callback only indicates the mender-client doesn't request network access now */
     /* in this example this helper function disconnects the network */
+
+#if 0
     if (ESP_OK != example_disconnect()) {
         ERROR("Unable to disconnect network\n");
         return MENDER_FAIL;
     }
-
+#endif
     return MENDER_OK;
 }
 
@@ -108,7 +111,7 @@ static mender_err_t authentication_failure_cb(void)
 
     /* Check if confirmation of the image is still pending */
     if (true == mender_flash_is_image_confirmed()) {
-        INFO("Mender client authentication failed\n");
+        INFO("Mender client authentication ok!\n");
         return MENDER_OK;
     }
 
@@ -142,6 +145,7 @@ static mender_err_t deployment_status_cb(mender_deployment_status_t status, char
  */
 static mender_err_t restart_cb(void)
 {
+    INFO("restart_cb\n");
     /* Application is responsible to shutdown and restart the system now */
     xEventGroupSetBits(mender_client_events, MENDER_CLIENT_EVENT_RESTART);
 
@@ -542,6 +546,10 @@ shell_close_cb(void) {
 #endif /* CONFIG_MENDER_CLIENT_TROUBLESHOOT_SHELL */
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT */
 
+static void _restart(void)
+{
+	esp_restart();
+}
 
 static void _init(void)
 {
@@ -588,10 +596,6 @@ static void _init(void)
 
 #endif /* CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER */
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT */
-
-    /* Initialize network */
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     /* Read base MAC address of the device */
     uint8_t mac[6];
@@ -700,6 +704,8 @@ static void _init(void)
                                       { .name = NULL, .value = NULL } };
     if (MENDER_OK != mender_inventory_set(inventory)) {
         ERROR("Unable to set mender inventory\n");
+    } else {
+        INFO("mender_inventory_set ok\n");
     }
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_INVENTORY */
 
@@ -708,12 +714,19 @@ static void _init(void)
         ERROR("Unable to activate mender-client\n");
         goto RELEASE;
     }
+    INFO("mender_client_activate ok\n");
 
+#if 0
     /* Wait for mender-mcu-client events */
     xEventGroupWaitBits(mender_client_events, MENDER_CLIENT_EVENT_RESTART, pdTRUE, pdFALSE, portMAX_DELAY);
+    INFO("MENDER_CLIENT_EVENT_RESTART is up\n");
+#endif
+
+    return;
 
 RELEASE:
 
+    INFO("RELEASE:\n");
     /* Deactivate and release mender-client */
     mender_client_deactivate();
     mender_client_exit();
@@ -723,12 +736,13 @@ RELEASE:
 
     /* Restart */
     INFO("Restarting system\n");
-    esp_restart();
+    _restart();
 }
 
-static void _restart(void)
+static bool dbgInit(uint8_t argc, char** argv)
 {
-	esp_restart();
+	_init();
+	return true;
 }
 
 static bool dbgRestart(uint8_t argc, char** argv)
@@ -747,6 +761,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("mender_ota", NULL)
+		DEBUG_MENU_CMD("init",	    NULL,		    NULL, dbgInit)
 		DEBUG_MENU_CMD("status",	NULL,		    NULL, dbgStatus)
 		DEBUG_MENU_CMD("restart",	NULL,		    NULL, dbgRestart)
 	DEBUG_MENU_DIR_END
