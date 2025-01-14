@@ -32,12 +32,11 @@
 #include "led.h"
 #include "nvs.h"
 #include "config.h"
-#include "ota.h"
 #include "max30001.h"
 #include "max17049.h"
+#include "mender_ota.h"
 
 #define BUF_SIZE    1024
-
 
 void ESP_printErr(int err)
 {
@@ -125,7 +124,7 @@ void app_main(void)
 	CLI_init();
 	CFG_init();
 	NVS_init();
-	OTA_init();
+	MENDER_init();
 	CMD_init(NULL);
 	ADC_init();
 

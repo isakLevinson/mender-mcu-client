@@ -489,7 +489,7 @@ static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i
 	if (!rsp.ok) {
 		return true;
 	}
-
+#if 0
 	ret = OTA_begin(i_pReq->url);
 	if (!ret) {
 		evt.ok = 0;
@@ -503,7 +503,7 @@ static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i
 		_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
 		return true;
 	}
-
+#endif
 	evt.ok = 1;
 	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
 	return true;
