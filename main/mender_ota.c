@@ -741,7 +741,7 @@ RELEASE:
     _restart();
 }
 
-static bool dbgInit(uint8_t argc, char** argv)
+static bool dbgStart(uint8_t argc, char** argv)
 {
 	_init();
 	return true;
@@ -763,7 +763,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("mender_ota", NULL)
-		DEBUG_MENU_CMD("init",	    NULL,		    NULL, dbgInit)
+		DEBUG_MENU_CMD("start",	    NULL,		    NULL, dbgStart)
 		DEBUG_MENU_CMD("status",	NULL,		    NULL, dbgStatus)
 		DEBUG_MENU_CMD("restart",	NULL,		    NULL, dbgRestart)
 	DEBUG_MENU_DIR_END
