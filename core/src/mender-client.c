@@ -265,10 +265,7 @@ mender_client_init(mender_client_config_t *config, mender_client_callbacks_t *ca
         mender_log_error("Unable to initialize scheduler");
         goto END;
     }
-    if (MENDER_OK != (ret = mender_log_init())) {
-        mender_log_error("Unable to initialize log");
-        goto END;
-    }
+
     if (MENDER_OK != (ret = mender_storage_init())) {
         mender_log_error("Unable to initialize storage");
         goto END;
@@ -607,7 +604,6 @@ mender_client_exit(void) {
     mender_api_exit();
     mender_tls_exit();
     mender_storage_exit();
-    mender_log_exit();
     mender_scheduler_exit();
 
     /* Release memory */

@@ -94,7 +94,7 @@ mender_http_perform(char                *jwt,
 
     /* Initialization of the client */
     if (NULL == (client = esp_http_client_init(&config))) {
-        mender_log_error("Unable to allocate memory");
+        mender_log_error("esp_http_client_init failed");
         ret = MENDER_FAIL;
         goto END;
     }

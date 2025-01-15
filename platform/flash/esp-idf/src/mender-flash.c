@@ -167,9 +167,8 @@ mender_flash_confirm_image(void) {
     return ret;
 }
 
-bool
-mender_flash_is_image_confirmed(void) {
-
+bool mender_flash_is_image_confirmed(void)
+{
     /* Retrieve running version state of the ESP32 */
     esp_ota_img_states_t   img_state;
     const esp_partition_t *partition = esp_ota_get_running_partition();

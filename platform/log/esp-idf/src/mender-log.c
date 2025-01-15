@@ -17,18 +17,18 @@
  * limitations under the License.
  */
 
+#define DEF_DBG_MODULE	DBG_MODULE_MENDER
+
+#include <sys_def.h>
+#include "dbgMenus.h"
+#include "dbgPrint.h"
+#include "parseArgs.h"
+
 #include <esp_log.h>
 #include "mender-log.h"
 
-mender_err_t
-mender_log_init(void) {
-
-    /* Nothing to do */
-    return MENDER_OK;
-}
-
-mender_err_t
-mender_log_print(uint8_t level, const char *filename, const char *function, int line, char *format, ...) {
+void mender_log_print(uint8_t level, const char *filename, const char *function, int line, char *format, ...)
+{
 
     (void)function;
     char log[256] = { 0 };
@@ -42,27 +42,18 @@ mender_log_print(uint8_t level, const char *filename, const char *function, int 
     /* Switch depending log level */
     switch (level) {
         case MENDER_LOG_LEVEL_ERR:
-            ESP_LOGE("mender", "%s (%d): %s", filename, line, log);
+            ERROR("mender", "%s (%d): %s\n", filename, line, log);
             break;
         case MENDER_LOG_LEVEL_WRN:
-            ESP_LOGW("mender", "%s (%d): %s", filename, line, log);
+            WARN("mender", "%s (%d): %s\n", filename, line, log);
             break;
         case MENDER_LOG_LEVEL_INF:
-            ESP_LOGI("mender", "%s (%d): %s", filename, line, log);
+            INFO("mender", "%s (%d): %s\n", filename, line, log);
             break;
         case MENDER_LOG_LEVEL_DBG:
-            ESP_LOGD("mender", "%s (%d): %s", filename, line, log);
+            TRACE("mender", "%s (%d): %s\n", filename, line, log);
             break;
         default:
             break;
     }
-
-    return MENDER_OK;
-}
-
-mender_err_t
-mender_log_exit(void) {
-
-    /* Nothing to do */
-    return MENDER_OK;
 }

@@ -58,7 +58,7 @@ mender_err_t mender_log_init(void);
  * @param ... Arguments
  * @return MENDER_OK if the function succeeds, error code otherwise
  */
-mender_err_t mender_log_print(uint8_t level, const char *filename, const char *function, int line, char *format, ...);
+void mender_log_print(uint8_t level, const char *filename, const char *function, int line, char *format, ...);
 
 /**
  * @brief Print error log

@@ -118,9 +118,8 @@ mender_websocket_init(mender_websocket_config_t *config) {
     return MENDER_OK;
 }
 
-mender_err_t
-mender_websocket_connect(
-    char *jwt, char *path, mender_err_t (*callback)(mender_websocket_client_event_t, void *, size_t, void *), void *params, void **handle) {
+mender_err_t mender_websocket_connect(char *jwt, char *path, mender_err_t (*callback)(mender_websocket_client_event_t, void *, size_t, void *), void *params, void **handle)
+{
 
     assert(NULL != path);
     assert(NULL != callback);
@@ -130,6 +129,8 @@ mender_websocket_connect(
     mender_err_t ret    = MENDER_OK;
     char        *url    = NULL;
     char        *bearer = NULL;
+
+    mender_log_error("mender_websocket_connect (generic)");
 
     /* Allocate a new handle */
     if (NULL == (*handle = malloc(sizeof(mender_websocket_handle_t)))) {

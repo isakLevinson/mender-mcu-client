@@ -91,7 +91,7 @@ endif()
 idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS ${incs}
-    REQUIRES app_update esp_http_client json mbedtls nvs_flash
+    REQUIRES app_update esp_http_client json mbedtls nvs_flash dbgterm
 )
 if (CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT)
     idf_component_optional_requires(PRIVATE espressif__esp_websocket_client esp_event msgpack-c)
