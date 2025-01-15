@@ -84,7 +84,7 @@ static mender_err_t authentication_success_cb(void)
 {
     mender_err_t ret;
 
-    INFO("Mender client authenticated\n");
+    INFO("Mender client authenticated !\n");
 
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
     /* Activate troubleshoot add-on (deactivated by default) */
@@ -617,6 +617,8 @@ static void _init(void)
     /* Compute artifact name */
     char artifact_name[128];
     sprintf(artifact_name, "%s-v%s", running_app_info.project_name, running_app_info.version);
+
+    INFO("artifact_name: %s\n", artifact_name);
 
     /* Retrieve device type */
     char *device_type = running_app_info.project_name;
