@@ -32,9 +32,6 @@
 #include <protocol_examples_common.h>
 
 
-
-
-
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
 #ifdef CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER
 #include <esp_littlefs.h>
@@ -615,13 +612,14 @@ static void _init(void)
     INFO("Running project '%s' version '%s'\n", running_app_info.project_name, running_app_info.version);
 
     /* Compute artifact name */
-    char artifact_name[128];
+    static char artifact_name[128];
     sprintf(artifact_name, "%s-v%s", running_app_info.project_name, running_app_info.version);
 
     INFO("artifact_name: %s\n", artifact_name);
 
     /* Retrieve device type */
-    char *device_type = running_app_info.project_name;
+    //char *device_type = running_app_info.project_name;
+    char *device_type = "PNU";
 
     /* Initialize mender-client */
     mender_keystore_t         identity[]              = { { .name = "mac", .value = mac_address }, { .name = NULL, .value = NULL } };

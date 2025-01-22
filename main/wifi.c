@@ -341,7 +341,7 @@ static int _startServer(void)
 		return ESP_FAIL;
 	}
 
-	ret = xTaskCreate(task_udp_time_server, "udp_time", 8192, NULL, 3, NULL);
+	ret = xTaskCreate(task_udp_time_server, "udp_time", 4096, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task %s failed\n", task_udp_time_server);
 		return ESP_FAIL;

@@ -136,7 +136,7 @@ void app_main(void)
 	PMP_init();
 	CTRL_init();
 
-	esp_log_level_set("*", ESP_LOG_ERROR);
+	esp_log_level_set("*", ESP_LOG_INFO);
 
 	PRINT("\n");
 	PRINT(" ==================================================\n");
