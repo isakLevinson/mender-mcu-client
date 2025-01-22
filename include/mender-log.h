@@ -38,9 +38,9 @@ extern "C" {
 /**
  * @brief Default log level
  */
-#ifndef CONFIG_MENDER_LOG_LEVEL
+//#ifndef CONFIG_MENDER_LOG_LEVEL
 #define CONFIG_MENDER_LOG_LEVEL MENDER_LOG_LEVEL_INF
-#endif /* CONFIG_MENDER_LOG_LEVEL */
+//#endif /* CONFIG_MENDER_LOG_LEVEL */
 
 /**
  * @brief Initialize mender log

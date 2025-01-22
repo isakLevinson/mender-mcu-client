@@ -89,15 +89,22 @@ mender_http_perform(char                *jwt,
     }
 
     /* Configuration of the client */
-    esp_http_client_config_t config
-        = { .url = (NULL != url) ? url : path, .user_agent = MENDER_HTTP_USER_AGENT, .crt_bundle_attach = esp_crt_bundle_attach, .buffer_size_tx = 2048 };
+    esp_http_client_config_t config = {
+		.url = (NULL != url) ? url : path,
+		.user_agent = MENDER_HTTP_USER_AGENT,
+		.crt_bundle_attach = esp_crt_bundle_attach,
+		.buffer_size_tx = 2048,
+	};
 
     /* Initialization of the client */
+    mender_log_info("calling esp_http_client_init. url: %s", config.url);
     if (NULL == (client = esp_http_client_init(&config))) {
-        mender_log_error("Unable to allocate memory");
+        mender_log_error("esp_http_client_init failed");
+        mender_log_info("url: %s", config.url);
         ret = MENDER_FAIL;
         goto END;
     }
+
     esp_http_client_set_method(client, mender_http_method_to_esp_http_client_method(method));
     if (NULL != jwt) {
         size_t str_length = strlen("Bearer ") + strlen(jwt) + 1;
