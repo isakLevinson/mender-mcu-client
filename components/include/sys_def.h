@@ -20,10 +20,6 @@
 
 #define SIMULATION_MODE     true
 
-#define SW_VERSION_MAJOR		1
-#define SW_VERSION_MINOR		1
-#define SW_VERSION_BUILD		2
-
 #define HW_VERSION_MAJOR		1
 #define HW_VERSION_MINOR		0
 #define HW_VERSION_BUILD		0

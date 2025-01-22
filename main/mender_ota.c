@@ -38,8 +38,7 @@
 #endif /* CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER */
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT */
 
-static EventGroupHandle_t mender_client_events;
-#define MENDER_CLIENT_EVENT_RESTART (1 << 0)
+static esp_app_desc_t         running_app_info;
 
 static mender_err_t network_connect_cb(void)
 {
@@ -144,7 +143,6 @@ static mender_err_t restart_cb(void)
 {
     INFO("restart_cb\n");
     /* Application is responsible to shutdown and restart the system now */
-    xEventGroupSetBits(mender_client_events, MENDER_CLIENT_EVENT_RESTART);
 
     return MENDER_OK;
 }
@@ -548,6 +546,26 @@ static void _restart(void)
 	esp_restart();
 }
 
+bool MENDER_version(char** ppProjName, char** ppVer, uint32_t* pNumbers)
+{
+    const esp_partition_t *partition = esp_ota_get_running_partition();
+    ESP_ERROR_CHECK(esp_ota_get_partition_description(partition, &running_app_info));
+
+	if (ppProjName) {
+		*ppProjName = running_app_info.project_name;
+	}
+
+	if (ppVer) {
+		*ppVer = running_app_info.version;
+	}
+
+	if (pNumbers) {
+		sscanf(running_app_info.version, "%d.%d.%d", &pNumbers[0], &pNumbers[1], &pNumbers[2]);
+	}
+
+	return true;
+}
+
 static void _init(void)
 {
 
@@ -601,25 +619,21 @@ static void _init(void)
     sprintf(mac_address, "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     INFO("MAC address of the device '%s'\n", mac_address);
 
-    /* Create mender-client event group */
-    //mender_client_events = xEventGroupCreate();
-    //ESP_ERROR_CHECK(NULL == mender_client_events);
+	char*	project_name;
+	char*	version;
+	MENDER_version(&project_name, &version, NULL);
 
     /* Retrieve running version of the device */
-    static esp_app_desc_t         running_app_info;
-    const esp_partition_t *running = esp_ota_get_running_partition();
-    ESP_ERROR_CHECK(esp_ota_get_partition_description(running, &running_app_info));
-    INFO("Running project '%s' version '%s'\n", running_app_info.project_name, running_app_info.version);
+    INFO("Running project '%s' version '%s'\n", project_name, version);
 
     /* Compute artifact name */
     static char artifact_name[128];
-    sprintf(artifact_name, "%s-v%s", running_app_info.project_name, running_app_info.version);
+    sprintf(artifact_name, "%s-v%s", project_name, version);
 
     INFO("artifact_name: %s\n", artifact_name);
 
     /* Retrieve device type */
-    char *device_type = running_app_info.project_name;
-    //char *device_type = "PNU";
+    char *device_type = project_name;
 
     /* Initialize mender-client */
     mender_keystore_t  identity[]              = { { .name = "mac", .value = mac_address }, { .name = NULL, .value = NULL } };
@@ -716,12 +730,6 @@ static void _init(void)
     }
     INFO("mender_client_activate ok\n");
 
-#if 0
-    /* Wait for mender-mcu-client events */
-    xEventGroupWaitBits(mender_client_events, MENDER_CLIENT_EVENT_RESTART, pdTRUE, pdFALSE, portMAX_DELAY);
-    INFO("MENDER_CLIENT_EVENT_RESTART is up\n");
-#endif
-
     return;
 
 RELEASE:
@@ -730,9 +738,6 @@ RELEASE:
     /* Deactivate and release mender-client */
     mender_client_deactivate();
     mender_client_exit();
-
-    /* Release event group */
-    //vEventGroupDelete(mender_client_events);
 
     /* Restart */
     INFO("Restarting system\n");

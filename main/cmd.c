@@ -31,7 +31,7 @@
 #include "wifi.h"
 #include "ctrl.h"
 #include "max17049.h"
-#include "ota.h"
+#include "mender_ota.h"
 
 // *INDENT-OFF*
 
@@ -259,13 +259,16 @@ static bool	_req_KEEPALIVE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KEEPALIVE* i
 static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint16_t size)
 {
 	CMD_RSPBUF_VER	rsp;
+	uint32_t		numbers[3];
 
 	INFO("VER\n");
 
+	MENDER_version(NULL, NULL, numbers);
+
 	memset(rsp.hash, 0, sizeof(rsp.hash));
-	rsp.sw[0] = SW_VERSION_MAJOR;
-	rsp.sw[1] = SW_VERSION_MINOR;
-	rsp.sw[2] = SW_VERSION_BUILD;
+	rsp.sw[0] = numbers[0];
+	rsp.sw[1] = numbers[1];
+	rsp.sw[2] = numbers[2];
 
 	rsp.hw[0] = HW_VERSION_MAJOR;
 	rsp.hw[1] = HW_VERSION_MINOR;
@@ -315,12 +318,10 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 
 	ret = fg_get_vbat(&voltage);
 	if (ret) {
-		rsp.voltage = voltage;
+		rsp.voltage = voltage / 10;
 	} else {
 		rsp.voltage = 0;
 	}
-
-	rsp.voltage	= 7500;
 
 	_sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
 #endif
@@ -470,9 +471,6 @@ static bool	_req_SET_VALVES_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_VALVES*
 static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i_pReq, uint16_t size)
 {
 	INFO("SET_VALVES\n");
-	bool	ret = 0;
-	uint8_t	i;
-	uint8_t	ok = true;
 
 	CMD_RSPBUF_OTA_START		rsp;
 	CMD_RSPBUF_EVT_OTA_STATUS	evt;
