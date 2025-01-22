@@ -38,7 +38,10 @@
 #endif /* CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER */
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT */
 
-static esp_app_desc_t         running_app_info;
+static struct {
+	esp_app_desc_t	running_app_info;
+	bool			active;
+} g_mender;
 
 static mender_err_t network_connect_cb(void)
 {
@@ -549,34 +552,40 @@ static void _restart(void)
 bool MENDER_version(char** ppProjName, char** ppVer, uint32_t* pNumbers)
 {
     const esp_partition_t *partition = esp_ota_get_running_partition();
-    ESP_ERROR_CHECK(esp_ota_get_partition_description(partition, &running_app_info));
+    ESP_ERROR_CHECK(esp_ota_get_partition_description(partition, &g_mender.running_app_info));
 
 	if (ppProjName) {
-		*ppProjName = running_app_info.project_name;
+		*ppProjName = g_mender.running_app_info.project_name;
 	}
 
 	if (ppVer) {
-		*ppVer = running_app_info.version;
+		*ppVer = g_mender.running_app_info.version;
 	}
 
 	if (pNumbers) {
-		sscanf(running_app_info.version, "%d.%d.%d", &pNumbers[0], &pNumbers[1], &pNumbers[2]);
+		sscanf(g_mender.running_app_info.version, "%d.%d.%d", &pNumbers[0], &pNumbers[1], &pNumbers[2]);
 	}
 
 	return true;
 }
 
-static void _init(void)
+static void _stop(void)
 {
+	if (!g_mender.active) {
+		return;
+	}
+    /* Deactivate and release mender-client */
+    mender_client_deactivate();
+    mender_client_exit();
+	g_mender.active = false;
+}
 
-    /* Initialize NVS */
-    esp_err_t ret = nvs_flash_init();
-    if ((ESP_ERR_NVS_NO_FREE_PAGES == ret) || (ESP_ERR_NVS_NEW_VERSION_FOUND == ret)) {
-        INFO("Erasing flash...\n");
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
+static void _start(void)
+{
+	if (g_mender.active) {
+		WARN("mender client already running\n");
+		return;
+	} 
 
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
 #ifdef CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER
@@ -643,7 +652,7 @@ static void _init(void)
                                                           .host                         = NULL,
                                                           .tenant_token                 = NULL,
                                                           .authentication_poll_interval = 0,
-                                                          .update_poll_interval         = 0,
+                                                          .update_poll_interval         = -1,	// only attempt once
                                                           .recommissioning              = false };
     mender_client_callbacks_t mender_client_callbacks = { .network_connect        = network_connect_cb,
                                                           .network_release        = network_release_cb,
@@ -726,29 +735,31 @@ static void _init(void)
     /* Finally activate mender client */
     if (MENDER_OK != mender_client_activate()) {
         ERROR("Unable to activate mender-client\n");
-        goto RELEASE;
+        goto stop;
     }
+
+	g_mender.active = true;
     INFO("mender_client_activate ok\n");
 
     return;
 
-RELEASE:
-
-    INFO("RELEASE:\n");
-    /* Deactivate and release mender-client */
-    mender_client_deactivate();
-    mender_client_exit();
-
-    /* Restart */
-    INFO("Restarting system\n");
-    _restart();
+	stop:
+		INFO("RELEASE:\n");
+		_stop();
 }
 
-static bool dbgConnect(uint8_t argc, char** argv)
+static bool dbgStart(uint8_t argc, char** argv)
 {
-	_init();
+	_start();
 	return true;
 }
+
+static bool dbgStop(uint8_t argc, char** argv)
+{
+	_stop();
+	return true;
+}
+
 
 static bool dbgRestart(uint8_t argc, char** argv)
 {
@@ -756,18 +767,11 @@ static bool dbgRestart(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgStatus(uint8_t argc, char** argv)
-{
-    PRINT("status\n");
-
-	return true;
-}
-
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-	DEBUG_MENU_DIR("mender_ota", NULL)
-		DEBUG_MENU_CMD("connect",	NULL,		    NULL, dbgConnect)
-		DEBUG_MENU_CMD("status",	NULL,		    NULL, dbgStatus)
+	DEBUG_MENU_DIR("mender_ota",	NULL)
+		DEBUG_MENU_CMD("start",		NULL,		    NULL, dbgStart)
+		DEBUG_MENU_CMD("stop",		NULL,		    NULL, dbgStop)
 		DEBUG_MENU_CMD("restart",	NULL,		    NULL, dbgRestart)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
