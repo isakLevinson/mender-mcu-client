@@ -602,11 +602,11 @@ static void _init(void)
     INFO("MAC address of the device '%s'\n", mac_address);
 
     /* Create mender-client event group */
-    mender_client_events = xEventGroupCreate();
-    ESP_ERROR_CHECK(NULL == mender_client_events);
+    //mender_client_events = xEventGroupCreate();
+    //ESP_ERROR_CHECK(NULL == mender_client_events);
 
     /* Retrieve running version of the device */
-    esp_app_desc_t         running_app_info;
+    static esp_app_desc_t         running_app_info;
     const esp_partition_t *running = esp_ota_get_running_partition();
     ESP_ERROR_CHECK(esp_ota_get_partition_description(running, &running_app_info));
     INFO("Running project '%s' version '%s'\n", running_app_info.project_name, running_app_info.version);
@@ -618,11 +618,11 @@ static void _init(void)
     INFO("artifact_name: %s\n", artifact_name);
 
     /* Retrieve device type */
-    //char *device_type = running_app_info.project_name;
-    char *device_type = "PNU";
+    char *device_type = running_app_info.project_name;
+    //char *device_type = "PNU";
 
     /* Initialize mender-client */
-    mender_keystore_t         identity[]              = { { .name = "mac", .value = mac_address }, { .name = NULL, .value = NULL } };
+    mender_keystore_t  identity[]              = { { .name = "mac", .value = mac_address }, { .name = NULL, .value = NULL } };
     mender_client_config_t    mender_client_config    = { .identity                     = identity,
                                                           .artifact_name                = artifact_name,
                                                           .device_type                  = device_type,
@@ -732,14 +732,14 @@ RELEASE:
     mender_client_exit();
 
     /* Release event group */
-    vEventGroupDelete(mender_client_events);
+    //vEventGroupDelete(mender_client_events);
 
     /* Restart */
     INFO("Restarting system\n");
     _restart();
 }
 
-static bool dbgStart(uint8_t argc, char** argv)
+static bool dbgConnect(uint8_t argc, char** argv)
 {
 	_init();
 	return true;
@@ -761,7 +761,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("mender_ota", NULL)
-		DEBUG_MENU_CMD("start",	    NULL,		    NULL, dbgStart)
+		DEBUG_MENU_CMD("connect",	NULL,		    NULL, dbgConnect)
 		DEBUG_MENU_CMD("status",	NULL,		    NULL, dbgStatus)
 		DEBUG_MENU_CMD("restart",	NULL,		    NULL, dbgRestart)
 	DEBUG_MENU_DIR_END
