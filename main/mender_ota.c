@@ -732,16 +732,6 @@ static void _stop(void)
 	g_mender.active = false;
 }
 
-static void _execute(void)
-{
-	if (!g_mender.active) {
-		WARN("mender mot active\n");
-		return;
-	}
-    /* Deactivate and release mender-client */
-    mender_client_execute();
-}
-
 static void _start(void)
 {
 	if (g_mender.active) {
@@ -765,6 +755,16 @@ static void _start(void)
 		_stop();
 }
 
+void MENDER_execute(void)
+{
+	if (!g_mender.active) {
+		WARN("mender mot active\n");
+		return;
+	}
+    /* Deactivate and release mender-client */
+    mender_client_execute();
+}
+
 //static bool dbgInit(uint8_t argc, char** argv)
 //{
 //	_init();
@@ -785,7 +785,7 @@ static bool dbgStop(uint8_t argc, char** argv)
 
 static bool dbgExecute(uint8_t argc, char** argv)
 {
-	_execute();
+	MENDER_execute();
 	return true;
 }
 
@@ -812,4 +812,5 @@ void MENDER_init(void)
 	DBG_TREE_add("/",		g_menu);
 
 	_init();
+	_start();
 }

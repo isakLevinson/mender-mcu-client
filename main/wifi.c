@@ -35,6 +35,7 @@
 #include "time.h"
 #include "wss.h"
 #include "config.h"
+#include "mender_ota.h"
 
 #define FLAG_CONNECTED            BIT0
 #define FLAG_DISCONNECT           BIT1
@@ -129,6 +130,7 @@ static void got_ip_handler(void* arg, esp_event_base_t event_base,
 
 	NVS_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
 	WIFI_stopAp();
+	MENDER_execute();
 }
 
 static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
