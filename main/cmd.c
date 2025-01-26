@@ -68,7 +68,8 @@
 	req(OTA_START,					0x14,	char		url[0];)		\
 	rsp(OTA_START,					0x15,	uint8_t		ok;)			\
 	rsp(EVT_OTA_STATUS,				0x16,	uint8_t		ok;)			\
-
+	rsp(EVT_BATTERY_STATUS,			0x17,	uint8_t		voltage;		\
+											uint8_t		soc;)			\
 // *INDENT-ON*
 
 
@@ -132,6 +133,8 @@ typedef enum {
 	CMD_STATE_WAIT_FOR_DATA,
 } CMD_STATE;
 
+
+#define BATTERY_CHECK_PERIOD	60000
 static struct {
 	SemaphoreHandle_t	semaphore;
 	CMD_CONTEXT			streamContext;
@@ -141,8 +144,9 @@ static struct {
 	uint8_t				rxBuf[CMD_INCOMING_MESSAGE_MAX_SIZE];
 	uint32_t			streamPeriod;
 	int32_t				streamSentTime;
+	int32_t				batteryCheckTime;
+	uint8_t				socNextThreshold;
 } g_cmd;
-
 
 bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint8_t size)
 {
@@ -177,8 +181,11 @@ bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint8_t size
 
 static void _streamPeriod(uint32_t period)
 {
-	g_cmd.streamSentTime = TIME_get32();
-	g_cmd.streamPeriod = period;
+	int32_t time = TIME_get32();
+	g_cmd.streamSentTime	= time;
+	g_cmd.batteryCheckTime	= time;
+	g_cmd.streamPeriod		= period;
+	g_cmd.socNextThreshold	= 100;
 }
 
 static void _taskStreamer(void* arg)
@@ -202,7 +209,6 @@ static void _taskStreamer(void* arg)
 		if (t - g_cmd.streamSentTime < g_cmd.streamPeriod) {
 			continue;
 		}
-
 		g_cmd.streamSentTime += g_cmd.streamPeriod;
 
 		CTRL_getPressure(press);
@@ -217,6 +223,35 @@ static void _taskStreamer(void* arg)
 			ERROR("failed to send. stopping streaming\n");
 			_streamPeriod(0);
 		}
+
+		if (t - g_cmd.batteryCheckTime < BATTERY_CHECK_PERIOD) {
+			continue;
+		}
+		g_cmd.batteryCheckTime += BATTERY_CHECK_PERIOD;
+
+		uint16_t	soc;
+		uint16_t	vbat;
+		ret = fg_get_soc(&soc);
+		if (ret) {
+			ret = fg_get_vbat(&vbat);
+		} 
+		if (ret) {
+			if (soc < g_cmd.socNextThreshold) {
+				CMD_sendBatteryEvent(soc, vbat);
+				switch(soc) {
+					case 30:
+						g_cmd.socNextThreshold = 15;
+						break;
+					case 15:
+						g_cmd.socNextThreshold = 5;
+						break;
+					case 5:
+						g_cmd.socNextThreshold = 0;
+						break;
+				}
+			}
+		}
+
 #endif
 	}
 }
@@ -506,6 +541,17 @@ static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i
 
 	evt.ok = 1;
 	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
+	return true;
+}
+
+bool CMD_sendBatteryEvent(uint8_t soc, uint8_t voltage)
+{
+	CMD_RSPBUF_EVT_BATTERY_STATUS		rsp;
+
+	rsp.soc		= soc;
+	rsp.voltage	= voltage;
+	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_BATTERY_STATUS, &rsp, sizeof(rsp));
+
 	return true;
 }
 
