@@ -264,7 +264,7 @@ bool CFG_default(void)
 	NVS_eraseAll();
 	WIFI_sta_disconnect();
 	WIFI_startAp();
-	wss_start_config();
+	wss_config_start();
 
 	return true;
 }

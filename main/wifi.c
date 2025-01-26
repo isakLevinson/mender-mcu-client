@@ -129,6 +129,7 @@ static void got_ip_handler(void* arg, esp_event_base_t event_base,
 
 	NVS_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
 	WIFI_stopAp();
+	wss_config_stop();
 }
 
 static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
@@ -478,12 +479,11 @@ static void _init(void)
 	} else {
 		ret = CFG_factoryGetSn(NULL);
 		if (ret) {
+			// start AP and configuration server only if SN has not been set yet
 			WIFI_startAp();
+			wss_config_start();
 		}
 	}
-
-	// TODO: use conditional config enable
-	wss_start_config();
 
 	_mdnsInit();
 
@@ -695,11 +695,11 @@ static bool dbgConfig(uint8_t argc, char** argv)
 	}
 
 	if ('0' == argv[1][0]) {
-		wss_stop_config();
+		wss_config_stop();
 	}
 
 	if ('1' == argv[1][0]) {
-		wss_start_config();
+		wss_config_start();
 	}
 
 	return true;

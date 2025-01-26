@@ -448,7 +448,7 @@ bool wss_start_server(void)
 	return true;
 }
 
-bool wss_start_config(void)
+bool wss_config_start(void)
 {
 	static const httpd_uri_t uri_config = {
 		.uri        = "/config",
@@ -464,7 +464,7 @@ bool wss_start_config(void)
 	return true;
 }
 
-bool wss_stop_config(void)
+bool wss_config_stop(void)
 {
 	httpd_unregister_uri(g_server.handle, "/config");
 
