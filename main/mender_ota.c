@@ -723,6 +723,7 @@ static void _init(void)
 static void _stop(void)
 {
 	if (!g_mender.active) {
+		WARN("mender mot active\n");
 		return;
 	}
     /* Deactivate and release mender-client */
@@ -731,10 +732,10 @@ static void _stop(void)
 	g_mender.active = false;
 }
 
-
 static void _execute(void)
 {
 	if (!g_mender.active) {
+		WARN("mender mot active\n");
 		return;
 	}
     /* Deactivate and release mender-client */
@@ -764,6 +765,12 @@ static void _start(void)
 		_stop();
 }
 
+//static bool dbgInit(uint8_t argc, char** argv)
+//{
+//	_init();
+//	return true;
+//}
+
 static bool dbgStart(uint8_t argc, char** argv)
 {
 	_start();
@@ -791,6 +798,7 @@ static bool dbgRestart(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("mender_ota",	NULL)
+//		DEBUG_MENU_CMD("init",		NULL,		    NULL, dbgInit)
 		DEBUG_MENU_CMD("start",		NULL,		    NULL, dbgStart)
 		DEBUG_MENU_CMD("stop",		NULL,		    NULL, dbgStop)
 		DEBUG_MENU_CMD("execute",	NULL,		    NULL, dbgExecute)
