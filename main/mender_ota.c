@@ -569,23 +569,9 @@ bool MENDER_version(char** ppProjName, char** ppVer, uint32_t* pNumbers)
 	return true;
 }
 
-static void _stop(void)
-{
-	if (!g_mender.active) {
-		return;
-	}
-    /* Deactivate and release mender-client */
-    mender_client_deactivate();
-    mender_client_exit();
-	g_mender.active = false;
-}
 
-static void _start(void)
+static void _init(void)
 {
-	if (g_mender.active) {
-		WARN("mender client already running\n");
-		return;
-	} 
 
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
 #ifdef CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER
@@ -732,6 +718,36 @@ static void _start(void)
     }
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_INVENTORY */
 
+}
+
+static void _stop(void)
+{
+	if (!g_mender.active) {
+		return;
+	}
+    /* Deactivate and release mender-client */
+    mender_client_deactivate();
+    //mender_client_exit();
+	g_mender.active = false;
+}
+
+
+static void _execute(void)
+{
+	if (!g_mender.active) {
+		return;
+	}
+    /* Deactivate and release mender-client */
+    mender_client_execute();
+}
+
+static void _start(void)
+{
+	if (g_mender.active) {
+		WARN("mender client already running\n");
+		return;
+	} 
+
     /* Finally activate mender client */
     if (MENDER_OK != mender_client_activate()) {
         ERROR("Unable to activate mender-client\n");
@@ -760,6 +776,11 @@ static bool dbgStop(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgExecute(uint8_t argc, char** argv)
+{
+	_execute();
+	return true;
+}
 
 static bool dbgRestart(uint8_t argc, char** argv)
 {
@@ -772,6 +793,7 @@ DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("mender_ota",	NULL)
 		DEBUG_MENU_CMD("start",		NULL,		    NULL, dbgStart)
 		DEBUG_MENU_CMD("stop",		NULL,		    NULL, dbgStop)
+		DEBUG_MENU_CMD("execute",	NULL,		    NULL, dbgExecute)
 		DEBUG_MENU_CMD("restart",	NULL,		    NULL, dbgRestart)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
@@ -780,4 +802,6 @@ DEBUG_MENU_END
 void MENDER_init(void)
 {
 	DBG_TREE_add("/",		g_menu);
+
+	_init();
 }
