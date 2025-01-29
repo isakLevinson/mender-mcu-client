@@ -411,15 +411,20 @@ bool wss_start_server(void)
 	conf.httpd.close_fn = wss_close_fd;
 
 	// Configure server certificate and private key
-	extern const unsigned char servercert_start[] asm("_binary_servercert_pem_start");
-	extern const unsigned char servercert_end[]   asm("_binary_servercert_pem_end");
-	conf.servercert = servercert_start;
-	conf.servercert_len = servercert_end - servercert_start;
+	extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
+	extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
+	conf.servercert = server_cert_start;
+	conf.servercert_len = server_cert_end - server_cert_start;
 
-	extern const unsigned char prvtkey_pem_start[] asm("_binary_prvtkey_pem_start");
-	extern const unsigned char prvtkey_pem_end[]   asm("_binary_prvtkey_pem_end");
+	extern const unsigned char prvtkey_pem_start[] asm("_binary_server_key_start");
+	extern const unsigned char prvtkey_pem_end[]   asm("_binary_server_key_end");
 	conf.prvtkey_pem = prvtkey_pem_start;
 	conf.prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
+
+	extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
+	extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
+	conf.cacert_pem = ca_cert_start;
+	conf.cacert_len = ca_cert_end - ca_cert_start;
 
 	conf.httpd.keep_alive_enable = false;
 

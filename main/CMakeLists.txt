@@ -26,9 +26,11 @@ idf_component_register(
 
 				INCLUDE_DIRS "."
 
-                EMBED_TXTFILES "${project_dir}/certs/servercert.pem"
-                               "${project_dir}/certs/prvtkey.pem"
-			       "${project_dir}/ota_server_certs/ca_cert.pem"
+                EMBED_TXTFILES	"${project_dir}/certs/server.crt"
+								"${project_dir}/certs/server.key"
+								"${project_dir}/certs/ca.crt"
+
+								"${project_dir}/ota_server_certs/ca_cert.pem"
 				)
 
 target_compile_options(${COMPONENT_LIB} PUBLIC "-Wno-format"  )
