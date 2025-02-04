@@ -70,6 +70,14 @@ void ESP_printErr(int err)
 			pStr = "ESP_ERR_INVALID_STATE";
 			break;
 
+		case ESP_ERR_NOT_SUPPORTED:
+			pStr = "ESP_ERR_NOT_SUPPORTED";
+			break;
+
+		case ESP_ERR_NOT_FOUND:
+			pStr = "ESP_ERR_NOT_FOUND";
+			break;
+
 		case ESP_ERR_NVS_INVALID_HANDLE:
 			pStr = "ESP_ERR_NVS_INVALID_HANDLE";
 			break;

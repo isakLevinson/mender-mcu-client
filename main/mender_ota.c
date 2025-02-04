@@ -31,6 +31,8 @@
 #include "mender-troubleshoot.h"
 #include <protocol_examples_common.h>
 
+#include "main.h"
+
 
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
 #ifdef CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER
@@ -98,10 +100,10 @@ static mender_err_t authentication_success_cb(void)
     /* In this example, authentication success with the mender-server is enough */
     if (MENDER_OK != (ret = mender_flash_confirm_image())) {
         ERROR("Unable to validate the image\n");
-        return ret;
+        //return ret;
     }
 
-    return ret;
+    return MENDER_OK;
 }
 
 static mender_err_t authentication_failure_cb(void)
@@ -160,14 +162,14 @@ static mender_err_t restart_cb(void)
  */
 static mender_err_t config_updated_cb(mender_keystore_t *configuration)
 {
-
+    INFO("config_updated_cb\n");
     /* Application can use the new device configuration now */
     /* In this example, we just print the content of the configuration received from the Mender server */
     if (NULL != configuration) {
         size_t index = 0;
-        ESP_LOGI(TAG, "Device configuration received from the server");
+        INFO("Device configuration received from the server\n");
         while ((NULL != configuration[index].name) && (NULL != configuration[index].value)) {
-            ESP_LOGI(TAG, "Key=%s, value=%s", configuration[index].name, configuration[index].value);
+            INFO("Key=%s, value=%s\n", configuration[index].name, configuration[index].value);
             index++;
         }
     }
@@ -651,12 +653,13 @@ static void _init(void)
 
     /* Initialize mender add-ons */
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_CONFIGURE
-    mender_configure_config_t    mender_configure_config    = { .refresh_interval = 0 };
+    mender_configure_config_t    mender_configure_config    = { .refresh_interval = -1 };
     mender_configure_callbacks_t mender_configure_callbacks = {
 #ifndef CONFIG_MENDER_CLIENT_CONFIGURE_STORAGE
         .config_updated = config_updated_cb,
 #endif /* CONFIG_MENDER_CLIENT_CONFIGURE_STORAGE */
     };
+
     ESP_ERROR_CHECK(mender_client_register_addon(
         (mender_addon_instance_t *)&mender_configure_addon_instance, (void *)&mender_configure_config, (void *)&mender_configure_callbacks));
     INFO("Mender configure add-on registered\n");
@@ -701,6 +704,8 @@ static void _init(void)
             index++;
         }
         mender_utils_keystore_delete(configuration);
+    } else {
+        ERROR("configuration: %x\n", configuration);
     }
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_CONFIGURE */
 
@@ -717,7 +722,6 @@ static void _init(void)
         INFO("mender_inventory_set ok\n");
     }
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_INVENTORY */
-
 }
 
 static void _stop(void)
@@ -765,11 +769,11 @@ void MENDER_execute(void)
     mender_client_execute();
 }
 
-//static bool dbgInit(uint8_t argc, char** argv)
-//{
-//	_init();
-//	return true;
-//}
+static bool dbgInit(uint8_t argc, char** argv)
+{
+	_init();
+	return true;
+}
 
 static bool dbgStart(uint8_t argc, char** argv)
 {
@@ -795,13 +799,88 @@ static bool dbgRestart(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgTest(uint8_t argc, char** argv)
+{
+    bool    ret;
+    int     err;
+    bool    isConfirmed = false;
+    bool    confirm     = false;
+    bool    markValid   = false;
+
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("ic",	ARGS_TYPE_SWITCH,	0,	"mender is confirmed",	    &isConfirmed)
+		ARGS_ENTRY("mc",	ARGS_TYPE_SWITCH,	0,	"mender confirm",   	    &confirm)
+		ARGS_ENTRY("v",		ARGS_TYPE_SWITCH,	0,	"mark image as valid",	    &markValid)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (!ret) {
+		return false;
+	}
+
+    if (isConfirmed) {
+        ret = mender_flash_is_image_confirmed();
+        PRINT("%d\n", ret);
+    }
+
+    if (confirm) {
+        mender_err_t mender_err;
+        mender_err = mender_flash_confirm_image();
+        PRINT("%d\n", mender_err);
+    }
+
+    if (markValid) {
+        err = esp_ota_mark_app_valid_cancel_rollback();
+        PRINT("%d\n", err);
+    }
+
+    return true;
+}
+
+static bool dbgStatus(uint8_t argc, char** argv)
+{
+    esp_err_t err;
+    mender_keystore_t *configuration;
+    mender_err_t    mender_err;
+
+    esp_ota_img_states_t   img_state;
+    const esp_partition_t *partition = esp_ota_get_running_partition();
+    err = esp_ota_get_state_partition(partition, &img_state);
+    ESP_printErr(err);
+    PRINT("label: %s\n", partition->label);
+    PRINT("type : %d / %d\n", partition->type, partition->subtype);
+    PRINT("addr : 0x%x size: 0x%x\n", partition->address, partition->size);
+    PRINT("enc: %d ro:%d\n", partition->encrypted, partition->readonly);
+
+    mender_err = mender_configure_get(&configuration);
+    if (MENDER_OK != mender_err) {
+        ERROR("Unable to get mender configuration\n");
+    } else if (configuration) {
+        size_t index = 0;
+        PRINT("Device configuration retrieved\n");
+        while ((NULL != configuration[index].name) && (NULL != configuration[index].value)) {
+            PRINT("Key=%s, value=%s\n", configuration[index].name, configuration[index].value);
+            index++;
+        }
+        mender_utils_keystore_delete(configuration);
+    } else {
+        ERROR("configuration: %x\n", configuration);
+    }
+
+    return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("mender_ota",	NULL)
-//		DEBUG_MENU_CMD("init",		NULL,		    NULL, dbgInit)
+		DEBUG_MENU_CMD("status",	NULL,		    NULL, dbgStatus)
+		DEBUG_MENU_CMD("init",		NULL,		    NULL, dbgInit)
 		DEBUG_MENU_CMD("start",		NULL,		    NULL, dbgStart)
 		DEBUG_MENU_CMD("stop",		NULL,		    NULL, dbgStop)
 		DEBUG_MENU_CMD("execute",	NULL,		    NULL, dbgExecute)
+		DEBUG_MENU_CMD("test",  	NULL,		    NULL, dbgTest)
 		DEBUG_MENU_CMD("restart",	NULL,		    NULL, dbgRestart)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
@@ -811,6 +890,6 @@ void MENDER_init(void)
 {
 	DBG_TREE_add("/",		g_menu);
 
-	_init();
-	_start();
+//	_init();
+//	_start();
 }
