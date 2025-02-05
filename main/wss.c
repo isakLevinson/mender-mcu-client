@@ -171,6 +171,9 @@ bool _cmdSendResp(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
 static esp_err_t ws_handler(httpd_req_t* req)
 {
 	TRACE("ws_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
+  
+	//mbedtls_ssl_context *ssl_ctx = httpd_ssl_get_ssl_ctx(req);
+	httpd_resp_set_hdr(req, "Connection", "keep-alive");
 
 	if (req->method == HTTP_GET) {
 		INFO("WS HTTP_GET Handshake done, the new connection was opened\n");
@@ -337,9 +340,14 @@ static esp_err_t _config_handler(httpd_req_t* req)
 
 	return ESP_OK;
 }
+
 esp_err_t wss_open_fd(httpd_handle_t hd, int sockfd)
 {
 	INFO("wss_open hd:0x%x fd:0x%x\n", hd, sockfd);
+
+	//mbedtls_ssl_context *ssl_ctx = (mbedtls_ssl_context*) httpd_ssl_get_socket_ctx(hd, sockfd);
+	//mbedtls_ssl_context *ssl_ctx = httpd_ssl_get_ctx_from_sock(hd, sockfd);
+
 	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
 	return wss_keep_alive_add_client(h, sockfd);
 }
@@ -385,7 +393,6 @@ static const httpd_uri_t uri_events = {
 
 bool wss_start_server(void)
 {
-
 	if (g_server.handle) {
 		WARN("wss already started\n");
 		return false;
@@ -427,6 +434,7 @@ bool wss_start_server(void)
 	conf.cacert_len = ca_cert_end - ca_cert_start;
 
 	conf.httpd.keep_alive_enable = false;
+	conf.session_tickets = true;
 
 	esp_err_t ret = httpd_ssl_start(&g_server.handle, &conf);
 	if (ESP_OK != ret) {
