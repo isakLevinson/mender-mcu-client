@@ -171,7 +171,7 @@ bool _cmdSendResp(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
 static esp_err_t ws_handler(httpd_req_t* req)
 {
 	TRACE("ws_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
-  
+
 	//mbedtls_ssl_context *ssl_ctx = httpd_ssl_get_ssl_ctx(req);
 	httpd_resp_set_hdr(req, "Connection", "keep-alive");
 

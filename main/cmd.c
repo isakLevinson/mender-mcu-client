@@ -31,7 +31,7 @@
 #include "wifi.h"
 #include "ctrl.h"
 #include "max17049.h"
-#include "ota.h"
+#include "mender_ota.h"
 
 // *INDENT-OFF*
 
@@ -116,566 +116,564 @@
 CMD(CMD_REQ_BUF, CMD_RSP_BUF)
 
 typedef enum {
-	CMD_REQ_INVALID,
-	CMD(CMD_ENUM_REQ, CMD_NONE)
+CMD_REQ_INVALID,
+CMD(CMD_ENUM_REQ, CMD_NONE)
 } CMD_REQ;
 
 typedef enum {
-	CMD(CMD_NONE, CMD_ENUM_RSP)
+CMD(CMD_NONE, CMD_ENUM_RSP)
 } CMD_RSP;
 
 CMD(CMD_DECLATE_FUNCS, CMD_NONE)
 
 
 typedef enum {
-	CMD_STATE_WAIT_FOR_LENGTH0,
-	CMD_STATE_WAIT_FOR_LENGTH1,
-	CMD_STATE_WAIT_FOR_DATA,
+CMD_STATE_WAIT_FOR_LENGTH0,
+CMD_STATE_WAIT_FOR_LENGTH1,
+CMD_STATE_WAIT_FOR_DATA,
 } CMD_STATE;
 
 
 #define BATTERY_CHECK_PERIOD	60000
 static struct {
-	SemaphoreHandle_t	semaphore;
-	CMD_CONTEXT			streamContext;
-	CMD_STATE	    	state;
-	uint16_t			expectedLength;
-	uint16_t			received;
-	uint8_t				rxBuf[CMD_INCOMING_MESSAGE_MAX_SIZE];
-	uint32_t			streamPeriod;
-	int32_t				streamSentTime;
-	int32_t				batteryCheckTime;
-	uint8_t				socNextThreshold;
+SemaphoreHandle_t	semaphore;
+CMD_CONTEXT			streamContext;
+CMD_STATE	    	state;
+uint16_t			expectedLength;
+uint16_t			received;
+uint8_t				rxBuf[CMD_INCOMING_MESSAGE_MAX_SIZE];
+uint32_t			streamPeriod;
+int32_t				streamSentTime;
+int32_t				batteryCheckTime;
+uint8_t				socNextThreshold;
 } g_cmd;
 
 bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint8_t size)
 {
-	bool	ret;
-	CMD_CONTEXT* pContext = i_pContext;
+bool	ret;
+CMD_CONTEXT* pContext = i_pContext;
 
-	if (!i_pContext) {
-		INFO("context is NULL\n");
-		pContext = &g_cmd.streamContext;
-	}
+if (!i_pContext) {
+INFO("context is NULL\n");
+pContext = &g_cmd.streamContext;
+}
 
-	if (!pContext) {
-		ERROR("invalid context\n");
-		return false;
-	}
+if (!pContext) {
+ERROR("invalid context\n");
+return false;
+}
 
-	if (!pContext->p_cbSend) {
-		ERROR("p_cbSend is NULL\n");
-		return false;
-	}
+if (!pContext->p_cbSend) {
+ERROR("p_cbSend is NULL\n");
+return false;
+}
 
-	xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
+xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
 
-	TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
-	ret = pContext->p_cbSend(pContext->pArg, type, i_pBuf, size);
+ret = pContext->p_cbSend(pContext->pArg, type, i_pBuf, size);
 
-	xSemaphoreGive(g_cmd.semaphore);
+xSemaphoreGive(g_cmd.semaphore);
 
-	return ret;
+return ret;
 }
 
 static void _streamPeriod(uint32_t period)
 {
-	int32_t time = TIME_get32();
-	g_cmd.streamSentTime	= time;
-	g_cmd.batteryCheckTime	= time;
-	g_cmd.streamPeriod		= period;
-	g_cmd.socNextThreshold	= 100;
+int32_t time = TIME_get32();
+g_cmd.streamSentTime	= time;
+g_cmd.batteryCheckTime	= time;
+g_cmd.streamPeriod		= period;
+g_cmd.socNextThreshold	= 100;
 }
 
 static void _taskStreamer(void* arg)
 {
 #if CONFIG_BUILD_TYPE_PNU
-	bool	ret;
-	int32_t	t;
-	int16_t	press[4];
-	CMD_RSPBUF_EVT_STREAM	rsp;
-	uint32_t	i;
+bool	ret;
+int32_t	t;
+int16_t	press[4];
+CMD_RSPBUF_EVT_STREAM	rsp;
+uint32_t	i;
 #endif
 
-	while (true) {
-		vTaskDelay(10);
+while (true) {
+vTaskDelay(10);
 #if CONFIG_BUILD_TYPE_PNU
-		if (!g_cmd.streamPeriod) {
-			continue;
-		}
+if (!g_cmd.streamPeriod) {
+continue;
+}
 
-		t = TIME_get32();
-		if (t - g_cmd.streamSentTime < g_cmd.streamPeriod) {
-			continue;
-		}
-		g_cmd.streamSentTime += g_cmd.streamPeriod;
+t = TIME_get32();
+if (t - g_cmd.streamSentTime < g_cmd.streamPeriod) {
+continue;
+}
+g_cmd.streamSentTime += g_cmd.streamPeriod;
 
-		CTRL_getPressure(press);
-		TRACE("stream %d: %3d %3d %3d %3d\n", t, press[0], press[1], press[2], press[3]);
+CTRL_getPressure(press);
+TRACE("stream %d: %3d %3d %3d %3d\n", t, press[0], press[1], press[2], press[3]);
 
-		rsp.time = t;
-		for (i = 0; i < 4; i++) {
-			rsp.pressure[i] = press[i];
-		}
-		ret = _sendResp(&g_cmd.streamContext, CMD_RSP_EVT_STREAM, &rsp, sizeof(rsp));
-		if (!ret) {
-			ERROR("failed to send. stopping streaming\n");
-			_streamPeriod(0);
-		}
+rsp.time = t;
+for (i = 0; i < 4; i++) {
+rsp.pressure[i] = press[i];
+}
+ret = _sendResp(&g_cmd.streamContext, CMD_RSP_EVT_STREAM, &rsp, sizeof(rsp));
+if (!ret) {
+ERROR("failed to send. stopping streaming\n");
+_streamPeriod(0);
+}
 
-		if (t - g_cmd.batteryCheckTime < BATTERY_CHECK_PERIOD) {
-			continue;
-		}
-		g_cmd.batteryCheckTime += BATTERY_CHECK_PERIOD;
+if (t - g_cmd.batteryCheckTime < BATTERY_CHECK_PERIOD) {
+continue;
+}
+g_cmd.batteryCheckTime += BATTERY_CHECK_PERIOD;
 
-		uint16_t	soc;
-		uint16_t	vbat;
-		ret = fg_get_soc(&soc);
-		if (ret) {
-			ret = fg_get_vbat(&vbat);
-		} 
-		if (ret) {
-			if (soc < g_cmd.socNextThreshold) {
-				CMD_sendBatteryEvent(soc, vbat);
-				switch(soc) {
-					case 30:
-						g_cmd.socNextThreshold = 15;
-						break;
-					case 15:
-						g_cmd.socNextThreshold = 5;
-						break;
-					case 5:
-						g_cmd.socNextThreshold = 0;
-						break;
-				}
-			}
-		}
+uint16_t	soc;
+uint16_t	vbat;
+ret = fg_get_soc(&soc);
+if (ret) {
+ret = fg_get_vbat(&vbat);
+}
+if (ret) {
+if (soc < g_cmd.socNextThreshold) {
+CMD_sendBatteryEvent(soc, vbat);
+switch (soc) {
+case 30:
+g_cmd.socNextThreshold = 15;
+break;
+case 15:
+g_cmd.socNextThreshold = 5;
+break;
+case 5:
+g_cmd.socNextThreshold = 0;
+break;
+}
+}
+}
 
 #endif
-	}
+}
 }
 
 static bool _init(void)
 {
-	bool	ret;
+bool	ret;
 
-	g_cmd.semaphore = xSemaphoreCreateBinary();
-	xSemaphoreGive(g_cmd.semaphore);
+g_cmd.semaphore = xSemaphoreCreateBinary();
+xSemaphoreGive(g_cmd.semaphore);
 
-	ret = xTaskCreate(_taskStreamer, "streamer", 8192, NULL, 3, NULL);
-	if (ret != pdPASS) {
-		ERROR("create task %s failed\n", "streamer");
-		return false;
-	}
+ret = xTaskCreate(_taskStreamer, "streamer", 8192, NULL, 3, NULL);
+if (ret != pdPASS) {
+ERROR("create task %s failed\n", "streamer");
+return false;
+}
 
-	return true;
+return true;
 }
 
 static bool	_req_NOP_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_NOP* i_pReq, uint16_t size)
 {
-	return true;
+return true;
 }
 
 static bool	_req_KEEPALIVE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KEEPALIVE* i_pReq, uint16_t size)
 {
-	CMD_RSPBUF_KEEPALIVE	rsp;
+CMD_RSPBUF_KEEPALIVE	rsp;
 
-	INFO("KEEPALIVE\n");
+INFO("KEEPALIVE\n");
 
-	// TODO: use real values
-	rsp.batVoltage	= 37;
-	rsp.soc			= 85;
-	_sendResp(i_pContext, CMD_RSP_KEEPALIVE, &rsp, sizeof(rsp));
+// TODO: use real values
+rsp.batVoltage	= 37;
+rsp.soc			= 85;
+_sendResp(i_pContext, CMD_RSP_KEEPALIVE, &rsp, sizeof(rsp));
 
-	return true;
+return true;
 }
 
 static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint16_t size)
 {
-	CMD_RSPBUF_VER	rsp;
+CMD_RSPBUF_VER	rsp;
+uint32_t		numbers[3];
 
-	INFO("VER\n");
+INFO("VER\n");
 
-	memset(rsp.hash, 0, sizeof(rsp.hash));
-	rsp.sw[0] = SW_VERSION_MAJOR;
-	rsp.sw[1] = SW_VERSION_MINOR;
-	rsp.sw[2] = SW_VERSION_BUILD;
+MENDER_version(NULL, NULL, numbers);
 
-	rsp.hw[0] = HW_VERSION_MAJOR;
-	rsp.hw[1] = HW_VERSION_MINOR;
-	rsp.hw[2] = HW_VERSION_BUILD;
+memset(rsp.hash, 0, sizeof(rsp.hash));
+rsp.sw[0] = numbers[0];
+rsp.sw[1] = numbers[1];
+rsp.sw[2] = numbers[2];
 
-	_sendResp(i_pContext, CMD_RSP_VER, &rsp, sizeof(rsp));
+rsp.hw[0] = HW_VERSION_MAJOR;
+rsp.hw[1] = HW_VERSION_MINOR;
+rsp.hw[2] = HW_VERSION_BUILD;
 
-	return true;
+_sendResp(i_pContext, CMD_RSP_VER, &rsp, sizeof(rsp));
+
+return true;
 }
 
 static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq, uint16_t size)
 {
 #if CONFIG_BUILD_TYPE_PNU
 
-	CMD_RSPBUF_STATUS	rsp;
-	bool	ret;
-	uint16_t	soc;
-	uint16_t	voltage;
-	int16_t	press[4];
-	bool	valves[5];
-	bool	pumps[4];
-	int		i;
+CMD_RSPBUF_STATUS	rsp;
+bool	ret;
+uint16_t	soc;
+uint16_t	voltage;
+int16_t	press[4];
+bool	valves[5];
+bool	pumps[4];
+int		i;
 
-	INFO("STATUS\n");
+INFO("STATUS\n");
 
-	CTRL_getPressure(press);
-	for (i = 0; i < 4; i++) {
-		rsp.pressure[i] = press[i];
-	}
+CTRL_getPressure(press);
+for (i = 0; i < 4; i++) {
+rsp.pressure[i] = press[i];
+}
 
-	CTRL_getValves(valves);
-	for (i = 0; i < 4; i++) {
-		rsp.valve[i] = valves[i];
-	}
+CTRL_getValves(valves);
+for (i = 0; i < 4; i++) {
+rsp.valve[i] = valves[i];
+}
 
-	CTRL_getPump(pumps);
-	for (i = 0; i < 4; i++) {
-		rsp.pump[i] = pumps[i];
-	}
+CTRL_getPump(pumps);
+for (i = 0; i < 4; i++) {
+rsp.pump[i] = pumps[i];
+}
 
-	ret = fg_get_soc(&soc);
-	if (ret) {
-		rsp.soc = soc;
-	} else {
-		rsp.soc = 0;
-	}
+ret = fg_get_soc(&soc);
+if (ret) {
+rsp.soc = soc;
+} else {
+rsp.soc = 0;
+}
 
-	ret = fg_get_vbat(&voltage);
-	if (ret) {
-		rsp.voltage = voltage;
-	} else {
-		rsp.voltage = 0;
-	}
+ret = fg_get_vbat(&voltage);
+if (ret) {
+rsp.voltage = voltage / 10;
+} else {
+rsp.voltage = 0;
+}
 
-	rsp.voltage	= 7500;
-
-	_sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
+_sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
 #endif
-	return true;
+return true;
 }
 
 static bool	_req_SET_PRESSURE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PRESSURE* i_pReq, uint16_t size)
 {
-	bool		ret;
-	uint16_t	press[4];
-	uint8_t		i;
+bool		ret;
+uint16_t	press[4];
+uint8_t		i;
 
-	CMD_RSPBUF_SET_PRESSURE	rsp;
+CMD_RSPBUF_SET_PRESSURE	rsp;
 
-	INFO("SET_PRESSURE\n");
+INFO("SET_PRESSURE\n");
 
-	for (i = 0; i < 4; i++) {
-		press[i] = i_pReq->pressure[i];
-	}
+for (i = 0; i < 4; i++) {
+press[i] = i_pReq->pressure[i];
+}
 
-	ret = CTRL_setTarget(press);
+ret = CTRL_setTarget(press);
 
-	rsp.ok = ret;
-	_sendResp(i_pContext, CMD_RSP_SET_PRESSURE, &rsp, sizeof(rsp));
+rsp.ok = ret;
+_sendResp(i_pContext, CMD_RSP_SET_PRESSURE, &rsp, sizeof(rsp));
 
-	return true;
+return true;
 }
 
 static bool	_req_START_STREAM_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_START_STREAM* i_pReq, uint16_t size)
 {
-	INFO("START_STREAM\n");
-	bool	okToStream = true;
+INFO("START_STREAM\n");
+bool	okToStream = true;
 
-	CMD_RSPBUF_START_STREAM	rsp;
+CMD_RSPBUF_START_STREAM	rsp;
 
-	if (!g_cmd.streamContext.p_cbSend) {
-		WARN("p_cbSend is NULL\n");
-		okToStream = false;
-	}
+if (!g_cmd.streamContext.p_cbSend) {
+WARN("p_cbSend is NULL\n");
+okToStream = false;
+}
 
-	if (!g_cmd.streamContext.pArg) {
-		WARN("pArg is NULL\n");
-		okToStream = false;
-	}
+if (!g_cmd.streamContext.pArg) {
+WARN("pArg is NULL\n");
+okToStream = false;
+}
 
-	rsp.ok = okToStream ? 1 : 0;
-	_sendResp(i_pContext, CMD_RSP_START_STREAM, &rsp, sizeof(rsp));
+rsp.ok = okToStream ? 1 : 0;
+_sendResp(i_pContext, CMD_RSP_START_STREAM, &rsp, sizeof(rsp));
 
-	if (okToStream) {
-		_streamPeriod(100);
-	}
-	return true;
+if (okToStream) {
+_streamPeriod(100);
+}
+return true;
 }
 
 static bool	_req_STOP_STREAM_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STOP_STREAM* i_pReq, uint16_t size)
 {
-	INFO("STOP_STREAM\n");
+INFO("STOP_STREAM\n");
 
-	CMD_RSPBUF_STOP_STREAM	rsp;
+CMD_RSPBUF_STOP_STREAM	rsp;
 
-	_streamPeriod(0);
+_streamPeriod(0);
 
-	rsp.ok = 1;
-	_sendResp(i_pContext, CMD_RSP_STOP_STREAM, &rsp, sizeof(rsp));
+rsp.ok = 1;
+_sendResp(i_pContext, CMD_RSP_STOP_STREAM, &rsp, sizeof(rsp));
 
-	return true;
+return true;
 }
 
 static bool	_req_CONTROL_ENABLE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_CONTROL_ENABLE* i_pReq, uint16_t size)
 {
-	INFO("CONTROL_ENABLE\n");
+INFO("CONTROL_ENABLE\n");
 
-	CMD_RSPBUF_CONTROL_ENABLE	rsp;
+CMD_RSPBUF_CONTROL_ENABLE	rsp;
 
-	CTRL_loopEnable(i_pReq->on);
+CTRL_loopEnable(i_pReq->on);
 
-	rsp.ok = 1;
-	_sendResp(i_pContext, CMD_RSP_CONTROL_ENABLE, &rsp, sizeof(rsp));
+rsp.ok = 1;
+_sendResp(i_pContext, CMD_RSP_CONTROL_ENABLE, &rsp, sizeof(rsp));
 
-	return true;
+return true;
 }
 
 static bool	_req_SET_PUMPS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PUMPS* i_pReq, uint16_t size)
 {
-	INFO("SET_PUMPS\n");
-	bool	ret;
-	uint8_t	i;
-	uint8_t	ok = true;
+INFO("SET_PUMPS\n");
+bool	ret;
+uint8_t	i;
+uint8_t	ok = true;
 
-	CMD_RSPBUF_SET_PUMPS	rsp;
+CMD_RSPBUF_SET_PUMPS	rsp;
 
-	for (i = 0; i < 4; i++) {
-		switch (i_pReq->on[i]) {
-			case 0:
-				ret = CTRL_setPump(i, false);
-				break;
-			case 1:
-				ret = CTRL_setPump(i, true);
-				break;
-			default:
-				ret = true;
-		}
-		if (!ret) {
-			ok = false;
-		}
-	}
+for (i = 0; i < 4; i++) {
+switch (i_pReq->on[i]) {
+case 0:
+ret = CTRL_setPump(i, false);
+break;
+case 1:
+ret = CTRL_setPump(i, true);
+break;
+default:
+ret = true;
+}
+if (!ret) {
+ok = false;
+}
+}
 
-	rsp.ok = ok;
+rsp.ok = ok;
 
-	_sendResp(i_pContext, CMD_RSP_SET_PUMPS, &rsp, sizeof(rsp));
+_sendResp(i_pContext, CMD_RSP_SET_PUMPS, &rsp, sizeof(rsp));
 
-	return true;
+return true;
 }
 
 static bool	_req_SET_VALVES_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_VALVES* i_pReq, uint16_t size)
 {
-	INFO("SET_VALVES\n");
-	bool	ret;
-	uint8_t	i;
-	uint8_t	ok = true;
+INFO("SET_VALVES\n");
+bool	ret;
+uint8_t	i;
+uint8_t	ok = true;
 
-	CMD_RSPBUF_SET_VALVES	rsp;
+CMD_RSPBUF_SET_VALVES	rsp;
 
-	for (i = 0; i < 4; i++) {
-		switch (i_pReq->on[i]) {
-			case 0:
-				ret = CTRL_setValve(i, false);
-				break;
-			case 1:
-				ret = CTRL_setValve(i, true);
-				break;
-			default:
-				ret = true;
-		}
-		if (!ret) {
-			ok = false;
-		}
-	}
+for (i = 0; i < 4; i++) {
+switch (i_pReq->on[i]) {
+case 0:
+ret = CTRL_setValve(i, false);
+break;
+case 1:
+ret = CTRL_setValve(i, true);
+break;
+default:
+ret = true;
+}
+if (!ret) {
+ok = false;
+}
+}
 
-	rsp.ok = ok;
+rsp.ok = ok;
 
-	_sendResp(i_pContext, CMD_RSP_SET_VALVES, &rsp, sizeof(rsp));
+_sendResp(i_pContext, CMD_RSP_SET_VALVES, &rsp, sizeof(rsp));
 
-	return true;
+return true;
 }
 
 static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i_pReq, uint16_t size)
 {
-	INFO("SET_VALVES\n");
-	bool	ret = 0;
-	uint8_t	i;
-	uint8_t	ok = true;
+INFO("SET_VALVES\n");
 
-	CMD_RSPBUF_OTA_START		rsp;
-	CMD_RSPBUF_EVT_OTA_STATUS	evt;
+CMD_RSPBUF_OTA_START		rsp;
+CMD_RSPBUF_EVT_OTA_STATUS	evt;
 
-	rsp.ok = 1;
+rsp.ok = 1;
 
-	INFO_BUF("OTA_START", PRINT_BUF_STYLE_ASC_SIZE_NL, i_pReq->url, size);
-	if (i_pReq->url[size-1] != '\0') {
-		WARN("unexpected last char %02x. expecting 0x00\n", i_pReq->url[size-1]);
-		rsp.ok = 0;
-	}
+INFO_BUF("OTA_START", PRINT_BUF_STYLE_ASC_SIZE_NL, i_pReq->url, size);
+if (i_pReq->url[size - 1] != '\0') {
+WARN("unexpected last char %02x. expecting 0x00\n", i_pReq->url[size - 1]);
+rsp.ok = 0;
+}
 
-	_sendResp(i_pContext, CMD_RSP_OTA_START, &rsp, sizeof(rsp));
-	if (!rsp.ok) {
-		return true;
-	}
+_sendResp(i_pContext, CMD_RSP_OTA_START, &rsp, sizeof(rsp));
+if (!rsp.ok) {
+return true;
+}
+#if 0
+ret = OTA_begin(i_pReq->url);
+if (!ret) {
+evt.ok = 0;
+_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
+return true;
+}
 
-	ret = OTA_begin(i_pReq->url);
-	if (!ret) {
-		evt.ok = 0;
-		_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
-		return true;
-	}
-
-	ret = OTA_perform();
-	if (!ret) {
-		evt.ok = 0;
-		_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
-		return true;
-	}
-
-	evt.ok = 1;
-	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
-	return true;
+ret = OTA_perform();
+if (!ret) {
+evt.ok = 0;
+_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
+return true;
+}
+#endif
+evt.ok = 1;
+_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
+return true;
 }
 
 bool CMD_sendBatteryEvent(uint8_t soc, uint8_t voltage)
 {
-	CMD_RSPBUF_EVT_BATTERY_STATUS		rsp;
+CMD_RSPBUF_EVT_BATTERY_STATUS		rsp;
 
-	rsp.soc		= soc;
-	rsp.voltage	= voltage;
-	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_BATTERY_STATUS, &rsp, sizeof(rsp));
+rsp.soc		= soc;
+rsp.voltage	= voltage;
+_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_BATTERY_STATUS, &rsp, sizeof(rsp));
 
-	return true;
+return true;
 }
 
 void CMD_parseInit(void)
 {
-	TRACE1("CMD_parseInit\n");
-	g_cmd.state             = CMD_STATE_WAIT_FOR_LENGTH0;
-	g_cmd.expectedLength  	= 0;
-	g_cmd.received			= 0;
+TRACE1("CMD_parseInit\n");
+g_cmd.state             = CMD_STATE_WAIT_FOR_LENGTH0;
+g_cmd.expectedLength  	= 0;
+g_cmd.received			= 0;
 }
 
 void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, uint16_t size)
 {
-	bool	retVal = false;
+bool	retVal = false;
 
-	CMD_CONTEXT* pContext;
-	CMD_REQ	t = (CMD_REQ)type;
+CMD_CONTEXT* pContext;
+CMD_REQ	t = (CMD_REQ)type;
 
-	if (!i_pContext) {
-		return;
-	}
+if (!i_pContext) {
+return;
+}
 
-	pContext = i_pContext;
+pContext = i_pContext;
 
-	if (!pContext) {
-		ERROR("invalid context\n");
-		return;
-	}
+if (!pContext) {
+ERROR("invalid context\n");
+return;
+}
 
-	TRACE_BUF("cmd", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+TRACE_BUF("cmd", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
-	switch (t) {
-			CMD(CMD_SWITCH, CMD_NONE)
+switch (t) {
+CMD(CMD_SWITCH, CMD_NONE)
 
-		default:
-			WARN("unhandled msg 0x%02x: ", type);
-			WARN_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
-	}
+default:
+WARN("unhandled msg 0x%02x: ", type);
+WARN_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+}
 
-	if (false == retVal) {
-		WARN("cmd handler returned error\n");
-	}
+if (false == retVal) {
+WARN("cmd handler returned error\n");
+}
 }
 
 void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 {
-	TRACE1("c:%02x state:%d expected:%04x, rec:%x\n", data, g_cmd.state, g_cmd.expectedLength, g_cmd.received);
+TRACE1("c:%02x state:%d expected:%04x, rec:%x\n", data, g_cmd.state, g_cmd.expectedLength, g_cmd.received);
 
-	switch (g_cmd.state) {
-		case CMD_STATE_WAIT_FOR_LENGTH0:
-			TRACE1("length0 %02x\n", data);
-			g_cmd.expectedLength = data;
-			g_cmd.state = CMD_STATE_WAIT_FOR_LENGTH1;
-			break;
+switch (g_cmd.state) {
+case CMD_STATE_WAIT_FOR_LENGTH0:
+TRACE1("length0 %02x\n", data);
+g_cmd.expectedLength = data;
+g_cmd.state = CMD_STATE_WAIT_FOR_LENGTH1;
+break;
 
-		case CMD_STATE_WAIT_FOR_LENGTH1:
-			TRACE1("length1 %02x\n", data);
-			g_cmd.expectedLength |= (uint16_t)data << 8;
-			g_cmd.received	= 0;
-			g_cmd.state = CMD_STATE_WAIT_FOR_DATA;
-			break;
+case CMD_STATE_WAIT_FOR_LENGTH1:
+TRACE1("length1 %02x\n", data);
+g_cmd.expectedLength |= (uint16_t)data << 8;
+g_cmd.received	= 0;
+g_cmd.state = CMD_STATE_WAIT_FOR_DATA;
+break;
 
-		case CMD_STATE_WAIT_FOR_DATA:
-			g_cmd.rxBuf[g_cmd.received] = data;
-			g_cmd.received++;
+case CMD_STATE_WAIT_FOR_DATA:
+g_cmd.rxBuf[g_cmd.received] = data;
+g_cmd.received++;
 
-			TRACE1("data:%02x len:%02x/%02x\n", data, g_cmd.received, g_cmd.expectedLength);
+TRACE1("data:%02x len:%02x/%02x\n", data, g_cmd.received, g_cmd.expectedLength);
 
-			if (g_cmd.received > g_cmd.expectedLength) {
-				uint8_t	type = g_cmd.rxBuf[0];
+if (g_cmd.received > g_cmd.expectedLength) {
+uint8_t	type = g_cmd.rxBuf[0];
 
-				TRACE1("CMD_processMessage t:%x ", type);
-				TRACE1_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, g_cmd.rxBuf + 1, g_cmd.received - 1);
+TRACE1("CMD_processMessage t:%x ", type);
+TRACE1_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, g_cmd.rxBuf + 1, g_cmd.received - 1);
 
-				CMD_processMessage(i_pContext, type, g_cmd.rxBuf + 1, g_cmd.received - 1);
-				CMD_parseInit();
-			}
-			break;
+CMD_processMessage(i_pContext, type, g_cmd.rxBuf + 1, g_cmd.received - 1);
+CMD_parseInit();
+}
+break;
 
-		default:
-			CMD_parseInit();
-	}
+default:
+CMD_parseInit();
+}
 }
 
 bool CMD_setStreamContext(CMD_CONTEXT* i_pContext)
 {
-	if (!i_pContext) {
-		return false;
-	}
+if (!i_pContext) {
+return false;
+}
 
-	if (!i_pContext->p_cbSend) {
-		return false;
-	}
+if (!i_pContext->p_cbSend) {
+return false;
+}
 
-	g_cmd.streamContext.p_cbSend	= i_pContext->p_cbSend;
-	g_cmd.streamContext.pArg		= i_pContext->pArg;
+g_cmd.streamContext.p_cbSend	= i_pContext->p_cbSend;
+g_cmd.streamContext.pArg		= i_pContext->pArg;
 
-	return true;
+return true;
 }
 
 static bool dbgReset(uint8_t argc, char** argv)
 {
-	CMD_parseInit();
-	return true;
+CMD_parseInit();
+return true;
 }
 
 static bool dbgStream(uint8_t argc, char** argv)
 {
-	uint32_t	period;
+uint32_t	period;
 
-	if (argc < 2) {
-		return false;
-	}
+if (argc < 2) {
+return false;
+}
 
-	period = strtoul(argv[1], NULL, 10);
+period = strtoul(argv[1], NULL, 10);
 
-	_streamPeriod(period);
+_streamPeriod(period);
 
-	return true;
+return true;
 }
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-	return true;
+return true;
 }
 
 // *INDENT-OFF*

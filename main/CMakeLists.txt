@@ -22,7 +22,8 @@ idf_component_register(
 				"led.c"
 				"nvs.c"
 				"config.c"
-				"ota.c"
+#				"ota.c"
+				"mender_ota.c"
 
 				INCLUDE_DIRS "."
 

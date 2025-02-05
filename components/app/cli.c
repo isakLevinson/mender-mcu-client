@@ -20,6 +20,7 @@
 
 #include "cli.h"
 #include "fifo.h"
+#include "mender_ota.h"
 
 static struct {
 	//osThreadId			taskHandle;
@@ -106,27 +107,27 @@ bool CLI_getc(char* o_pChar)
 static bool dbgVer(uint8_t argc, char** argv)
 {
 	int err;
+	char*	proj;
+	char*	ver;
+	uint32_t	numbers[3];
 
-	PRINT("sw:%d.%d.%d\n",
-	    SW_VERSION_MAJOR,
-	    SW_VERSION_MINOR,
-	    SW_VERSION_BUILD);
+	MENDER_version(&proj, &ver, numbers);
+	PRINT("proj: %s\n", proj);
+	PRINT("sw ver: \"%s\" [%d.%d.%d]\n", ver, numbers[0], numbers[1], numbers[2]);
 
 	PRINT("hw:%d.%d.%d\n",
 	    HW_VERSION_MAJOR,
 	    HW_VERSION_MINOR,
 	    HW_VERSION_BUILD);
 
-	//PRINT_BUF("hash",	PRINT_BUF_STYLE_HEX_NL, i_pBuf, size);
-
 	uint8_t mac[6];
-	err = esp_efuse_mac_get_default(mac);
+
+	err = esp_read_mac(mac, ESP_MAC_WIFI_STA);
 	if (err) {
-		ERROR("esp_efuse_mac_get_default failed %d\n", err);
+		ERROR("esp_read_mac failed %d\n", err);
 	} else {
 		PRINT("default MAC %02x%02x%02x%02x%02x%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 	}
-
 
 	return true;
 }

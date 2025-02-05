@@ -1,5 +1,5 @@
-# @file      idf_component.yml
-# @brief     mender-esp32-example main component dependencies
+# @file      CMakeLists.txt
+# @brief     mender-mcu-client component CMakeLists file
 #
 # Copyright joelguittet and mender-mcu-client contributors
 #
@@ -15,8 +15,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dependencies:
-  espressif/mdns: "^1.0.3"
-  espressif/led_strip: "^2.4.1"
-  espressif/esp_websocket_client: "~=1.2.3"
-  joltwallet/littlefs: "~=1.14.2"
+include("${CMAKE_CURRENT_LIST_DIR}/mender-mcu-client/esp-idf/CMakeLists.txt")
