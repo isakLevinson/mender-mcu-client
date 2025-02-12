@@ -18,6 +18,8 @@
 #define PROMPT     "gsr"
 #endif
 
+#define USE_FLASH_LOG				1
+#define USE_FIFO_MEMORY_INTERFACE	1
 #define SIMULATION_MODE     true
 
 #define HW_VERSION_MAJOR		1
