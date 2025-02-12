@@ -89,7 +89,7 @@ static void _free(void* i_pBuf)
 
 uint64_t _getTime(void)
 {
-	return esp_timer_get_time();
+	return esp_timer_get_time() / 1000;
 }
 
 #if USE_FLASH_LOG
@@ -498,6 +498,7 @@ bool	CLI_init(void)
 		.cbMutexGet			= _mutexGet,
 		.cbMutexRelease		= _mutexPost,
 		.cbGetTime64		= _getTime,
+		.printTimestamp		= true,
 	};
 
 	DBG_MENU_CONFIG cfg = {
