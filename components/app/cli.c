@@ -329,9 +329,8 @@ static bool dbgPs(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgLogInit(uint8_t argc, char** argv)
+static bool dbgLogStatus(uint8_t argc, char** argv)
 {
-	_logInit();
 	if (!g_cli.logPartition) {
 		PRINT("failed\n");
 		return true;
@@ -343,6 +342,33 @@ static bool dbgLogInit(uint8_t argc, char** argv)
 		g_cli.logPartition->address,
 		g_cli.logPartition->size,
 		g_cli.logPartition->erase_size);
+
+	return true;
+}
+
+static bool dbgLogClear(uint8_t argc, char** argv)
+{
+	esp_err_t	err;
+
+	if (!g_cli.logPartition) {
+		PRINT("failed\n");
+		return true;
+	}
+
+	err = esp_partition_erase_range(g_cli.logPartition, 0, g_cli.logPartition->size);
+	if (ESP_OK != err) {
+		PRINT("erase failed %d\n", err);
+	}
+
+	FIFO_clear(&g_cli.logFlashFifo);
+	FIFO_clear(&g_cli.logRamFifo);
+
+	return true;
+}
+
+static bool dbgLogRecover(uint8_t argc, char** argv)
+{
+	FIFO_recoverPointers(&g_cli.logFlashFifo);
 
 	return true;
 }
@@ -408,15 +434,59 @@ static bool dbgLogErase(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgLogTail(uint8_t argc, char** argv)
+{
+	bool			ret;
+	uint8_t			buf[64];
+	char			decodedBuf[256];
+	uint16_t		size;
+	uint16_t		decodedSize;
+	DBG_DECODE_INST	decoder;
+
+	uint32_t	totalPopped = 0;
+	uint32_t	totalDecoded = 0;
+
+	int32_t	loc = 8000;
+
+	//_flush();
+
+	DBG_PRINT_decodeInit(&decoder);
+
+	size = FIFO_peekLast(&g_cli.logFlashFifo, buf, sizeof(buf), NULL);
+
+	if (argc >= 2) {
+		loc = strtoul(argv[1], NULL, 10);
+//		FIFO_peekSetLocation(&g_cli.logFlashFifo, -loc);
+	}
+
+	while (size) {
+		ret = DBG_PRINT_decode(&decoder, buf, size, decodedBuf, &decodedSize, NULL);
+		totalPopped		+= size;
+		totalDecoded	+= decodedSize;
+		if (ret) {
+			uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, decodedBuf, decodedSize);
+			
+		}
+		size = FIFO_peekNext(&g_cli.logFlashFifo, buf, sizeof(buf), NULL);
+	}
+
+	//_flush();
+
+	PRINT("\ntotal popped %d decoded %d\n", totalPopped, totalDecoded);
+	return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-	DEBUG_MENU_CMD("ver",			NULL,		NULL, dbgVer)
-	DEBUG_MENU_CMD("ps",			NULL,		NULL, dbgPs)
+	DEBUG_MENU_CMD("ver",		NULL,		NULL, dbgVer)
+	DEBUG_MENU_CMD("ps",		NULL,		NULL, dbgPs)
+	DEBUG_MENU_CMD("tail",	NULL,		NULL, dbgLogTail)
 	DEBUG_MENU_DIR("log", NULL)
-		DEBUG_MENU_CMD("init",	NULL,		NULL, dbgLogInit)
-		DEBUG_MENU_CMD("r",		NULL,		NULL, dbgLogRead)
-		DEBUG_MENU_CMD("w",		NULL,		NULL, dbgLogWrite)
-		DEBUG_MENU_CMD("e",		NULL,		NULL, dbgLogErase)
+		DEBUG_MENU_CMD("clear",		NULL,		NULL, dbgLogClear)
+		DEBUG_MENU_CMD("recover",	NULL,		NULL, dbgLogRecover)
+		DEBUG_MENU_CMD("r",			NULL,		NULL, dbgLogRead)
+		DEBUG_MENU_CMD("w",			NULL,		NULL, dbgLogWrite)
+		DEBUG_MENU_CMD("e",			NULL,		NULL, dbgLogErase)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
