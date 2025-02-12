@@ -446,9 +446,7 @@ static bool dbgLogTail(uint8_t argc, char** argv)
 	uint32_t	totalPopped = 0;
 	uint32_t	totalDecoded = 0;
 
-	int32_t	loc = 8000;
-
-	//_flush();
+	int32_t	loc = 1000;
 
 	DBG_PRINT_decodeInit(&decoder);
 
@@ -456,8 +454,10 @@ static bool dbgLogTail(uint8_t argc, char** argv)
 
 	if (argc >= 2) {
 		loc = strtoul(argv[1], NULL, 10);
-//		FIFO_peekSetLocation(&g_cli.logFlashFifo, -loc);
 	}
+
+	PRINT("printing last %d bytes\n", loc);
+	FIFO_peekSetLocation(&g_cli.logFlashFifo, -loc);
 
 	while (size) {
 		ret = DBG_PRINT_decode(&decoder, buf, size, decodedBuf, &decodedSize, NULL);
@@ -469,8 +469,6 @@ static bool dbgLogTail(uint8_t argc, char** argv)
 		}
 		size = FIFO_peekNext(&g_cli.logFlashFifo, buf, sizeof(buf), NULL);
 	}
-
-	//_flush();
 
 	PRINT("\ntotal popped %d decoded %d\n", totalPopped, totalDecoded);
 	return true;
