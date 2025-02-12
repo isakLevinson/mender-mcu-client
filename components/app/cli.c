@@ -35,7 +35,7 @@ static struct {
 	FIFO			logFlashFifo;
 
 	uint8_t			logBuf[1024];
-	uint32_t		erasedSector
+	uint32_t		erasedSector;
 #endif
 } g_cli;
 
@@ -89,32 +89,42 @@ uint64_t _getTime(void)
 #if USE_FLASH_LOG
 static void _flashRead(void* pArg, uint32_t addr, uint8_t* o_pData, uint16_t size)
 {
-	int err;
+	esp_err_t	err;
 
-	//addr += QSPI_PARTITION_LOG_START;
+	if (!g_cli.logPartition) {
+		return;
+	}
 
-//	err = qspi_read(o_pData, size, addr);
-
+	err =  esp_partition_read(g_cli.logPartition, addr, o_pData, size);
 }
 
 static void _flashWrite(void* pArg, uint32_t addr, uint8_t* i_pData, uint16_t size)
 {
-	int				err;
-	static uint32_t	lastAddr;
+	esp_err_t	err;
 
-	//addr += QSPI_PARTITION_LOG_START;
-
-	if (g_cli.erasedSector != ((addr + size) & ~0xfff)) {
-		g_cli.erasedSector = ((addr + size) & ~0xfff);
-		//qspi_erase_sector((addr + size) / 0x1000);
+	if (!g_cli.logPartition) {
+		return;
 	}
 
-	//err = qspi_write(i_pData, size, addr);
+	const uint32_t	sectorSize = g_cli.logPartition->erase_size;
+	const uint32_t	eraseMask = sectorSize-1;
+
+	if (g_cli.erasedSector != ((addr + size) & ~eraseMask)) {
+		g_cli.erasedSector = ((addr + size) & ~eraseMask);
+
+		err = esp_partition_erase_range(g_cli.logPartition, g_cli.erasedSector, sectorSize);
+	}
+
+	err = esp_partition_write(g_cli.logPartition, addr, i_pData, size);
 }
 
 static bool _logInit(void)
 {
 	g_cli.logPartition  = esp_partition_find_first(0x40, 2, NULL);
+
+	if (!g_cli.logPartition) {
+		return false;
+	}
 
 	FIFO_CONFIG   configRamLog = {
 		.type			= FIFO_MSG_TYPE_STREAM,
@@ -134,6 +144,8 @@ static bool _logInit(void)
 		.reservedSpace	= 16,
 		.pName			= "logFlash",
 	};
+
+	configFlashLog.size = g_cli.logPartition->size;
 
 	FIFO_init(&g_cli.logRamFifo,	&configRamLog);
 	FIFO_init(&g_cli.logFlashFifo,	&configFlashLog);
@@ -285,7 +297,73 @@ static bool dbgLogInit(uint8_t argc, char** argv)
 		return true;
 	}
 
-	PRINT("found partition '%s' at offset 0x%x with size 0x%x\n", g_cli.logPartition->label, g_cli.logPartition->address, g_cli.logPartition->size);
+	PRINT("log partition '%s' chip:%x offset:%x size:%x, erase_size:%x\n",
+		g_cli.logPartition->label,
+		g_cli.logPartition->flash_chip,
+		g_cli.logPartition->address,
+		g_cli.logPartition->size,
+		g_cli.logPartition->erase_size);
+
+	return true;
+}
+
+static bool dbgLogRead(uint8_t argc, char** argv)
+{
+	uint32_t	addr;
+	uint32_t	size = 16;
+	uint8_t		buf[256];
+
+	if (argc < 2) {
+		return false;
+	}
+
+	addr	= strtoul(argv[1], NULL, 16);
+
+	if (argc >= 3) {
+		size = strtoul(argv[2], NULL, 16);
+	}
+	
+	_flashRead(NULL, addr, buf, size);
+	PRINT_BUF(NULL, PRINT_BUF_STYLE_HEX_SIZE_NL, buf, size);
+
+	return true;
+}
+
+static bool dbgLogWrite(uint8_t argc, char** argv)
+{
+	uint32_t	addr;
+	uint8_t		buf[256];
+	uint16_t	size = sizeof(buf);
+
+	if (argc < 3) {
+		return false;
+	}
+
+	addr	= strtoul(argv[1], NULL, 16);
+	DBG_PRINT_hex2buf(argv[2], buf, &size);
+
+	_flashWrite(NULL, addr, buf, size);
+
+	return true;
+}
+
+static bool dbgLogErase(uint8_t argc, char** argv)
+{
+	esp_err_t	err;
+	uint32_t	addr;
+
+	if (argc < 2) {
+		return false;
+	}
+
+	addr	= strtoul(argv[1], NULL, 16);
+
+	PRINT("erasing addr:%x, size:%x\n", addr, g_cli.logPartition->erase_size);
+
+	err = esp_partition_erase_range(g_cli.logPartition, addr, g_cli.logPartition->erase_size);
+	if (ESP_OK != err) {
+		PRINT("failed %d\n", err);
+	}
 
 	return true;
 }
@@ -294,7 +372,12 @@ static bool dbgLogInit(uint8_t argc, char** argv)
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_CMD("ver",			NULL,		NULL, dbgVer)
 	DEBUG_MENU_CMD("ps",			NULL,		NULL, dbgPs)
-	DEBUG_MENU_CMD("logInit",		NULL,		NULL, dbgLogInit)
+	DEBUG_MENU_DIR("log", NULL)
+		DEBUG_MENU_CMD("init",	NULL,		NULL, dbgLogInit)
+		DEBUG_MENU_CMD("r",		NULL,		NULL, dbgLogRead)
+		DEBUG_MENU_CMD("w",		NULL,		NULL, dbgLogWrite)
+		DEBUG_MENU_CMD("e",		NULL,		NULL, dbgLogErase)
+	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
 
@@ -317,7 +400,7 @@ bool	CLI_init(void)
 
 	g_cli.mutex = xSemaphoreCreateMutex();
 
-	//_logInit();
+	_logInit();
 
 	DBG_PRINT_decodeInit(&g_cli.decoder);
 	DBG_PRINT_init(&dbgPrintCfg);
