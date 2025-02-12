@@ -174,7 +174,6 @@ error:
 	return NULL;
 }
 
-
 bool CFG_factoryGetPrivateKey(char** o_ppStr)
 {
 	const cJSON*  object;

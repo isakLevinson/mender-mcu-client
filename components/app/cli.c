@@ -34,7 +34,7 @@ static struct {
 	FIFO			logRamFifo;
 	FIFO			logFlashFifo;
 
-	uint8_t			logBuf[1024];
+	uint8_t			logBuf[8192];
 	uint32_t		erasedSector;
 #endif
 } g_cli;
@@ -65,6 +65,12 @@ static bool _puts(uint8_t devBitmap, char* i_pStr, uint16_t size)
 			uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, decodedBuf, decodedSize);
 		}
 	}
+
+#if USE_FLASH_LOG
+	if (devBitmap & DBG_OUT_STREAM_DEVICE_MASK_LOG) {
+		FIFO_push(&g_cli.logRamFifo, i_pStr, size);
+	}
+#endif
 
 	return true;
 }
@@ -154,7 +160,7 @@ static bool _logInit(void)
 }
 #endif
 
-static void _task(void* arg)
+static void _taskCli(void* arg)
 {
 	char c;
 	size_t length;
@@ -166,6 +172,40 @@ static void _task(void* arg)
 		if (length) {
 			DBG_MENU_handler(c);
 		}
+	}
+
+	vTaskDelete(NULL);
+}
+
+static void _taskLog(void* arg)
+{
+	uint16_t	popedSize;
+	uint8_t		buf[512];
+	uint16_t    decodedSize;
+
+	while (true) {
+		vTaskDelay(10);
+//		INFO("calling FIFO_peekLast\n");
+		popedSize = FIFO_peekLast(&g_cli.logRamFifo, buf, sizeof(buf), NULL);
+//		INFO("popedSize: %d\n", popedSize);
+
+#if 1
+		if (popedSize < 256) {
+			continue;
+		}
+		while (popedSize > 0) {
+			popedSize &= 0xfffc;
+
+			if (!popedSize) {
+				continue;;
+			}
+
+			FIFO_push(&g_cli.logFlashFifo, buf, popedSize);
+			FIFO_pop(&g_cli.logRamFifo, NULL, popedSize);
+
+			popedSize = FIFO_peekLast(&g_cli.logRamFifo, buf, sizeof(buf), NULL);
+		}
+#endif
 	}
 
 	vTaskDelete(NULL);
@@ -418,10 +458,17 @@ bool	CLI_init(void)
 	uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
 	uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, str, strlen(str));
 
-	ret = xTaskCreate(_task, "cli", 8192, NULL, 8, NULL);
+	ret = xTaskCreate(_taskCli, "cli", 8192, NULL, 8, NULL);
 	if (ret != pdPASS) {
 		//ERROR
 		return false;
 	}
+
+	ret = xTaskCreate(_taskLog, "log", 8192, NULL, 8, NULL);
+	if (ret != pdPASS) {
+		//ERROR
+		return false;
+	}
+
 	return true;
 }
