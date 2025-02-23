@@ -64,19 +64,19 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 	object = cJSON_GetObjectItemCaseSensitive(json, "cert");
 	if (object) {
 		INFO("cert: %s\n", object->valuestring);
-		NVS_set_certificate(object->valuestring);
+		NVS_set(NVS_KEY_CERT,  object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "sync_dns");
 	if (object) {
 		INFO("sync_dns: %s\n", object->valuestring);
-		NVS_set_sync_dns(object->valuestring);
+		NVS_set(NVS_KEY_SYNC_DNS, object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "sync_port");
 	if (object) {
 		INFO("sync_port: %s\n", object->valuestring);
-		NVS_set_sync_port(object->valuestring);
+		NVS_set(NVS_KEY_SYNC_PORT, object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");
