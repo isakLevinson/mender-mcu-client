@@ -32,7 +32,11 @@
 #include <protocol_examples_common.h>
 
 #include "main.h"
+#include "nvs.h"
 
+#ifndef CONFIG_MENDER_SERVER_HOST
+#define CONFIG_MENDER_SERVER_HOST "https://hosted.mender.io"
+#endif /* CONFIG_MENDER_SERVER_HOST */
 
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
 #ifdef CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER
@@ -43,6 +47,8 @@
 static struct {
 	esp_app_desc_t	running_app_info;
 	bool			active;
+	char			url[128];
+	char			token[64];
 } g_mender;
 
 static mender_err_t network_connect_cb(void)
@@ -648,7 +654,7 @@ static void _init(void)
 	mender_client_config_t    mender_client_config    = { .identity                     = identity,
 	                              .artifact_name                = artifact_name,
 	                              .device_type                  = device_type,
-	                              .host                         = NULL,
+	                              .host                         = CONFIG_MENDER_SERVER_HOST,
 	                              .tenant_token                 = NULL,
 	                              .authentication_poll_interval = 0,
 	                              .update_poll_interval         = -1,	// only attempt once
@@ -661,6 +667,12 @@ static void _init(void)
 	                              .deployment_status      = deployment_status_cb,
 	                              .restart                = restart_cb
 	                          };
+
+	NVS_get(NVS_KEY_OTA_URL, g_mender.url);
+	NVS_get(NVS_KEY_OTA_TOKEN, g_mender.token);
+	//mender_client_config.host 			= g_mender.url;
+	//mender_client_config.tenant_token	= g_mender.token;
+
 	ESP_ERROR_CHECK(mender_client_init(&mender_client_config, &mender_client_callbacks));
 	INFO("Mender client initialized\n");
 
@@ -906,6 +918,6 @@ void MENDER_init(void)
 {
 	DBG_TREE_add("/",		g_menu);
 
-	//	_init();
-	//	_start();
+	_init();
+	_start();
 }

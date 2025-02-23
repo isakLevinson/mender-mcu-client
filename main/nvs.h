@@ -2,7 +2,6 @@
 
 #include <sys_def.h>
 
-#define NVS_NAMESPACE      "cfg"
 #define NVS_KEY_SSID       "ssid"
 #define NVS_KEY_PASSWD     "passwd"
 #define NVS_KEY_CERT       "cert"
@@ -11,6 +10,7 @@
 #define NVS_KEY_MDNS       "mdns"
 #define NVS_KEY_MDNS       "mdns"
 #define NVS_KEY_OTA_URL    "ota_url"
+#define NVS_KEY_OTA_TOKEN  "ota_tocken"
 
 void NVS_init(void);
 bool NVS_eraseAll(void);
