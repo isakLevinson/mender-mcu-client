@@ -87,13 +87,15 @@
 
 #endif
 
-#define NVS_NAMESPACE_WIFI      "wifi"
-#define NVS_KEY_WIFI_SSID       "ssid"
-#define NVS_KEY_WIFI_PASSWD     "passwd"
-#define NVS_KEY_WIFI_CERT       "cert"
-#define NVS_KEY_WIFI_SYNC_DNS   "sync_dns"
-#define NVS_KEY_WIFI_SYNC_PORT  "sync_port"
-#define NVS_KEY_WIFI_MDNS       "mdns"
+#define NVS_NAMESPACE      "cfg"
+#define NVS_KEY_SSID       "ssid"
+#define NVS_KEY_PASSWD     "passwd"
+#define NVS_KEY_CERT       "cert"
+#define NVS_KEY_SYNC_DNS   "sync_dns"
+#define NVS_KEY_SYNC_PORT  "sync_port"
+#define NVS_KEY_MDNS       "mdns"
+#define NVS_KEY_MDNS       "mdns"
+#define NVS_KEY_OTA_URL    "ota_url"
 
 #define MENU_LOC      
 #define DBG_MENU_STORAGE    

@@ -23,9 +23,9 @@ static bool _get(char* key,  char* val)
 	nvs_handle_t handle;
 	size_t length = WIFI_MAX_NVS_LENGTH;
 
-	err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READONLY, &handle);
+	err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
 	if (err != ESP_OK) {
-		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE_WIFI, err);
+		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE, err);
 		return false;
 	}
 
@@ -52,7 +52,7 @@ static bool _set(char* key,  char* val)
 	char    str[WIFI_MAX_NVS_LENGTH];
 	size_t  length;
 
-	err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READWRITE, &handle);
+	err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
 	if (err != ESP_OK) {
 		ERROR("nvs_open failed\n");
 		return false;
@@ -90,10 +90,10 @@ bool NVS_get_ssid(char* ssid, char* passwd)
 {
 	bool    ret = true;
 
-	ret = _get(NVS_KEY_WIFI_SSID, ssid);
+	ret = _get(NVS_KEY_SSID, ssid);
 	if (!ret)  {
 		ERROR("get ssid failed\n");
-		_set(NVS_KEY_WIFI_SSID, "");
+		_set(NVS_KEY_SSID, "");
 		return false;
 	}
 
@@ -101,10 +101,10 @@ bool NVS_get_ssid(char* ssid, char* passwd)
 		return false;
 	}
 
-	ret = _get(NVS_KEY_WIFI_PASSWD, passwd);
+	ret = _get(NVS_KEY_PASSWD, passwd);
 	if (!ret)  {
 		ERROR("get passwd failed\n");
-		_set(NVS_KEY_WIFI_PASSWD, "");
+		_set(NVS_KEY_PASSWD, "");
 		return false;
 	}
 
@@ -119,11 +119,11 @@ bool NVS_set_ssid(char* ssid, char* passwd)
 {
 	bool    ret = true;
 
-	ret = _set(NVS_KEY_WIFI_SSID, ssid);
+	ret = _set(NVS_KEY_SSID, ssid);
 	if (!ret)  {
 		ERROR("set ssid failed\n");
 	}
-	ret &= _set(NVS_KEY_WIFI_PASSWD, passwd);
+	ret &= _set(NVS_KEY_PASSWD, passwd);
 	if (!ret)  {
 		ERROR("set passwd failed\n");
 	}
@@ -135,7 +135,7 @@ bool NVS_get_certificate(char* val)
 {
 	bool    ret = true;
 
-	ret = _get(NVS_KEY_WIFI_CERT, val);
+	ret = _get(NVS_KEY_CERT, val);
 	if (!ret)  {
 		ERROR("get cert failed\n");
 	}
@@ -147,7 +147,7 @@ bool NVS_set_certificate(char* val)
 {
 	bool    ret = true;
 
-	ret = _set(NVS_KEY_WIFI_CERT, val);
+	ret = _set(NVS_KEY_CERT, val);
 	if (!ret)  {
 		ERROR("set cert failed\n");
 	}
@@ -159,7 +159,7 @@ bool NVS_get_sync_dns(char* val)
 {
 	bool    ret = true;
 
-	ret = _get(NVS_KEY_WIFI_SYNC_DNS, val);
+	ret = _get(NVS_KEY_SYNC_DNS, val);
 	if (!ret)  {
 		ERROR("get cert failed\n");
 	}
@@ -171,7 +171,7 @@ bool NVS_set_sync_dns(char* val)
 {
 	bool    ret = true;
 
-	ret = _set(NVS_KEY_WIFI_SYNC_DNS, val);
+	ret = _set(NVS_KEY_SYNC_DNS, val);
 	if (!ret)  {
 		ERROR("set cert failed\n");
 	}
@@ -183,7 +183,7 @@ bool NVS_get_sync_port(char* val)
 {
 	bool    ret = true;
 
-	ret = _get(NVS_KEY_WIFI_SYNC_PORT, val);
+	ret = _get(NVS_KEY_SYNC_PORT, val);
 	if (!ret)  {
 		ERROR("get cert failed\n");
 	}
@@ -195,7 +195,7 @@ bool NVS_set_sync_port(char* val)
 {
 	bool    ret = true;
 
-	ret = _set(NVS_KEY_WIFI_SYNC_PORT, val);
+	ret = _set(NVS_KEY_SYNC_PORT, val);
 	if (!ret)  {
 		ERROR("set cert failed\n");
 	}
@@ -209,9 +209,9 @@ bool NVS_eraseAll(void)
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
 
-	err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READWRITE, &handle);
+	err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
 	if (err != ESP_OK) {
-		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE_WIFI, err);
+		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE, err);
 		return false;
 	}
 
