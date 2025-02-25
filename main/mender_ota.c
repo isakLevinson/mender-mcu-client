@@ -33,6 +33,7 @@
 
 #include "main.h"
 #include "nvs.h"
+#include "cmd.h"
 
 #ifndef CONFIG_MENDER_SERVER_HOST
 #define CONFIG_MENDER_SERVER_HOST "https://hosted.mender.io"
@@ -160,7 +161,13 @@ static mender_err_t restart_cb(void)
 	INFO("restart_cb\n");
 	/* Application is responsible to shutdown and restart the system now */
 
-	NVS_set(NVS_KEY_OTA_UPDATED,  "1");
+//	NVS_set(NVS_KEY_OTA_UPDATED,  "1");
+
+	CMD_sendVersionEvent();
+	
+	// just give anogh time for the event to be sent
+	vTaskDelay(500);
+
 	_restart();
 
 	return MENDER_OK;
@@ -671,9 +678,9 @@ static void _init(void)
 	                              .restart                = restart_cb
 	                          };
 
-	NVS_get(NVS_KEY_OTA_URL, g_mender.url);
-	NVS_get(NVS_KEY_OTA_TOKEN, g_mender.token);
-	//mender_client_config.host 			= g_mender.url;
+	NVS_get(NVS_KEY_OTA_URL, g_mender.url);			// CONFIG_MENDER_SERVER_HOST
+	NVS_get(NVS_KEY_OTA_TOKEN, g_mender.token);		// CONFIG_MENDER_SERVER_TENANT_TOKEN
+	//mender_client_config.host 		= g_mender.url;
 	//mender_client_config.tenant_token	= g_mender.token;
 
 	ESP_ERROR_CHECK(mender_client_init(&mender_client_config, &mender_client_callbacks));
