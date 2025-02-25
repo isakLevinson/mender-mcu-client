@@ -51,6 +51,11 @@ static struct {
 	char			token[64];
 } g_mender;
 
+static void _restart(void)
+{
+	esp_restart();
+}
+
 static mender_err_t network_connect_cb(void)
 {
 	INFO("Mender client connect network\n");
@@ -154,6 +159,9 @@ static mender_err_t restart_cb(void)
 {
 	INFO("restart_cb\n");
 	/* Application is responsible to shutdown and restart the system now */
+
+	NVS_set(NVS_KEY_OTA_UPDATED,  "1");
+	_restart();
 
 	return MENDER_OK;
 }
@@ -562,11 +570,6 @@ shell_close_cb(void)
 
 #endif /* CONFIG_MENDER_CLIENT_TROUBLESHOOT_SHELL */
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT */
-
-static void _restart(void)
-{
-	esp_restart();
-}
 
 bool MENDER_version(char** ppProjName, char** ppVer, uint32_t* pNumbers)
 {

@@ -189,6 +189,7 @@ static esp_err_t ws_handler(httpd_req_t* req)
 		ERROR("httpd_ws_recv_frame failed to get frame len with %d\n", ret);
 		return ret;
 	}
+
 	if (ws_pkt.len) {
 		INFO("ws frame len is %d\n", ws_pkt.len);
 		buf = calloc(1, ws_pkt.len + 1);
@@ -204,15 +205,21 @@ static esp_err_t ws_handler(httpd_req_t* req)
 			return ret;
 		}
 	}
-	if (ws_pkt.type == HTTPD_WS_TYPE_PONG) {
-		INFO("WS PONG message\n");
-		free(buf);
-		return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle),
-		        httpd_req_to_sockfd(req));
-		return 0;
 
-	} else {
-		if ((ws_pkt.type == HTTPD_WS_TYPE_TEXT) || (ws_pkt.type == HTTPD_WS_TYPE_BINARY)) {
+	switch (ws_pkt.type) {
+		case HTTPD_WS_TYPE_PING:
+			INFO("WS PING frame, Replying PONG\n");
+			ws_pkt.type = HTTPD_WS_TYPE_PONG;
+			break;
+
+		case HTTPD_WS_TYPE_PONG:
+			INFO("WS PONG message\n");
+			free(buf);
+			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), httpd_req_to_sockfd(req));
+			break;
+
+		case HTTPD_WS_TYPE_TEXT:
+		case HTTPD_WS_TYPE_BINARY:
 			INFO("WS Received packet with message: type=%d\n", ws_pkt.type);
 			INFO_BUF("WS Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
 
@@ -232,21 +239,23 @@ static esp_err_t ws_handler(httpd_req_t* req)
 
 				CMD_processMessage(&context, type, ws_pkt.payload + 3, ws_pkt.len - 3);
 			}
-		}
+			break;
 
-		if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
-			INFO("WS PING frame, Replying PONG\n");
-			ws_pkt.type = HTTPD_WS_TYPE_PONG;
-		} else if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
+		case HTTPD_WS_TYPE_CLOSE:
 			ws_pkt.len = 0;
 			ws_pkt.payload = NULL;
-		}
+			break;
 
-		INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d\n", req->handle,
-		    httpd_req_to_sockfd(req), httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
-		free(buf);
-		return ret;
+		case HTTPD_WS_TYPE_CONTINUE:
+			INFO("continue\n");
+			break;
 	}
+
+	INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d\n",
+		req->handle,
+		httpd_req_to_sockfd(req),
+		httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
+
 	free(buf);
 	return ESP_OK;
 }

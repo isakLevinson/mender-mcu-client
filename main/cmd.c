@@ -70,8 +70,8 @@
 	rsp(EVT_OTA_STATUS,				0x16,	uint8_t		ok;)			\
 	rsp(EVT_BATTERY_STATUS,			0x17,	uint8_t		voltage;		\
 											uint8_t		soc;)			\
-// *INDENT-ON*
 
+// *INDENT-ON*
 
 #define CMD_ENUM_REQ(cmd, op, fields)	CMD_REQ_ ## cmd = (op),
 #define CMD_ENUM_RSP(cmd, op, fields)	CMD_RSP_ ## cmd = (op),
@@ -256,6 +256,25 @@ break;
 }
 }
 
+static void _sendVersion(CMD_CONTEXT* i_pContext)
+{
+	CMD_RSPBUF_VER	rsp;
+	uint32_t		numbers[3];
+
+	MENDER_version(NULL, NULL, numbers);
+
+	memset(rsp.hash, 0, sizeof(rsp.hash));
+	rsp.sw[0] = numbers[0];
+	rsp.sw[1] = numbers[1];
+	rsp.sw[2] = numbers[2];
+
+	rsp.hw[0] = HW_VERSION_MAJOR;
+	rsp.hw[1] = HW_VERSION_MINOR;
+	rsp.hw[2] = HW_VERSION_BUILD;
+
+	_sendResp(i_pContext, CMD_RSP_VER, &rsp, sizeof(rsp));
+}
+
 static bool _init(void)
 {
 bool	ret;
@@ -293,25 +312,12 @@ return true;
 
 static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint16_t size)
 {
-CMD_RSPBUF_VER	rsp;
-uint32_t		numbers[3];
 
-INFO("VER\n");
+	INFO("VER\n");
 
-MENDER_version(NULL, NULL, numbers);
+	_sendVersion(i_pContext);
 
-memset(rsp.hash, 0, sizeof(rsp.hash));
-rsp.sw[0] = numbers[0];
-rsp.sw[1] = numbers[1];
-rsp.sw[2] = numbers[2];
-
-rsp.hw[0] = HW_VERSION_MAJOR;
-rsp.hw[1] = HW_VERSION_MINOR;
-rsp.hw[2] = HW_VERSION_BUILD;
-
-_sendResp(i_pContext, CMD_RSP_VER, &rsp, sizeof(rsp));
-
-return true;
+	return true;
 }
 
 static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq, uint16_t size)
@@ -552,6 +558,14 @@ _sendResp(&g_cmd.streamContext, CMD_RSP_EVT_BATTERY_STATUS, &rsp, sizeof(rsp));
 
 return true;
 }
+
+bool CMD_sendVersionEvent(void)
+{
+	_sendVersion(&g_cmd.streamContext);
+
+	return true;
+}
+
 
 void CMD_parseInit(void)
 {

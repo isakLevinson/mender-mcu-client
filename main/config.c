@@ -79,6 +79,18 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 		NVS_set(NVS_KEY_SYNC_PORT, object->valuestring);
 	}
 
+	object = cJSON_GetObjectItemCaseSensitive(json, "mender_url");
+	if (object) {
+		INFO("mender_url: %s\n", object->valuestring);
+		NVS_set(NVS_KEY_OTA_URL, object->valuestring);
+	}
+
+	object = cJSON_GetObjectItemCaseSensitive(json, "mender_token");
+	if (object) {
+		INFO("mender_url: %s\n", object->valuestring);
+		NVS_set(NVS_KEY_OTA_TOKEN, object->valuestring);
+	}
+
 	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");
 	if (object) {
 		if (cJSON_IsArray(object)) {
