@@ -8,6 +8,8 @@
 
 #include "esp_partition.h"
 #include "esp_flash.h"
+#include "esp_efuse_chip.h"
+#include "esp_efuse.h"
 #include "driver/gpio.h"
 
 #include "cJSON.h"

@@ -284,7 +284,7 @@ static esp_err_t events_handler(httpd_req_t* req)
 		if (g_server.ota_new_restart) {
 			INFO("OTA was recently performed. Sending new version notification\n");
 			g_server.ota_new_restart = false;
-			CMD_sendVersionEvent();
+			CMD_sendOtaStatusEvent();
 			NVS_set(NVS_KEY_OTA_UPDATED,  "0");
 		}
 
@@ -459,8 +459,8 @@ bool wss_start_server(void)
 
 	extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
 	extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
-	conf.cacert_pem = ca_cert_start;
-	conf.cacert_len = ca_cert_end - ca_cert_start;
+//	conf.cacert_pem = ca_cert_start;
+//	conf.cacert_len = ca_cert_end - ca_cert_start;
 
 	conf.httpd.keep_alive_enable = false;
 	conf.session_tickets = true;
