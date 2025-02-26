@@ -23,48 +23,51 @@ LOG_MODULE_REGISTER(mender, CONFIG_MENDER_LOG_LEVEL);
 #include "mender-log.h"
 
 mender_err_t
-mender_log_init(void) {
+mender_log_init(void)
+{
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }
 
 mender_err_t
-mender_log_print(uint8_t level, const char *filename, const char *function, int line, char *format, ...) {
+mender_log_print(uint8_t level, const char* filename, const char* function, int line, char* format, ...)
+{
 
-    (void)function;
-    char log[256] = { 0 };
+	(void)function;
+	char log[256] = { 0 };
 
-    /* Format message */
-    va_list args;
-    va_start(args, format);
-    vsnprintf(log, sizeof(log), format, args);
-    va_end(args);
+	/* Format message */
+	va_list args;
+	va_start(args, format);
+	vsnprintf(log, sizeof(log), format, args);
+	va_end(args);
 
-    /* Switch depending log level */
-    switch (level) {
-        case MENDER_LOG_LEVEL_ERR:
-            LOG_ERR("%s (%d): %s", filename, line, log);
-            break;
-        case MENDER_LOG_LEVEL_WRN:
-            LOG_WRN("%s (%d): %s", filename, line, log);
-            break;
-        case MENDER_LOG_LEVEL_INF:
-            LOG_INF("%s (%d): %s", filename, line, log);
-            break;
-        case MENDER_LOG_LEVEL_DBG:
-            LOG_DBG("%s (%d): %s", filename, line, log);
-            break;
-        default:
-            break;
-    }
+	/* Switch depending log level */
+	switch (level) {
+		case MENDER_LOG_LEVEL_ERR:
+			LOG_ERR("%s (%d): %s", filename, line, log);
+			break;
+		case MENDER_LOG_LEVEL_WRN:
+			LOG_WRN("%s (%d): %s", filename, line, log);
+			break;
+		case MENDER_LOG_LEVEL_INF:
+			LOG_INF("%s (%d): %s", filename, line, log);
+			break;
+		case MENDER_LOG_LEVEL_DBG:
+			LOG_DBG("%s (%d): %s", filename, line, log);
+			break;
+		default:
+			break;
+	}
 
-    return MENDER_OK;
+	return MENDER_OK;
 }
 
 mender_err_t
-mender_log_exit(void) {
+mender_log_exit(void)
+{
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }
