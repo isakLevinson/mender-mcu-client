@@ -41,6 +41,7 @@ static const size_t max_clients = 4;
 
 static struct {
 	httpd_handle_t handle;
+	bool			ota_new_restart;
 	struct {
 		int mallocCount;
 	} dbg;
@@ -263,11 +264,13 @@ static esp_err_t ws_handler(httpd_req_t* req)
 static esp_err_t events_handler(httpd_req_t* req)
 {
 	esp_err_t ret;
+	httpd_ws_frame_t ws_pkt;
+	uint8_t* buf = NULL;
 
 	TRACE("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
 	if (req->method == HTTP_GET) {
-		INFO("EVENTS HTTP_GET Handshake done, the new connection was opened\n");
+		INFO("EVENTS HTTP_GET\n");
 		events_async_resp.hd  = req->handle;
 		events_async_resp.fd  = httpd_req_to_sockfd(req);
 
@@ -278,11 +281,16 @@ static esp_err_t events_handler(httpd_req_t* req)
 
 		CMD_setStreamContext(&context);
 
+		if (g_server.ota_new_restart) {
+			INFO("OTA was recently performed. Sending new version notification\n");
+			g_server.ota_new_restart = false;
+			CMD_sendVersionEvent();
+			NVS_set(NVS_KEY_OTA_UPDATED,  "0");
+		}
+
 		return ESP_OK;
 	}
 
-	httpd_ws_frame_t ws_pkt;
-	uint8_t* buf = NULL;
 	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
 
 	// First receive the full ws message
@@ -314,6 +322,7 @@ static esp_err_t events_handler(httpd_req_t* req)
 
 	}
 	free(buf);
+
 	return ESP_OK;
 }
 
@@ -402,12 +411,23 @@ static const httpd_uri_t uri_events = {
 
 bool wss_start_server(void)
 {
+	bool		ret;
+	esp_err_t	err;
+	char		buf[32];
+
 	if (g_server.handle) {
 		WARN("wss already started\n");
 		return false;
 	}
 	// Start the httpd server
 	INFO("Starting server");
+
+	ret = NVS_get(NVS_KEY_OTA_UPDATED,  buf);
+	if (ret) {
+		if (!strcmp(buf, "1")) {
+			g_server.ota_new_restart = true;
+		}
+	}
 
 	// Create and initialize the keep-alive configuration
 	wss_keep_alive_config_t keep_alive_config = KEEP_ALIVE_CONFIG_DEFAULT();
@@ -445,9 +465,9 @@ bool wss_start_server(void)
 	conf.httpd.keep_alive_enable = false;
 	conf.session_tickets = true;
 
-	esp_err_t ret = httpd_ssl_start(&g_server.handle, &conf);
-	if (ESP_OK != ret) {
-		ERROR("Error starting server!\n");
+	err = httpd_ssl_start(&g_server.handle, &conf);
+	if (ESP_OK != err) {
+		ERROR("Error starting server %d\n", err);
 		return NULL;
 	}
 
