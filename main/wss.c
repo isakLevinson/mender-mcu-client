@@ -430,8 +430,8 @@ bool wss_start_server(void)
 
 	extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
 	extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
-	conf.cacert_pem = ca_cert_start;
-	conf.cacert_len = ca_cert_end - ca_cert_start;
+//	conf.cacert_pem = ca_cert_start;
+//	conf.cacert_len = ca_cert_end - ca_cert_start;
 
 	conf.httpd.keep_alive_enable = false;
 	conf.session_tickets = true;
