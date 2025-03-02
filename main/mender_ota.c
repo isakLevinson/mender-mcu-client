@@ -162,8 +162,8 @@ static mender_err_t restart_cb(void)
 	/* Application is responsible to shutdown and restart the system now */
 
 	NVS_set(NVS_KEY_OTA_UPDATED,  "1");
-//	CMD_sendVersionEvent();
-	
+	//	CMD_sendVersionEvent();
+
 	// just give anogh time for the event to be sent
 	vTaskDelay(500);
 

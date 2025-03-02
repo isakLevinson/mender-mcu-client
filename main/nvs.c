@@ -159,10 +159,11 @@ static bool dbgOpen(uint8_t argc, char** argv)
 	esp_err_t   err = ESP_OK;
 
 	if (argc < 2) {
-		return false;
+		err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &g_nvs.nvsHandle);
+	} else {
+		err = nvs_open(argv[1], NVS_READWRITE, &g_nvs.nvsHandle);
 	}
 
-	err = nvs_open(argv[1], NVS_READWRITE, &g_nvs.nvsHandle);
 	ESP_printErr(err);
 
 	return true;

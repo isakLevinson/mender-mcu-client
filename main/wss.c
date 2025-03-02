@@ -253,9 +253,9 @@ static esp_err_t ws_handler(httpd_req_t* req)
 	}
 
 	INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d\n",
-		req->handle,
-		httpd_req_to_sockfd(req),
-		httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
+	    req->handle,
+	    httpd_req_to_sockfd(req),
+	    httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
 
 	free(buf);
 	return ESP_OK;
@@ -459,8 +459,8 @@ bool wss_start_server(void)
 
 	extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
 	extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
-//	conf.cacert_pem = ca_cert_start;
-//	conf.cacert_len = ca_cert_end - ca_cert_start;
+	//	conf.cacert_pem = ca_cert_start;
+	//	conf.cacert_len = ca_cert_end - ca_cert_start;
 
 	conf.httpd.keep_alive_enable = false;
 	conf.session_tickets = true;
