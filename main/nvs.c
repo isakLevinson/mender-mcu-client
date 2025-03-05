@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <nvs_flash.h>
 #include "main.h"
+#include "nvs.h"
 
 #define	NVS_NAMESPACE      "cfg"
 #define WIFI_MAX_NVS_LENGTH    128
@@ -17,7 +18,13 @@ static struct {
 	nvs_handle_t nvsHandle;
 } g_nvs;
 
-bool NVS_get(char* key,  char* val)
+nvs_arr_t g_id[] = {
+	NVS_LIST(NVS_ARR)
+//	[0] = {.pId = "aa", .pDefault ="bb"},
+//	[0] = {.pId = "aa", .pDefault ="bb"},
+};
+
+static bool _get(char* key,  char* val)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
@@ -45,7 +52,7 @@ exit:
 	return ret;
 }
 
-bool NVS_set(char* key,  char* val)
+static bool _set(char* key,  char* val)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
@@ -87,14 +94,31 @@ exit:
 	return ret;
 }
 
+bool NVS_get(nvs_id_t id,  char* val)
+{
+	bool	ret;
+
+	ret = _get(g_id[id].pId, val);
+
+	return ret;
+}
+
+bool NVS_set(nvs_id_t id,  char* val)
+{
+	bool	ret;
+
+	ret = _set(g_id[id].pId, val);
+
+	return ret;
+}
+
 bool NVS_get_ssid(char* ssid, char* passwd)
 {
 	bool    ret = true;
 
-	ret = NVS_get(NVS_KEY_SSID, ssid);
+	ret = NVS_get(nvs_id_ssid, ssid);
 	if (!ret)  {
 		ERROR("get ssid failed\n");
-		NVS_set(NVS_KEY_SSID, "");
 		return false;
 	}
 
@@ -102,10 +126,9 @@ bool NVS_get_ssid(char* ssid, char* passwd)
 		return false;
 	}
 
-	ret = NVS_get(NVS_KEY_PASSWD, passwd);
+	ret = NVS_get(nvs_id_passwd, passwd);
 	if (!ret)  {
 		ERROR("get passwd failed\n");
-		NVS_set(NVS_KEY_PASSWD, "");
 		return false;
 	}
 
@@ -120,11 +143,11 @@ bool NVS_set_ssid(char* ssid, char* passwd)
 {
 	bool    ret = true;
 
-	ret = NVS_set(NVS_KEY_SSID, ssid);
+	ret = NVS_set(nvs_id_ssid, ssid);
 	if (!ret)  {
 		ERROR("set ssid failed\n");
 	}
-	ret &= NVS_set(NVS_KEY_PASSWD, passwd);
+	ret &= NVS_set(nvs_id_passwd, passwd);
 	if (!ret)  {
 		ERROR("set passwd failed\n");
 	}
