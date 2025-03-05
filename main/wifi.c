@@ -479,11 +479,15 @@ static void _init(void)
 		WIFI_stopAp();
 		WIFI_sta_connect(ssid, passwd);
 	} else {
+		INFO("WSS and PASSWD not set\n");
 		ret = CFG_factoryGetSn(NULL);
 		if (ret) {
+			INFO("Starting AP and configuration server\n");
 			// start AP and configuration server only if SN has not been set yet
 			WIFI_startAp();
 			wss_config_start();
+		} else {
+			WARN("SN not set. will not start configuration mode\n");
 		}
 	}
 

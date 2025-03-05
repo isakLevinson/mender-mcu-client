@@ -501,6 +501,7 @@ bool wss_config_start(void)
 		.handle_ws_control_frames = true
 	};
 
+	INFO("wss_config_start\n");
 	httpd_register_uri_handler(g_server.handle, &uri_config);
 
 	return true;
