@@ -677,10 +677,10 @@ static void _init(void)
 	                              .restart                = restart_cb
 	                          };
 
-	NVS_get(nvs_id_ota_url, g_mender.url);			// CONFIG_MENDER_SERVER_HOST
-	NVS_get(nvs_id_ota_token, g_mender.token);		// CONFIG_MENDER_SERVER_TENANT_TOKEN
-	//mender_client_config.host 		= g_mender.url;
-	//mender_client_config.tenant_token	= g_mender.token;
+	NVS_get(nvs_id_ota_url, g_mender.url);
+	NVS_get(nvs_id_ota_token, g_mender.token);
+	mender_client_config.host 			= g_mender.url;
+	mender_client_config.tenant_token	= g_mender.token;
 
 	ESP_ERROR_CHECK(mender_client_init(&mender_client_config, &mender_client_callbacks));
 	INFO("Mender client initialized\n");

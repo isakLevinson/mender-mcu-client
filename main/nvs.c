@@ -20,8 +20,6 @@ static struct {
 
 nvs_arr_t g_id[] = {
 	NVS_LIST(NVS_ARR)
-//	[0] = {.pId = "aa", .pDefault ="bb"},
-//	[0] = {.pId = "aa", .pDefault ="bb"},
 };
 
 static bool _get(char* key,  char* val)
@@ -33,13 +31,14 @@ static bool _get(char* key,  char* val)
 
 	err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
 	if (err != ESP_OK) {
-		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE, err);
+		ERROR("nvs_open <%s> failed\n",  NVS_NAMESPACE);
+		ESP_printErr(err);
 		return false;
 	}
 
 	err =  nvs_get_str(handle, key, val, &length);
 	if (err != ESP_OK) {
-		ERROR("nvs_get_str <%s> failed\n", key);
+		//ERROR("nvs_get_str <%s> failed\n", key);
 		ret = false;
 		goto exit;
 	}
@@ -47,7 +46,7 @@ static bool _get(char* key,  char* val)
 
 exit:
 	nvs_close(handle);
-	ESP_printErr(err);
+	//ESP_printErr(err);
 
 	return ret;
 }
@@ -99,8 +98,16 @@ bool NVS_get(nvs_id_t id,  char* val)
 	bool	ret;
 
 	ret = _get(g_id[id].pId, val);
+	if (!ret) {
+		if (g_id[id].pDefault) {
+			strcpy(val, g_id[id].pDefault);
+			return true;
+		} else {
+			return false;
+		}
+	}
 
-	return ret;
+	return true;
 }
 
 bool NVS_set(nvs_id_t id,  char* val)
@@ -300,8 +307,11 @@ static bool dbgList(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
+	bool		ret;
 	esp_err_t   err = ESP_OK;
 	nvs_stats_t nvs_stats;
+	uint8_t		i;
+	char		val[128];
 
 	err =  nvs_get_stats(NULL, &nvs_stats);
 	if (err == ESP_OK) {
@@ -309,6 +319,15 @@ static bool dbgStatus(uint8_t argc, char** argv)
 		PRINT("free_entries   : %d\n", nvs_stats.free_entries);
 		PRINT("total_entries  : %d\n", nvs_stats.total_entries);
 		PRINT("namespace_count: %d\n", nvs_stats.namespace_count);
+	}
+
+	for (i=nvs_id_invalid+1; i<sizeof(g_id)/sizeof(g_id[0]); i++) {
+		ret = NVS_get(i, val);
+		if (ret) {
+			PRINT("%2d %-12s: %s\n", i, g_id[i].pId, val);
+		} else {
+			PRINT("%2d %-12s: NULL\n", i, g_id[i].pId);
+		}
 	}
 
 	return true;
