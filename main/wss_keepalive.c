@@ -87,13 +87,19 @@ static bool update_client(wss_keep_alive_t h, int sockfd, uint64_t timestamp)
 
 static bool remove_client(wss_keep_alive_t h, int sockfd)
 {
+	INFO("remove_client %x\n", sockfd);
+
 	for (int i = 0; i < h->max_clients; ++i) {
+		TRACE("%d: %d %d", i, h->clients[i].type, h->clients[i].fd);
+
 		if (h->clients[i].type == CLIENT_ACTIVE && h->clients[i].fd == sockfd) {
 			h->clients[i].type = NO_CLIENT;
 			h->clients[i].fd = -1;
 			return true;
 		}
 	}
+
+	ERROR("remove_client failed %x\n", sockfd);
 	return false;
 }
 static bool add_new_client(wss_keep_alive_t h, int sockfd)

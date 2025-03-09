@@ -277,8 +277,8 @@ bool CFG_default(void)
 	NVS_eraseAll();
 	WIFI_sta_disconnect();
 	WIFI_startAp();
+	
 	wss_config_start();
-
 	return true;
 }
 
@@ -545,24 +545,32 @@ static bool dbgDefault(uint8_t argc, char** argv)
 	if ('1' != argv[1][0]) {
 		return false;
 	}
-
+	
 	CFG_default();
-
 	return true;
 }
+
+
+static bool dbgStartServer(uint8_t argc, char** argv)
+{
+	wss_config_start();
+	return true;
+}
+
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("config", NULL)
-		DEBUG_MENU_CMD("status",    NULL,		NULL, dbgStatus)
-		DEBUG_MENU_CMD("findPart",  NULL,		NULL, dbgFindPart)
-		DEBUG_MENU_CMD("rd",	    NULL,		NULL, dbgRead)
-		DEBUG_MENU_CMD("json",	    NULL,		NULL, dbgJson)
-		DEBUG_MENU_CMD("getObject", NULL,		NULL, dbgGetObject)
-		DEBUG_MENU_CMD("freeObject",NULL,		NULL, dbgFreeObject)
-		DEBUG_MENU_CMD("config",	"<json>",	NULL, dbgConfig)
-		DEBUG_MENU_CMD("gpio",		NULL,		NULL, dbgGpio)
-		DEBUG_MENU_CMD("default",	NULL,		NULL, dbgDefault)
+		DEBUG_MENU_CMD("status",    	NULL,		NULL, dbgStatus)
+		DEBUG_MENU_CMD("findPart",  	NULL,		NULL, dbgFindPart)
+		DEBUG_MENU_CMD("rd",	    	NULL,		NULL, dbgRead)
+		DEBUG_MENU_CMD("json",	    	NULL,		NULL, dbgJson)
+		DEBUG_MENU_CMD("getObject", 	NULL,		NULL, dbgGetObject)
+		DEBUG_MENU_CMD("freeObject",	NULL,		NULL, dbgFreeObject)
+		DEBUG_MENU_CMD("config",		"<json>",	NULL, dbgConfig)
+		DEBUG_MENU_CMD("gpio",			NULL,		NULL, dbgGpio)
+		DEBUG_MENU_CMD("default",		NULL,		NULL, dbgDefault)
+		DEBUG_MENU_CMD("startServer",	NULL,		NULL, dbgStartServer)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
