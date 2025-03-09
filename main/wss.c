@@ -41,6 +41,7 @@ static const size_t max_clients = 4;
 
 static struct {
 	httpd_handle_t handle;
+	bool			ota_new_restart;
 	struct {
 		int mallocCount;
 	} dbg;
@@ -189,6 +190,7 @@ static esp_err_t ws_handler(httpd_req_t* req)
 		ERROR("httpd_ws_recv_frame failed to get frame len with %d\n", ret);
 		return ret;
 	}
+
 	if (ws_pkt.len) {
 		INFO("ws frame len is %d\n", ws_pkt.len);
 		buf = calloc(1, ws_pkt.len + 1);
@@ -204,15 +206,21 @@ static esp_err_t ws_handler(httpd_req_t* req)
 			return ret;
 		}
 	}
-	if (ws_pkt.type == HTTPD_WS_TYPE_PONG) {
-		INFO("WS PONG message\n");
-		free(buf);
-		return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle),
-		        httpd_req_to_sockfd(req));
-		return 0;
 
-	} else {
-		if ((ws_pkt.type == HTTPD_WS_TYPE_TEXT) || (ws_pkt.type == HTTPD_WS_TYPE_BINARY)) {
+	switch (ws_pkt.type) {
+		case HTTPD_WS_TYPE_PING:
+			INFO("WS PING frame, Replying PONG\n");
+			ws_pkt.type = HTTPD_WS_TYPE_PONG;
+			break;
+
+		case HTTPD_WS_TYPE_PONG:
+			INFO("WS PONG message\n");
+			free(buf);
+			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), httpd_req_to_sockfd(req));
+			break;
+
+		case HTTPD_WS_TYPE_TEXT:
+		case HTTPD_WS_TYPE_BINARY:
 			INFO("WS Received packet with message: type=%d\n", ws_pkt.type);
 			INFO_BUF("WS Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
 
@@ -232,21 +240,23 @@ static esp_err_t ws_handler(httpd_req_t* req)
 
 				CMD_processMessage(&context, type, ws_pkt.payload + 3, ws_pkt.len - 3);
 			}
-		}
+			break;
 
-		if (ws_pkt.type == HTTPD_WS_TYPE_PING) {
-			INFO("WS PING frame, Replying PONG\n");
-			ws_pkt.type = HTTPD_WS_TYPE_PONG;
-		} else if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
+		case HTTPD_WS_TYPE_CLOSE:
 			ws_pkt.len = 0;
 			ws_pkt.payload = NULL;
-		}
+			break;
 
-		INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d\n", req->handle,
-		    httpd_req_to_sockfd(req), httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
-		free(buf);
-		return ret;
+		case HTTPD_WS_TYPE_CONTINUE:
+			INFO("continue\n");
+			break;
 	}
+
+	INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d\n",
+	    req->handle,
+	    httpd_req_to_sockfd(req),
+	    httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
+
 	free(buf);
 	return ESP_OK;
 }
@@ -254,11 +264,13 @@ static esp_err_t ws_handler(httpd_req_t* req)
 static esp_err_t events_handler(httpd_req_t* req)
 {
 	esp_err_t ret;
+	httpd_ws_frame_t ws_pkt;
+	uint8_t* buf = NULL;
 
 	TRACE("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
 	if (req->method == HTTP_GET) {
-		INFO("EVENTS HTTP_GET Handshake done, the new connection was opened\n");
+		INFO("EVENTS HTTP_GET\n");
 		events_async_resp.hd  = req->handle;
 		events_async_resp.fd  = httpd_req_to_sockfd(req);
 
@@ -269,11 +281,16 @@ static esp_err_t events_handler(httpd_req_t* req)
 
 		CMD_setStreamContext(&context);
 
+		if (g_server.ota_new_restart) {
+			INFO("OTA was recently performed. Sending new version notification\n");
+			g_server.ota_new_restart = false;
+			CMD_sendOtaStatusEvent();
+			NVS_set(nvs_id_ota_updated,  "0");
+		}
+
 		return ESP_OK;
 	}
 
-	httpd_ws_frame_t ws_pkt;
-	uint8_t* buf = NULL;
 	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
 
 	// First receive the full ws message
@@ -305,6 +322,7 @@ static esp_err_t events_handler(httpd_req_t* req)
 
 	}
 	free(buf);
+
 	return ESP_OK;
 }
 
@@ -393,12 +411,23 @@ static const httpd_uri_t uri_events = {
 
 bool wss_start_server(void)
 {
+	bool		ret;
+	esp_err_t	err;
+	char		buf[32];
+
 	if (g_server.handle) {
 		WARN("wss already started\n");
 		return false;
 	}
 	// Start the httpd server
 	INFO("Starting server");
+
+	ret = NVS_get(nvs_id_ota_updated,  buf);
+	if (ret) {
+		if (!strcmp(buf, "1")) {
+			g_server.ota_new_restart = true;
+		}
+	}
 
 	// Create and initialize the keep-alive configuration
 	wss_keep_alive_config_t keep_alive_config = KEEP_ALIVE_CONFIG_DEFAULT();
@@ -430,15 +459,15 @@ bool wss_start_server(void)
 
 	extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
 	extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
-	conf.cacert_pem = ca_cert_start;
-	conf.cacert_len = ca_cert_end - ca_cert_start;
+	//	conf.cacert_pem = ca_cert_start;
+	//	conf.cacert_len = ca_cert_end - ca_cert_start;
 
 	conf.httpd.keep_alive_enable = false;
 	conf.session_tickets = true;
 
-	esp_err_t ret = httpd_ssl_start(&g_server.handle, &conf);
-	if (ESP_OK != ret) {
-		ERROR("Error starting server!\n");
+	err = httpd_ssl_start(&g_server.handle, &conf);
+	if (ESP_OK != err) {
+		ERROR("Error starting server %d\n", err);
 		return NULL;
 	}
 
@@ -472,6 +501,7 @@ bool wss_config_start(void)
 		.handle_ws_control_frames = true
 	};
 
+	INFO("wss_config_start\n");
 	httpd_register_uri_handler(g_server.handle, &uri_config);
 
 	return true;

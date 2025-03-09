@@ -67,7 +67,9 @@
 											uint16_t	pressure[4];)	\
 	req(OTA_START,					0x14,	char		url[0];)		\
 	rsp(OTA_START,					0x15,	uint8_t		ok;)			\
-	rsp(EVT_OTA_STATUS,				0x16,	uint8_t		ok;)			\
+	rsp(EVT_OTA_STATUS,				0x16,	uint8_t		hash[8];		\
+											uint8_t		sw[3];			\
+											uint8_t		hw[3];)			\
 	rsp(EVT_BATTERY_STATUS,			0x17,	uint8_t		voltage;		\
 											uint8_t		soc;)			\
 
@@ -293,10 +295,10 @@ static bool	_req_KEEPALIVE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KEEPALIVE* i
 
 static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint16_t size)
 {
+	INFO("VER\n");
+
 	CMD_RSPBUF_VER	rsp;
 	uint32_t		numbers[3];
-
-	INFO("VER\n");
 
 	MENDER_version(NULL, NULL, numbers);
 
@@ -537,8 +539,8 @@ static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i
 		return true;
 	}
 #endif
-	evt.ok = 1;
-	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
+	//	evt.ok = 1;
+	//	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &evt, sizeof(evt));
 	return true;
 }
 
@@ -549,6 +551,27 @@ bool CMD_sendBatteryEvent(uint8_t soc, uint8_t voltage)
 	rsp.soc		= soc;
 	rsp.voltage	= voltage;
 	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_BATTERY_STATUS, &rsp, sizeof(rsp));
+
+	return true;
+}
+
+bool CMD_sendOtaStatusEvent(void)
+{
+	CMD_RSPBUF_EVT_OTA_STATUS	rsp;
+	uint32_t		numbers[3];
+
+	MENDER_version(NULL, NULL, numbers);
+
+	memset(rsp.hash, 0, sizeof(rsp.hash));
+	rsp.sw[0] = numbers[0];
+	rsp.sw[1] = numbers[1];
+	rsp.sw[2] = numbers[2];
+
+	rsp.hw[0] = HW_VERSION_MAJOR;
+	rsp.hw[1] = HW_VERSION_MINOR;
+	rsp.hw[2] = HW_VERSION_BUILD;
+
+	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &rsp, sizeof(rsp));
 
 	return true;
 }

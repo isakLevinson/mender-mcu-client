@@ -19,6 +19,7 @@ void	CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 void	CMD_parseInit(void);
 bool	CMD_setStreamContext(CMD_CONTEXT* i_pContext);
 bool	CMD_sendBatteryEvent(uint8_t soc, uint8_t voltage);
+bool	CMD_sendOtaStatusEvent(void);
 
 #ifdef __cplusplus
 }

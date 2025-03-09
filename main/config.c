@@ -8,6 +8,8 @@
 
 #include "esp_partition.h"
 #include "esp_flash.h"
+#include "esp_efuse_chip.h"
+#include "esp_efuse.h"
 #include "driver/gpio.h"
 
 #include "cJSON.h"
@@ -64,19 +66,31 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 	object = cJSON_GetObjectItemCaseSensitive(json, "cert");
 	if (object) {
 		INFO("cert: %s\n", object->valuestring);
-		NVS_set(NVS_KEY_CERT,  object->valuestring);
+		NVS_set(nvs_id_cert,  object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "sync_dns");
 	if (object) {
 		INFO("sync_dns: %s\n", object->valuestring);
-		NVS_set(NVS_KEY_SYNC_DNS, object->valuestring);
+		NVS_set(nvs_id_sync_dns, object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "sync_port");
 	if (object) {
 		INFO("sync_port: %s\n", object->valuestring);
-		NVS_set(NVS_KEY_SYNC_PORT, object->valuestring);
+		NVS_set(nvs_id_sync_port, object->valuestring);
+	}
+
+	object = cJSON_GetObjectItemCaseSensitive(json, "mender_url");
+	if (object) {
+		INFO("mender_url: %s\n", object->valuestring);
+		NVS_set(nvs_id_ota_url, object->valuestring);
+	}
+
+	object = cJSON_GetObjectItemCaseSensitive(json, "mender_token");
+	if (object) {
+		INFO("mender_url: %s\n", object->valuestring);
+		NVS_set(nvs_id_ota_token, object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");
