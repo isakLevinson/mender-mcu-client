@@ -276,7 +276,6 @@ static esp_ip4_addr_t  wifi_getSelfIp(void)
 
 static void task_tcp_server(void* arg)
 {
-	bool	ret;
 	esp_ip4_addr_t  ip  = {0};
 
 	INFO("TCP started\n");
@@ -425,7 +424,6 @@ static bool _startAp(void)
 static void _init(void)
 {
 	static bool initialized = false;
-	esp_err_t err;
 	bool    ret = true;
 	char    ssid[32];
 	char    passwd[32];
@@ -479,11 +477,15 @@ static void _init(void)
 		WIFI_stopAp();
 		WIFI_sta_connect(ssid, passwd);
 	} else {
+		INFO("WSS and PASSWD not set\n");
 		ret = CFG_factoryGetSn(NULL);
 		if (ret) {
+			INFO("Starting AP and configuration server\n");
 			// start AP and configuration server only if SN has not been set yet
 			WIFI_startAp();
 			wss_config_start();
+		} else {
+			WARN("SN not set. will not start configuration mode\n");
 		}
 	}
 

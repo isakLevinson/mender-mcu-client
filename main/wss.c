@@ -253,9 +253,9 @@ static esp_err_t ws_handler(httpd_req_t* req)
 	}
 
 	INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d\n",
-		req->handle,
-		httpd_req_to_sockfd(req),
-		httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
+	    req->handle,
+	    httpd_req_to_sockfd(req),
+	    httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
 
 	free(buf);
 	return ESP_OK;
@@ -285,7 +285,7 @@ static esp_err_t events_handler(httpd_req_t* req)
 			INFO("OTA was recently performed. Sending new version notification\n");
 			g_server.ota_new_restart = false;
 			CMD_sendOtaStatusEvent();
-			NVS_set(NVS_KEY_OTA_UPDATED,  "0");
+			NVS_set(nvs_id_ota_updated,  "0");
 		}
 
 		return ESP_OK;
@@ -328,11 +328,8 @@ static esp_err_t events_handler(httpd_req_t* req)
 
 static esp_err_t _config_handler(httpd_req_t* req)
 {
-	//esp_err_t ret;
 	bool    ret;
 	char    buf[256];
-	bool    validSsid;
-	bool    validPasswd;
 
 	INFO("config_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
@@ -342,6 +339,10 @@ static esp_err_t _config_handler(httpd_req_t* req)
 	}
 
 	ret = httpd_req_recv(req, buf, req->content_len);
+	if (!ret) {
+		ERROR("httpd_req_recv failed\n");
+		return ESP_FAIL;
+	}
 
 	//INFO("POST: %.*s\n", ret, buf);
 	INFO_BUF("/config POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
@@ -422,7 +423,7 @@ bool wss_start_server(void)
 	// Start the httpd server
 	INFO("Starting server");
 
-	ret = NVS_get(NVS_KEY_OTA_UPDATED,  buf);
+	ret = NVS_get(nvs_id_ota_updated,  buf);
 	if (ret) {
 		if (!strcmp(buf, "1")) {
 			g_server.ota_new_restart = true;
@@ -457,10 +458,12 @@ bool wss_start_server(void)
 	conf.prvtkey_pem = prvtkey_pem_start;
 	conf.prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
 
+#if 0
 	extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
 	extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
-//	conf.cacert_pem = ca_cert_start;
-//	conf.cacert_len = ca_cert_end - ca_cert_start;
+	conf.cacert_pem = ca_cert_start;
+	conf.cacert_len = ca_cert_end - ca_cert_start;
+#endif
 
 	conf.httpd.keep_alive_enable = false;
 	conf.session_tickets = true;
@@ -501,6 +504,7 @@ bool wss_config_start(void)
 		.handle_ws_control_frames = true
 	};
 
+	INFO("wss_config_start\n");
 	httpd_register_uri_handler(g_server.handle, &uri_config);
 
 	return true;

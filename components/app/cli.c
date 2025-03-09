@@ -18,7 +18,6 @@
 #include "esp_partition.h"
 
 #include "main.h"
-
 #include "cli.h"
 #include "fifo.h"
 #include "mender_ota.h"
@@ -102,6 +101,7 @@ static void _flashRead(void* pArg, uint32_t addr, uint8_t* o_pData, uint16_t siz
 	}
 
 	err =  esp_partition_read(g_cli.logPartition, addr, o_pData, size);
+	ESP_printErr(err);
 }
 
 static void _flashWrite(void* pArg, uint32_t addr, uint8_t* i_pData, uint16_t size)
@@ -113,15 +113,17 @@ static void _flashWrite(void* pArg, uint32_t addr, uint8_t* i_pData, uint16_t si
 	}
 
 	const uint32_t	sectorSize = g_cli.logPartition->erase_size;
-	const uint32_t	eraseMask = sectorSize-1;
+	const uint32_t	eraseMask = sectorSize - 1;
 
 	if (g_cli.erasedSector != ((addr + size) & ~eraseMask)) {
 		g_cli.erasedSector = ((addr + size) & ~eraseMask);
 
 		err = esp_partition_erase_range(g_cli.logPartition, g_cli.erasedSector, sectorSize);
+		ESP_printErr(err);
 	}
 
 	err = esp_partition_write(g_cli.logPartition, addr, i_pData, size);
+	ESP_printErr(err);
 }
 
 static bool _logInit(void)
@@ -181,13 +183,12 @@ static void _taskLog(void* arg)
 {
 	uint16_t	popedSize;
 	uint8_t		buf[512];
-	uint16_t    decodedSize;
 
 	while (true) {
 		vTaskDelay(10);
-//		INFO("calling FIFO_peekLast\n");
+		//		INFO("calling FIFO_peekLast\n");
 		popedSize = FIFO_peekLast(&g_cli.logRamFifo, buf, sizeof(buf), NULL);
-//		INFO("popedSize: %d\n", popedSize);
+		//		INFO("popedSize: %d\n", popedSize);
 
 #if 1
 		if (popedSize < 256) {
@@ -337,11 +338,11 @@ static bool dbgLogStatus(uint8_t argc, char** argv)
 	}
 
 	PRINT("log partition '%s' chip:%x offset:%x size:%x, erase_size:%x\n",
-		g_cli.logPartition->label,
-		g_cli.logPartition->flash_chip,
-		g_cli.logPartition->address,
-		g_cli.logPartition->size,
-		g_cli.logPartition->erase_size);
+	    g_cli.logPartition->label,
+	    g_cli.logPartition->flash_chip,
+	    g_cli.logPartition->address,
+	    g_cli.logPartition->size,
+	    g_cli.logPartition->erase_size);
 
 	return true;
 }
@@ -388,7 +389,7 @@ static bool dbgLogRead(uint8_t argc, char** argv)
 	if (argc >= 3) {
 		size = strtoul(argv[2], NULL, 16);
 	}
-	
+
 	_flashRead(NULL, addr, buf, size);
 	PRINT_BUF(NULL, PRINT_BUF_STYLE_HEX_SIZE_NL, buf, size);
 
@@ -465,7 +466,7 @@ static bool dbgLogTail(uint8_t argc, char** argv)
 		totalDecoded	+= decodedSize;
 		if (ret) {
 			uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, decodedBuf, decodedSize);
-			
+
 		}
 		size = FIFO_peekNext(&g_cli.logFlashFifo, buf, sizeof(buf), NULL);
 	}
@@ -480,6 +481,7 @@ DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_CMD("ps",		NULL,		NULL, dbgPs)
 	DEBUG_MENU_CMD("tail",	NULL,		NULL, dbgLogTail)
 	DEBUG_MENU_DIR("log", NULL)
+		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgLogStatus)
 		DEBUG_MENU_CMD("clear",		NULL,		NULL, dbgLogClear)
 		DEBUG_MENU_CMD("recover",	NULL,		NULL, dbgLogRecover)
 		DEBUG_MENU_CMD("r",			NULL,		NULL, dbgLogRead)

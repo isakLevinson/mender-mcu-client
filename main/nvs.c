@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <nvs_flash.h>
 #include "main.h"
+#include "nvs.h"
 
 #define	NVS_NAMESPACE      "cfg"
 #define WIFI_MAX_NVS_LENGTH    128
@@ -17,7 +18,11 @@ static struct {
 	nvs_handle_t nvsHandle;
 } g_nvs;
 
-bool NVS_get(char* key,  char* val)
+nvs_arr_t g_id[] = {
+	NVS_LIST(NVS_ARR)
+};
+
+static bool _get(char* key,  char* val)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
@@ -26,13 +31,14 @@ bool NVS_get(char* key,  char* val)
 
 	err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
 	if (err != ESP_OK) {
-		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE, err);
+		ERROR("nvs_open <%s> failed\n",  NVS_NAMESPACE);
+		ESP_printErr(err);
 		return false;
 	}
 
 	err =  nvs_get_str(handle, key, val, &length);
 	if (err != ESP_OK) {
-		ERROR("nvs_get_str <%s> failed\n", key);
+		//ERROR("nvs_get_str <%s> failed\n", key);
 		ret = false;
 		goto exit;
 	}
@@ -40,12 +46,12 @@ bool NVS_get(char* key,  char* val)
 
 exit:
 	nvs_close(handle);
-	ESP_printErr(err);
+	//ESP_printErr(err);
 
 	return ret;
 }
 
-bool NVS_set(char* key,  char* val)
+static bool _set(char* key,  char* val)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
@@ -87,14 +93,39 @@ exit:
 	return ret;
 }
 
+bool NVS_get(nvs_id_t id,  char* val)
+{
+	bool	ret;
+
+	ret = _get(g_id[id].pId, val);
+	if (!ret) {
+		if (g_id[id].pDefault) {
+			strcpy(val, g_id[id].pDefault);
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool NVS_set(nvs_id_t id,  char* val)
+{
+	bool	ret;
+
+	ret = _set(g_id[id].pId, val);
+
+	return ret;
+}
+
 bool NVS_get_ssid(char* ssid, char* passwd)
 {
 	bool    ret = true;
 
-	ret = NVS_get(NVS_KEY_SSID, ssid);
+	ret = NVS_get(nvs_id_ssid, ssid);
 	if (!ret)  {
 		ERROR("get ssid failed\n");
-		NVS_set(NVS_KEY_SSID, "");
 		return false;
 	}
 
@@ -102,10 +133,9 @@ bool NVS_get_ssid(char* ssid, char* passwd)
 		return false;
 	}
 
-	ret = NVS_get(NVS_KEY_PASSWD, passwd);
+	ret = NVS_get(nvs_id_passwd, passwd);
 	if (!ret)  {
 		ERROR("get passwd failed\n");
-		NVS_set(NVS_KEY_PASSWD, "");
 		return false;
 	}
 
@@ -120,11 +150,11 @@ bool NVS_set_ssid(char* ssid, char* passwd)
 {
 	bool    ret = true;
 
-	ret = NVS_set(NVS_KEY_SSID, ssid);
+	ret = NVS_set(nvs_id_ssid, ssid);
 	if (!ret)  {
 		ERROR("set ssid failed\n");
 	}
-	ret &= NVS_set(NVS_KEY_PASSWD, passwd);
+	ret &= NVS_set(nvs_id_passwd, passwd);
 	if (!ret)  {
 		ERROR("set passwd failed\n");
 	}
@@ -134,7 +164,6 @@ bool NVS_set_ssid(char* ssid, char* passwd)
 
 bool NVS_eraseAll(void)
 {
-	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
 
@@ -159,10 +188,11 @@ static bool dbgOpen(uint8_t argc, char** argv)
 	esp_err_t   err = ESP_OK;
 
 	if (argc < 2) {
-		return false;
+		err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &g_nvs.nvsHandle);
+	} else {
+		err = nvs_open(argv[1], NVS_READWRITE, &g_nvs.nvsHandle);
 	}
 
-	err = nvs_open(argv[1], NVS_READWRITE, &g_nvs.nvsHandle);
 	ESP_printErr(err);
 
 	return true;
@@ -276,8 +306,11 @@ static bool dbgList(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
+	bool		ret;
 	esp_err_t   err = ESP_OK;
 	nvs_stats_t nvs_stats;
+	uint8_t		i;
+	char		val[128];
 
 	err =  nvs_get_stats(NULL, &nvs_stats);
 	if (err == ESP_OK) {
@@ -285,6 +318,15 @@ static bool dbgStatus(uint8_t argc, char** argv)
 		PRINT("free_entries   : %d\n", nvs_stats.free_entries);
 		PRINT("total_entries  : %d\n", nvs_stats.total_entries);
 		PRINT("namespace_count: %d\n", nvs_stats.namespace_count);
+	}
+
+	for (i = nvs_id_invalid + 1; i < sizeof(g_id) / sizeof(g_id[0]); i++) {
+		ret = NVS_get(i, val);
+		if (ret) {
+			PRINT("%2d %-12s: %s\n", i, g_id[i].pId, val);
+		} else {
+			PRINT("%2d %-12s: NULL\n", i, g_id[i].pId);
+		}
 	}
 
 	return true;
