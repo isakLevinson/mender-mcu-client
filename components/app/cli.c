@@ -15,30 +15,40 @@
 #include "driver/uart.h"
 #include "esp_timer.h"
 #include "esp_mac.h"
+#include "esp_partition.h"
 
 #include "main.h"
 
 #include "cli.h"
 #include "fifo.h"
+#include "mender_ota.h"
 
 static struct {
-	//osThreadId			taskHandle;
 	DBG_DECODE_INST		decoder;
 	SemaphoreHandle_t	mutex;
 	TaskStatus_t 		taskStatusArray[32];
-} g_cliDb;
 
+#if USE_FLASH_LOG
+	const esp_partition_t* logPartition;
+
+	FIFO			logRamFifo;
+	FIFO			logFlashFifo;
+
+	uint8_t			logBuf[8192];
+	uint32_t		erasedSector;
+#endif
+} g_cli;
 
 static uint32_t _mutexGet(uint8_t devMask)
 {
-	xSemaphoreTake(g_cliDb.mutex, portMAX_DELAY);
+	xSemaphoreTake(g_cli.mutex, portMAX_DELAY);
 
 	return true;
 }
 
 static bool _mutexPost(uint8_t devMask, uint32_t state)
 {
-	xSemaphoreGive(g_cliDb.mutex);
+	xSemaphoreGive(g_cli.mutex);
 
 	return true;
 }
@@ -50,11 +60,17 @@ static bool _puts(uint8_t devBitmap, char* i_pStr, uint16_t size)
 	uint16_t	decodedSize;
 
 	if (devBitmap & DBG_OUT_STREAM_DEVICE_MASK_CLI) {
-		retVal = DBG_PRINT_decode(&g_cliDb.decoder, (uint8_t*)i_pStr, size, decodedBuf, &decodedSize, NULL);
+		retVal = DBG_PRINT_decode(&g_cli.decoder, (uint8_t*)i_pStr, size, decodedBuf, &decodedSize, NULL);
 		if (retVal) {
 			uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, decodedBuf, decodedSize);
 		}
 	}
+
+#if USE_FLASH_LOG
+	if (devBitmap & DBG_OUT_STREAM_DEVICE_MASK_LOG) {
+		FIFO_push(&g_cli.logRamFifo, i_pStr, size);
+	}
+#endif
 
 	return true;
 }
@@ -73,10 +89,78 @@ static void _free(void* i_pBuf)
 
 uint64_t _getTime(void)
 {
-	return esp_timer_get_time();
+	return esp_timer_get_time() / 1000;
 }
 
-static void _task(void* arg)
+#if USE_FLASH_LOG
+static void _flashRead(void* pArg, uint32_t addr, uint8_t* o_pData, uint16_t size)
+{
+	esp_err_t	err;
+
+	if (!g_cli.logPartition) {
+		return;
+	}
+
+	err =  esp_partition_read(g_cli.logPartition, addr, o_pData, size);
+}
+
+static void _flashWrite(void* pArg, uint32_t addr, uint8_t* i_pData, uint16_t size)
+{
+	esp_err_t	err;
+
+	if (!g_cli.logPartition) {
+		return;
+	}
+
+	const uint32_t	sectorSize = g_cli.logPartition->erase_size;
+	const uint32_t	eraseMask = sectorSize-1;
+
+	if (g_cli.erasedSector != ((addr + size) & ~eraseMask)) {
+		g_cli.erasedSector = ((addr + size) & ~eraseMask);
+
+		err = esp_partition_erase_range(g_cli.logPartition, g_cli.erasedSector, sectorSize);
+	}
+
+	err = esp_partition_write(g_cli.logPartition, addr, i_pData, size);
+}
+
+static bool _logInit(void)
+{
+	g_cli.logPartition  = esp_partition_find_first(0x40, 2, NULL);
+
+	if (!g_cli.logPartition) {
+		return false;
+	}
+
+	FIFO_CONFIG   configRamLog = {
+		.type			= FIFO_MSG_TYPE_STREAM,
+		.pBuf			= g_cli.logBuf,
+		.size			= sizeof(g_cli.logBuf),
+		.popOldOnFull	= true,
+		.pName			= "logRam",
+	};
+
+	FIFO_CONFIG   configFlashLog = {
+		.type			= FIFO_MSG_TYPE_STREAM,
+		.size			= 0,//QSPI_PARTITION_LOG_END - QSPI_PARTITION_LOG_START,
+		.pCbRd			= _flashRead,
+		.pCbWr			= _flashWrite,
+		.popOldOnFull	= true,
+		.erasePopped	= true,
+		.reservedSpace	= 16,
+		.pName			= "logFlash",
+	};
+
+	configFlashLog.size = g_cli.logPartition->size;
+
+	FIFO_init(&g_cli.logRamFifo,	&configRamLog);
+	FIFO_init(&g_cli.logFlashFifo,	&configFlashLog);
+
+	return true;
+}
+#endif
+
+static void _taskCli(void* arg)
 {
 	char c;
 	size_t length;
@@ -93,6 +177,40 @@ static void _task(void* arg)
 	vTaskDelete(NULL);
 }
 
+static void _taskLog(void* arg)
+{
+	uint16_t	popedSize;
+	uint8_t		buf[512];
+	uint16_t    decodedSize;
+
+	while (true) {
+		vTaskDelay(10);
+//		INFO("calling FIFO_peekLast\n");
+		popedSize = FIFO_peekLast(&g_cli.logRamFifo, buf, sizeof(buf), NULL);
+//		INFO("popedSize: %d\n", popedSize);
+
+#if 1
+		if (popedSize < 256) {
+			continue;
+		}
+		while (popedSize > 0) {
+			popedSize &= 0xfffc;
+
+			if (!popedSize) {
+				continue;;
+			}
+
+			FIFO_push(&g_cli.logFlashFifo, buf, popedSize);
+			FIFO_pop(&g_cli.logRamFifo, NULL, popedSize);
+
+			popedSize = FIFO_peekLast(&g_cli.logRamFifo, buf, sizeof(buf), NULL);
+		}
+#endif
+	}
+
+	vTaskDelete(NULL);
+}
+
 bool CLI_getc(char* o_pChar)
 {
 	size_t length;
@@ -102,31 +220,30 @@ bool CLI_getc(char* o_pChar)
 	return (length > 0);
 }
 
-
 static bool dbgVer(uint8_t argc, char** argv)
 {
 	int err;
+	char*	proj;
+	char*	ver;
+	uint32_t	numbers[3];
 
-	PRINT("sw:%d.%d.%d\n",
-	    SW_VERSION_MAJOR,
-	    SW_VERSION_MINOR,
-	    SW_VERSION_BUILD);
+	MENDER_version(&proj, &ver, numbers);
+	PRINT("proj: %s\n", proj);
+	PRINT("sw ver: \"%s\" [%d.%d.%d]\n", ver, numbers[0], numbers[1], numbers[2]);
 
 	PRINT("hw:%d.%d.%d\n",
 	    HW_VERSION_MAJOR,
 	    HW_VERSION_MINOR,
 	    HW_VERSION_BUILD);
 
-	//PRINT_BUF("hash",	PRINT_BUF_STYLE_HEX_NL, i_pBuf, size);
-
 	uint8_t mac[6];
-	err = esp_efuse_mac_get_default(mac);
+
+	err = esp_read_mac(mac, ESP_MAC_WIFI_STA);
 	if (err) {
-		ERROR("esp_efuse_mac_get_default failed %d\n", err);
+		ERROR("esp_read_mac failed %d\n", err);
 	} else {
 		PRINT("default MAC %02x%02x%02x%02x%02x%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 	}
-
 
 	return true;
 }
@@ -153,12 +270,12 @@ static bool dbgPs(uint8_t argc, char** argv)
 	for (i = 0; i < uxArraySize; i++) {
 		TaskStatus_t* pTask = &taskStatusArray[i];
 		valid[pTask->xTaskNumber] = true;
-		dt[pTask->xTaskNumber] = pTask->ulRunTimeCounter - g_cliDb.taskStatusArray[pTask->xTaskNumber].ulRunTimeCounter;
+		dt[pTask->xTaskNumber] = pTask->ulRunTimeCounter - g_cli.taskStatusArray[pTask->xTaskNumber].ulRunTimeCounter;
 
-		if (pTask->usStackHighWaterMark < g_cliDb.taskStatusArray[pTask->xTaskNumber].usStackHighWaterMark) {
+		if (pTask->usStackHighWaterMark < g_cli.taskStatusArray[pTask->xTaskNumber].usStackHighWaterMark) {
 			stackReduced[pTask->xTaskNumber] = true;
 		}
-		memcpy(&g_cliDb.taskStatusArray[pTask->xTaskNumber], pTask, sizeof(g_cliDb.taskStatusArray[0]));
+		memcpy(&g_cli.taskStatusArray[pTask->xTaskNumber], pTask, sizeof(g_cli.taskStatusArray[0]));
 	}
 
 	PRINT("id name             S B  P  counter   Stk base stack remaining\n");
@@ -166,13 +283,13 @@ static bool dbgPs(uint8_t argc, char** argv)
 
 	for (i = 0; i < 32; i++) {
 		if (!valid[i]) {
-			memset(&g_cliDb.taskStatusArray[i], 0, sizeof(g_cliDb.taskStatusArray[0]));
+			memset(&g_cli.taskStatusArray[i], 0, sizeof(g_cli.taskStatusArray[0]));
 		}
-		if (!g_cliDb.taskStatusArray[i].xTaskNumber) {
+		if (!g_cli.taskStatusArray[i].xTaskNumber) {
 			continue;
 		}
 
-		TaskStatus_t* pTask = &g_cliDb.taskStatusArray[i];
+		TaskStatus_t* pTask = &g_cli.taskStatusArray[i];
 
 		char	cState = ' ';
 		switch (pTask->eCurrentState) {
@@ -212,10 +329,163 @@ static bool dbgPs(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgLogStatus(uint8_t argc, char** argv)
+{
+	if (!g_cli.logPartition) {
+		PRINT("failed\n");
+		return true;
+	}
+
+	PRINT("log partition '%s' chip:%x offset:%x size:%x, erase_size:%x\n",
+		g_cli.logPartition->label,
+		g_cli.logPartition->flash_chip,
+		g_cli.logPartition->address,
+		g_cli.logPartition->size,
+		g_cli.logPartition->erase_size);
+
+	return true;
+}
+
+static bool dbgLogClear(uint8_t argc, char** argv)
+{
+	esp_err_t	err;
+
+	if (!g_cli.logPartition) {
+		PRINT("failed\n");
+		return true;
+	}
+
+	err = esp_partition_erase_range(g_cli.logPartition, 0, g_cli.logPartition->size);
+	if (ESP_OK != err) {
+		PRINT("erase failed %d\n", err);
+	}
+
+	FIFO_clear(&g_cli.logFlashFifo);
+	FIFO_clear(&g_cli.logRamFifo);
+
+	return true;
+}
+
+static bool dbgLogRecover(uint8_t argc, char** argv)
+{
+	FIFO_recoverPointers(&g_cli.logFlashFifo);
+
+	return true;
+}
+
+static bool dbgLogRead(uint8_t argc, char** argv)
+{
+	uint32_t	addr;
+	uint32_t	size = 16;
+	uint8_t		buf[256];
+
+	if (argc < 2) {
+		return false;
+	}
+
+	addr	= strtoul(argv[1], NULL, 16);
+
+	if (argc >= 3) {
+		size = strtoul(argv[2], NULL, 16);
+	}
+	
+	_flashRead(NULL, addr, buf, size);
+	PRINT_BUF(NULL, PRINT_BUF_STYLE_HEX_SIZE_NL, buf, size);
+
+	return true;
+}
+
+static bool dbgLogWrite(uint8_t argc, char** argv)
+{
+	uint32_t	addr;
+	uint8_t		buf[256];
+	uint16_t	size = sizeof(buf);
+
+	if (argc < 3) {
+		return false;
+	}
+
+	addr	= strtoul(argv[1], NULL, 16);
+	DBG_PRINT_hex2buf(argv[2], buf, &size);
+
+	_flashWrite(NULL, addr, buf, size);
+
+	return true;
+}
+
+static bool dbgLogErase(uint8_t argc, char** argv)
+{
+	esp_err_t	err;
+	uint32_t	addr;
+
+	if (argc < 2) {
+		return false;
+	}
+
+	addr	= strtoul(argv[1], NULL, 16);
+
+	PRINT("erasing addr:%x, size:%x\n", addr, g_cli.logPartition->erase_size);
+
+	err = esp_partition_erase_range(g_cli.logPartition, addr, g_cli.logPartition->erase_size);
+	if (ESP_OK != err) {
+		PRINT("failed %d\n", err);
+	}
+
+	return true;
+}
+
+static bool dbgLogTail(uint8_t argc, char** argv)
+{
+	bool			ret;
+	uint8_t			buf[64];
+	char			decodedBuf[256];
+	uint16_t		size;
+	uint16_t		decodedSize;
+	DBG_DECODE_INST	decoder;
+
+	uint32_t	totalPopped = 0;
+	uint32_t	totalDecoded = 0;
+
+	int32_t	loc = 1000;
+
+	DBG_PRINT_decodeInit(&decoder);
+
+	size = FIFO_peekLast(&g_cli.logFlashFifo, buf, sizeof(buf), NULL);
+
+	if (argc >= 2) {
+		loc = strtoul(argv[1], NULL, 10);
+	}
+
+	PRINT("printing last %d bytes\n", loc);
+	FIFO_peekSetLocation(&g_cli.logFlashFifo, -loc);
+
+	while (size) {
+		ret = DBG_PRINT_decode(&decoder, buf, size, decodedBuf, &decodedSize, NULL);
+		totalPopped		+= size;
+		totalDecoded	+= decodedSize;
+		if (ret) {
+			uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, decodedBuf, decodedSize);
+			
+		}
+		size = FIFO_peekNext(&g_cli.logFlashFifo, buf, sizeof(buf), NULL);
+	}
+
+	PRINT("\ntotal popped %d decoded %d\n", totalPopped, totalDecoded);
+	return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-	DEBUG_MENU_CMD("ver",			NULL,		NULL, dbgVer)
-	DEBUG_MENU_CMD("ps",			NULL,		NULL, dbgPs)
+	DEBUG_MENU_CMD("ver",		NULL,		NULL, dbgVer)
+	DEBUG_MENU_CMD("ps",		NULL,		NULL, dbgPs)
+	DEBUG_MENU_CMD("tail",	NULL,		NULL, dbgLogTail)
+	DEBUG_MENU_DIR("log", NULL)
+		DEBUG_MENU_CMD("clear",		NULL,		NULL, dbgLogClear)
+		DEBUG_MENU_CMD("recover",	NULL,		NULL, dbgLogRecover)
+		DEBUG_MENU_CMD("r",			NULL,		NULL, dbgLogRead)
+		DEBUG_MENU_CMD("w",			NULL,		NULL, dbgLogWrite)
+		DEBUG_MENU_CMD("e",			NULL,		NULL, dbgLogErase)
+	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
 
@@ -226,6 +496,7 @@ bool	CLI_init(void)
 		.cbMutexGet			= _mutexGet,
 		.cbMutexRelease		= _mutexPost,
 		.cbGetTime64		= _getTime,
+		.printTimestamp		= true,
 	};
 
 	DBG_MENU_CONFIG cfg = {
@@ -236,12 +507,12 @@ bool	CLI_init(void)
 		.pfFree		= _free,
 	};
 
-	g_cliDb.mutex = xSemaphoreCreateMutex();
+	g_cli.mutex = xSemaphoreCreateMutex();
 
-	DBG_PRINT_decodeInit(&g_cliDb.decoder);
+	_logInit();
 
+	DBG_PRINT_decodeInit(&g_cli.decoder);
 	DBG_PRINT_init(&dbgPrintCfg);
-
 	DBG_MENU_init(&cfg);
 
 	DBG_PRINT_addMenu();
@@ -256,10 +527,17 @@ bool	CLI_init(void)
 	uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
 	uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, str, strlen(str));
 
-	ret = xTaskCreate(_task, "cli", 8192, NULL, 8, NULL);
+	ret = xTaskCreate(_taskCli, "cli", 8192, NULL, 8, NULL);
 	if (ret != pdPASS) {
 		//ERROR
 		return false;
 	}
+
+	ret = xTaskCreate(_taskLog, "log", 8192, NULL, 8, NULL);
+	if (ret != pdPASS) {
+		//ERROR
+		return false;
+	}
+
 	return true;
 }

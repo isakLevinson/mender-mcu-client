@@ -193,9 +193,9 @@ static bool _init(void)
 		return false;
 	}
 
-	ret = xTaskCreate(_task, "streamer", 8192, NULL, 3, NULL);
+	ret = xTaskCreate(_task, "led", 8192, NULL, 3, NULL);
 	if (ret != pdPASS) {
-		ERROR("create task %s failed\n", "streamer");
+		ERROR("create task %s failed\n", "led");
 		return false;
 	}
 

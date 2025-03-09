@@ -4,3 +4,7 @@
 [submodule "components/dbgterm"]
 	path = components/dbgterm
 	url = ../dbgterm.git
+[submodule "--"]
+	path = components/mender-mcu-client/mender-mcu-client
+	url = ../mender_ota_esp.git
+

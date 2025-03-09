@@ -10,22 +10,23 @@
 #include <nvs_flash.h>
 #include "main.h"
 
-#define   WIFI_MAX_NVS_LENGTH    128
+#define	NVS_NAMESPACE      "cfg"
+#define WIFI_MAX_NVS_LENGTH    128
 
 static struct {
 	nvs_handle_t nvsHandle;
 } g_nvs;
 
-static bool _get(char* key,  char* val)
+bool NVS_get(char* key,  char* val)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
 	size_t length = WIFI_MAX_NVS_LENGTH;
 
-	err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READONLY, &handle);
+	err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
 	if (err != ESP_OK) {
-		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE_WIFI, err);
+		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE, err);
 		return false;
 	}
 
@@ -44,7 +45,7 @@ exit:
 	return ret;
 }
 
-static bool _set(char* key,  char* val)
+bool NVS_set(char* key,  char* val)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
@@ -52,7 +53,7 @@ static bool _set(char* key,  char* val)
 	char    str[WIFI_MAX_NVS_LENGTH];
 	size_t  length;
 
-	err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READWRITE, &handle);
+	err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
 	if (err != ESP_OK) {
 		ERROR("nvs_open failed\n");
 		return false;
@@ -90,10 +91,10 @@ bool NVS_get_ssid(char* ssid, char* passwd)
 {
 	bool    ret = true;
 
-	ret = _get(NVS_KEY_WIFI_SSID, ssid);
+	ret = NVS_get(NVS_KEY_SSID, ssid);
 	if (!ret)  {
 		ERROR("get ssid failed\n");
-		_set(NVS_KEY_WIFI_SSID, "");
+		NVS_set(NVS_KEY_SSID, "");
 		return false;
 	}
 
@@ -101,10 +102,10 @@ bool NVS_get_ssid(char* ssid, char* passwd)
 		return false;
 	}
 
-	ret = _get(NVS_KEY_WIFI_PASSWD, passwd);
+	ret = NVS_get(NVS_KEY_PASSWD, passwd);
 	if (!ret)  {
 		ERROR("get passwd failed\n");
-		_set(NVS_KEY_WIFI_PASSWD, "");
+		NVS_set(NVS_KEY_PASSWD, "");
 		return false;
 	}
 
@@ -119,85 +120,13 @@ bool NVS_set_ssid(char* ssid, char* passwd)
 {
 	bool    ret = true;
 
-	ret = _set(NVS_KEY_WIFI_SSID, ssid);
+	ret = NVS_set(NVS_KEY_SSID, ssid);
 	if (!ret)  {
 		ERROR("set ssid failed\n");
 	}
-	ret &= _set(NVS_KEY_WIFI_PASSWD, passwd);
+	ret &= NVS_set(NVS_KEY_PASSWD, passwd);
 	if (!ret)  {
 		ERROR("set passwd failed\n");
-	}
-
-	return ret;
-}
-
-bool NVS_get_certificate(char* val)
-{
-	bool    ret = true;
-
-	ret = _get(NVS_KEY_WIFI_CERT, val);
-	if (!ret)  {
-		ERROR("get cert failed\n");
-	}
-
-	return ret;
-}
-
-bool NVS_set_certificate(char* val)
-{
-	bool    ret = true;
-
-	ret = _set(NVS_KEY_WIFI_CERT, val);
-	if (!ret)  {
-		ERROR("set cert failed\n");
-	}
-
-	return ret;
-}
-
-bool NVS_get_sync_dns(char* val)
-{
-	bool    ret = true;
-
-	ret = _get(NVS_KEY_WIFI_SYNC_DNS, val);
-	if (!ret)  {
-		ERROR("get cert failed\n");
-	}
-
-	return ret;
-}
-
-bool NVS_set_sync_dns(char* val)
-{
-	bool    ret = true;
-
-	ret = _set(NVS_KEY_WIFI_SYNC_DNS, val);
-	if (!ret)  {
-		ERROR("set cert failed\n");
-	}
-
-	return ret;
-}
-
-bool NVS_get_sync_port(char* val)
-{
-	bool    ret = true;
-
-	ret = _get(NVS_KEY_WIFI_SYNC_PORT, val);
-	if (!ret)  {
-		ERROR("get cert failed\n");
-	}
-
-	return ret;
-}
-
-bool NVS_set_sync_port(char* val)
-{
-	bool    ret = true;
-
-	ret = _set(NVS_KEY_WIFI_SYNC_PORT, val);
-	if (!ret)  {
-		ERROR("set cert failed\n");
 	}
 
 	return ret;
@@ -209,9 +138,9 @@ bool NVS_eraseAll(void)
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
 
-	err = nvs_open(NVS_NAMESPACE_WIFI, NVS_READWRITE, &handle);
+	err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
 	if (err != ESP_OK) {
-		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE_WIFI, err);
+		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE, err);
 		return false;
 	}
 
