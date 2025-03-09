@@ -510,7 +510,7 @@ static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i
 	INFO("SET_VALVES\n");
 
 	CMD_RSPBUF_OTA_START		rsp;
-	CMD_RSPBUF_EVT_OTA_STATUS	evt;
+	//	CMD_RSPBUF_EVT_OTA_STATUS	evt;
 
 	rsp.ok = 1;
 

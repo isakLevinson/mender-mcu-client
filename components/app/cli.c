@@ -18,7 +18,6 @@
 #include "esp_partition.h"
 
 #include "main.h"
-
 #include "cli.h"
 #include "fifo.h"
 #include "mender_ota.h"
@@ -102,6 +101,7 @@ static void _flashRead(void* pArg, uint32_t addr, uint8_t* o_pData, uint16_t siz
 	}
 
 	err =  esp_partition_read(g_cli.logPartition, addr, o_pData, size);
+	ESP_printErr(err);
 }
 
 static void _flashWrite(void* pArg, uint32_t addr, uint8_t* i_pData, uint16_t size)
@@ -119,9 +119,11 @@ static void _flashWrite(void* pArg, uint32_t addr, uint8_t* i_pData, uint16_t si
 		g_cli.erasedSector = ((addr + size) & ~eraseMask);
 
 		err = esp_partition_erase_range(g_cli.logPartition, g_cli.erasedSector, sectorSize);
+		ESP_printErr(err);
 	}
 
 	err = esp_partition_write(g_cli.logPartition, addr, i_pData, size);
+	ESP_printErr(err);
 }
 
 static bool _logInit(void)
@@ -181,7 +183,6 @@ static void _taskLog(void* arg)
 {
 	uint16_t	popedSize;
 	uint8_t		buf[512];
-	uint16_t    decodedSize;
 
 	while (true) {
 		vTaskDelay(10);
@@ -480,6 +481,7 @@ DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_CMD("ps",		NULL,		NULL, dbgPs)
 	DEBUG_MENU_CMD("tail",	NULL,		NULL, dbgLogTail)
 	DEBUG_MENU_DIR("log", NULL)
+		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgLogStatus)
 		DEBUG_MENU_CMD("clear",		NULL,		NULL, dbgLogClear)
 		DEBUG_MENU_CMD("recover",	NULL,		NULL, dbgLogRecover)
 		DEBUG_MENU_CMD("r",			NULL,		NULL, dbgLogRead)

@@ -98,7 +98,7 @@ static bool _rdReg(uint8_t reg, uint16_t* val)
 
 	return true;
 }
-
+#if 0
 static bool _wrReg(uint8_t reg, uint16_t val)
 {
 	bool	ret;
@@ -114,6 +114,7 @@ static bool _wrReg(uint8_t reg, uint16_t val)
 
 	return true;
 }
+#endif
 
 static bool _i2c_master_init(void)
 {

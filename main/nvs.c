@@ -164,7 +164,6 @@ bool NVS_set_ssid(char* ssid, char* passwd)
 
 bool NVS_eraseAll(void)
 {
-	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
 
