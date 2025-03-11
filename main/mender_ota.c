@@ -665,7 +665,7 @@ static void _init(void)
 	                              .device_type                  = device_type,
 	                              .host                         = CONFIG_MENDER_SERVER_HOST,
 	                              .tenant_token                 = NULL,
-	                              .authentication_poll_interval = 0,
+	                              .authentication_poll_interval = -1,
 	                              .update_poll_interval         = -1,	// only attempt once
 	                              .recommissioning              = false
 	                          };
