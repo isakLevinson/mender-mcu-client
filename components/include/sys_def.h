@@ -12,11 +12,25 @@
 
 #if CONFIG_BUILD_TYPE_PNU
 #define PROMPT     "pnu"
+#elif CONFIG_BUILD_TYPE_GSR
+#define PROMPT     "gsr"
+#elif CONFIG_BUILD_TYPE_EEG
+#define PROMPT     "eeg"
+#else
+#error Build type not defined
 #endif
 
-#if CONFIG_BUILD_TYPE_GSR
-#define PROMPT     "gsr"
+#if CONFIG_BUILD_TYPE_PNU
+#define USE_ADC	1
+#define USE_LED	1
+#elif CONFIG_BUILD_TYPE_GSR
+#define USE_ADC	1
+#define USE_LED	1
+#elif CONFIG_BUILD_TYPE_EEG
+#define USE_ADC	0
+#define USE_LED	0
 #endif
+
 
 #define USE_FLASH_LOG				1
 #define USE_FIFO_MEMORY_INTERFACE	1
