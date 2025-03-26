@@ -66,11 +66,12 @@ static struct {
 
 static bool _mdnsInit(void)
 {
-	bool    ret;
-	char*	sn;
+	esp_err_t	err;
+	bool    	ret;
+	char*		sn;
 
 	INFO("mDNS init\n");
-	esp_err_t err = mdns_init();
+	err = mdns_init();
 	if (err) {
 		ERROR("MDNS Init failed: %d\n", err);
 		return false;
@@ -79,7 +80,11 @@ static bool _mdnsInit(void)
 	ret = CFG_factoryGetSn(&sn);
 	if (ret) {
 		INFO("setting MDNS to SN %s\n", sn);
-		mdns_hostname_set(sn);
+		err = mdns_hostname_set(sn);
+		if (ESP_OK != err ) {
+			ERROR("failed to set mdns\n");
+			ESP_printErr(err);
+		}
 	} else {
 		ERROR("MDNS not defined, and no SN in configuration\n");
 	}
