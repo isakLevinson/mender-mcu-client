@@ -21,14 +21,20 @@
 #endif
 
 #if CONFIG_BUILD_TYPE_PNU
-#define USE_ADC	1
-#define USE_LED	1
+#define USE_ADC		1
+#define USE_LED		1
+#define USE_STREAM	1
+
 #elif CONFIG_BUILD_TYPE_GSR
-#define USE_ADC	1
-#define USE_LED	1
+#define USE_ADC		1
+#define USE_LED		1
+#define USE_STREAM	0
+
 #elif CONFIG_BUILD_TYPE_EEG
-#define USE_ADC	0
-#define USE_LED	0
+#define USE_ADC		0
+#define USE_LED		0
+#define USE_STREAM	1
+
 #endif
 
 

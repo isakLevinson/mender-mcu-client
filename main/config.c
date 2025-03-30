@@ -89,7 +89,7 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "mender_token");
 	if (object) {
-		INFO("mender_url: %s\n", object->valuestring);
+		INFO("mender_token: %s\n", object->valuestring);
 		NVS_set(nvs_id_ota_token, object->valuestring);
 	}
 
@@ -277,7 +277,7 @@ bool CFG_default(void)
 	NVS_eraseAll();
 	WIFI_sta_disconnect();
 	WIFI_startAp();
-	
+
 	wss_config_start();
 	return true;
 }
@@ -545,7 +545,7 @@ static bool dbgDefault(uint8_t argc, char** argv)
 	if ('1' != argv[1][0]) {
 		return false;
 	}
-	
+
 	CFG_default();
 	return true;
 }

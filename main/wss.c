@@ -29,10 +29,12 @@
 #endif
 
 struct send_arg_t {
-	httpd_handle_t  hd;
-	int             fd;
-	size_t          size;
-	uint8_t         buf[];
+	httpd_handle_t  	hd;
+	int             	fd;
+	httpd_ws_frame_t	pkt;
+	size_t          	size;
+	int					counter;
+	uint8_t         	buf[];
 };
 
 struct async_resp_arg events_async_resp;
@@ -43,6 +45,7 @@ static struct {
 	httpd_handle_t handle;
 	bool			ota_new_restart;
 	struct {
+		int	counter;
 		int mallocCount;
 	} dbg;
 } g_server;
@@ -69,15 +72,18 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
 	struct async_resp_arg* resp_arg = malloc(sizeof(struct async_resp_arg));
 	resp_arg->hd = wss_keep_alive_get_user_ctx(h);
 	resp_arg->fd = fd;
-
+#if 0
 	status = httpd_queue_work(resp_arg->hd, send_ping, resp_arg);
 	if (ESP_OK != status) {
 		ERROR("check_client_alive_cb: failed to send ping\n");
 		free(resp_arg);
 		return false;
 	}
+#endif
 	return true;
 }
+
+static portMUX_TYPE my_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
 static void send_binary_frame(void* arg)
 {
@@ -90,37 +96,58 @@ static void send_binary_frame(void* arg)
 	ws_pkt.type = HTTPD_WS_TYPE_BINARY;
 
 	httpd_ws_send_frame_async(resp_arg->hd, resp_arg->fd, &ws_pkt);
+
+	taskENTER_CRITICAL(&my_spinlock);
 	free(resp_arg);
 	g_server.dbg.mallocCount--;
+	taskEXIT_CRITICAL(&my_spinlock);
 }
 
 bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
 {
 	int status;
-	TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
-	struct send_arg_t* arg = malloc(sizeof(struct send_arg_t) + size);
+	TRACE("send_binary fd:%d\n", fd);
 
 	if (g_server.dbg.mallocCount) {
-		INFO("count: %d\n", g_server.dbg.mallocCount);
+		INFO("mallocCount: %d\n", g_server.dbg.mallocCount);
 	}
+#if 0
+	//taskENTER_CRITICAL(&my_spinlock);
+	struct send_arg_t* arg = malloc(sizeof(struct send_arg_t) + size);
 
 	if (!arg) {
 		ERROR("send_binary: failed to allocate %d\n", sizeof(struct send_arg_t) + size);
+		//taskEXIT_CRITICAL(&my_spinlock);
 		return false;
 	}
+
 	g_server.dbg.mallocCount++;
+	//	taskEXIT_CRITICAL(&my_spinlock);
 
 	arg->hd     = hd;
 	arg->fd     = fd;
 	arg->size   = size;
-	memcpy(arg->buf, pBuf, size);
+	arg->counter = g_server.dbg.counter;
 
-	status = httpd_queue_work(hd, send_binary_frame, arg);
+	memcpy(arg->buf, pBuf, size);
+#endif
+	httpd_ws_frame_t ws_pkt;
+	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+	ws_pkt.payload = pBuf;
+	ws_pkt.len = size;
+	ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+
+	status = httpd_ws_send_frame_async(hd, fd, &ws_pkt);
+	//status = httpd_queue_work(hd, send_binary_frame, arg);
+	//taskEXIT_CRITICAL(&my_spinlock);
+
 	if (ESP_OK != status) {
 		ERROR("send_binary: failed to queue packet %d\n", status);
-		free(arg);
+		//free(arg);
 		g_server.dbg.mallocCount--;
 		return false;
+	} else {
+		g_server.dbg.counter++;
 	}
 	return true;
 }
@@ -130,7 +157,7 @@ bool wss_send(struct async_resp_arg* i_pAsync, void* pBuf, size_t len)
 	bool        ret;
 	struct async_resp_arg*  pAsync = i_pAsync;
 
-	INFO_BUF("wss_send packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, pBuf, len);
+	TRACE_BUF("wss_send packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, pBuf, len);
 
 	if (!pAsync) {
 		pAsync = &events_async_resp;
@@ -151,7 +178,7 @@ bool _cmdSendResp(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
 	bool    ret;
 	struct async_resp_arg* pAsync = (struct async_resp_arg*)pArg;
 
-	uint8_t 	buf[300];
+	uint8_t 	buf[1600];
 	uint8_t*	pBuf = buf;
 
 	*(uint16_t*)pBuf	= size;
@@ -168,7 +195,6 @@ bool _cmdSendResp(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
 
 	return ret;
 }
-
 static esp_err_t ws_handler(httpd_req_t* req)
 {
 	TRACE("ws_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
@@ -214,7 +240,7 @@ static esp_err_t ws_handler(httpd_req_t* req)
 			break;
 
 		case HTTPD_WS_TYPE_PONG:
-			INFO("WS PONG message\n");
+			INFO("WS PONG message h:%x\n", req->handle);
 			free(buf);
 			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), httpd_req_to_sockfd(req));
 			break;
@@ -288,6 +314,10 @@ static esp_err_t events_handler(httpd_req_t* req)
 			NVS_set(nvs_id_ota_updated,  "0");
 		}
 
+		//		while (true) {
+		//			vTaskDelay(10);
+		//		}
+
 		return ESP_OK;
 	}
 
@@ -360,6 +390,32 @@ static esp_err_t _config_handler(httpd_req_t* req)
 	return ESP_OK;
 }
 
+static esp_err_t rest_handler(httpd_req_t* req)
+{
+	bool    ret;
+	char    buf[256];
+
+	INFO("rest_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
+
+	if (req->method != HTTP_POST) {
+		WARN("unsupported method %s. must be POST\n", req->method);
+		return ESP_OK;
+	}
+
+	ret = httpd_req_recv(req, buf, req->content_len);
+	if (!ret) {
+		ERROR("httpd_req_recv failed\n");
+		return ESP_FAIL;
+	}
+
+	INFO_BUF("/rest POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
+
+	httpd_resp_send(req, "OK\n", HTTPD_RESP_USE_STRLEN);
+	//	httpd_resp_send_chunk(req, NULL, 0);
+
+	return ESP_OK;
+}
+
 esp_err_t wss_open_fd(httpd_handle_t hd, int sockfd)
 {
 	INFO("wss_open hd:0x%x fd:0x%x\n", hd, sockfd);
@@ -410,6 +466,15 @@ static const httpd_uri_t uri_events = {
 	.handle_ws_control_frames = true
 };
 
+static const httpd_uri_t uri_rest = {
+	.uri        = "/rest",
+	.method     = HTTP_POST,
+	.handler    = rest_handler,
+	.user_ctx   = NULL,
+	.is_websocket = false,
+	.handle_ws_control_frames = true
+};
+
 bool wss_start_server(void)
 {
 	bool		ret;
@@ -438,12 +503,13 @@ bool wss_start_server(void)
 
 	// Start the keep-alive engine
 	wss_keep_alive_t keep_alive = wss_keep_alive_start(&keep_alive_config);
+	wss_keep_alive_set_user_ctx(keep_alive, g_server.handle);
 
 #if USE_SSL
 	httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
 
-	conf.httpd.max_open_sockets = max_clients;
 	conf.httpd.global_user_ctx = keep_alive;
+	conf.httpd.max_open_sockets = max_clients;
 	conf.httpd.open_fn = wss_open_fd;
 	conf.httpd.close_fn = wss_close_fd;
 
@@ -488,7 +554,7 @@ bool wss_start_server(void)
 	INFO("Registering URI handlers");
 	httpd_register_uri_handler(g_server.handle, &uri_ws);
 	httpd_register_uri_handler(g_server.handle, &uri_events);
-	wss_keep_alive_set_user_ctx(keep_alive, g_server.handle);
+	httpd_register_uri_handler(g_server.handle, &uri_rest);
 
 	return true;
 }
