@@ -28,17 +28,28 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 
 	json = cJSON_ParseWithLength(pStr, size);
 	if (!json) {
-		PRINT("json parse error\n");
+		WARN("json parse error\n");
 		return false;
 	}
 
 	object = json;
 	while (object) {
 		const cJSON* child = object->child;
-		PRINT("%x, child:%x\n", object, child);
-		if (object->string) {
-			PRINT("name:%s\n", object->string);
+		INFO("%x, child:%x\n", object, child);
+
+		while (child) {
+				if (child->string) {
+					bool isValidName = NVS_isValidName(child->string);
+					INFO("name:%s %d\n", child->string, isValidName);
+					if (!isValidName) {
+						WARN("invalid name %s\n", child->string);
+						return false;
+					}
+				}
+
+				child = child->next;
 		}
+
 		object = object->next;
 	}
 
