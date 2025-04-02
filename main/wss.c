@@ -46,7 +46,6 @@ static struct {
 	bool			ota_new_restart;
 	struct {
 		int	counter;
-		int mallocCount;
 	} dbg;
 } g_server;
 
@@ -85,52 +84,11 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
 
 static portMUX_TYPE my_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
-static void send_binary_frame(void* arg)
-{
-	struct send_arg_t* resp_arg = arg;
-
-	httpd_ws_frame_t ws_pkt;
-	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-	ws_pkt.payload = resp_arg->buf;
-	ws_pkt.len = resp_arg->size;
-	ws_pkt.type = HTTPD_WS_TYPE_BINARY;
-
-	httpd_ws_send_frame_async(resp_arg->hd, resp_arg->fd, &ws_pkt);
-
-	taskENTER_CRITICAL(&my_spinlock);
-	free(resp_arg);
-	g_server.dbg.mallocCount--;
-	taskEXIT_CRITICAL(&my_spinlock);
-}
-
 bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
 {
 	int status;
 	TRACE("send_binary fd:%d\n", fd);
 
-	if (g_server.dbg.mallocCount) {
-		INFO("mallocCount: %d\n", g_server.dbg.mallocCount);
-	}
-#if 0
-	//taskENTER_CRITICAL(&my_spinlock);
-	struct send_arg_t* arg = malloc(sizeof(struct send_arg_t) + size);
-
-	if (!arg) {
-		ERROR("send_binary: failed to allocate %d\n", sizeof(struct send_arg_t) + size);
-		//taskEXIT_CRITICAL(&my_spinlock);
-		return false;
-	}
-
-	g_server.dbg.mallocCount++;
-	//	taskEXIT_CRITICAL(&my_spinlock);
-
-	arg->hd     = hd;
-	arg->fd     = fd;
-	arg->size   = size;
-	arg->counter = g_server.dbg.counter;
-
-	memcpy(arg->buf, pBuf, size);
-#endif
 	httpd_ws_frame_t ws_pkt;
 	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
 	ws_pkt.payload = pBuf;
@@ -138,13 +96,9 @@ bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
 	ws_pkt.type = HTTPD_WS_TYPE_BINARY;
 
 	status = httpd_ws_send_frame_async(hd, fd, &ws_pkt);
-	//status = httpd_queue_work(hd, send_binary_frame, arg);
-	//taskEXIT_CRITICAL(&my_spinlock);
 
 	if (ESP_OK != status) {
 		ERROR("send_binary: failed to queue packet %d\n", status);
-		//free(arg);
-		g_server.dbg.mallocCount--;
 		return false;
 	} else {
 		g_server.dbg.counter++;
