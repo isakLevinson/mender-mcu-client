@@ -26,7 +26,6 @@
 #include "ctrl.h"
 #include "pump.h"
 #include "adc.h"
-#include "led.h"
 #include "cli.h"
 
 static const uint8_t g_valveGpios[] = {

@@ -19,9 +19,10 @@ idf_component_register(
 				"adc.c"
 				"wss.c"
 				"wss_keepalive.c"
-				"led.c"
+				"mmi.c"
 				"nvs.c"
 				"config.c"
+				"factory.c"
 #				"ota.c"
 				"mender_ota.c"
 
