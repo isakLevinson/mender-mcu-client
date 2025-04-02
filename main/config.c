@@ -550,13 +550,11 @@ static bool dbgDefault(uint8_t argc, char** argv)
 	return true;
 }
 
-
 static bool dbgStartServer(uint8_t argc, char** argv)
 {
 	wss_config_start();
 	return true;
 }
-
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
