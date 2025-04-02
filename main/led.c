@@ -150,17 +150,27 @@ static void _task(void* arg)
 		static bool     trig = false;
 		gpio_set_direction(GPIO_BOOT_BUTTON, GPIO_MODE_INPUT);
 		bool val = gpio_get_level(GPIO_BOOT_BUTTON);
-		if (val) {
+
+		if (!trig && !val) {
 			pressTime = time;
 			trig = true;
-		} else {
+		}
+
+		if (val) {
 			if (trig) {
-				if (time - pressTime > 10000) {
-					INFO("resetting to default\n");
-					CFG_default();
-					g_led.isConfigurated = false;
-					trig = false;
+				if (time - pressTime < BUTTOR_PRESS_TIME_FACTORY_RESET) {
+					INFO("press is too short %d\n", time - pressTime);
 				}
+			}
+			trig = false;
+		}
+
+		if (trig) {
+			if (time - pressTime >= BUTTOR_PRESS_TIME_FACTORY_RESET) {
+				INFO("resetting to default\n");
+				CFG_default();
+				g_led.isConfigurated = false;
+				trig = false;
 			}
 		}
 	}

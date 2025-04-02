@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "driver/i2c.h"
+#include "driver/i2c_master.h"
 #include "main.h"
 
 //#define MAX17049_ADDR	(0x36<<1)
@@ -30,6 +30,8 @@
 #define MAX_FAIL_COUNT	5
 
 static struct {
+	i2c_master_bus_handle_t bus_handle;
+	i2c_master_dev_handle_t dev_handle;
 	uint8_t	failCount;
 } g_fg = {
 	.failCount = MAX_FAIL_COUNT,
@@ -43,9 +45,9 @@ static bool _read(uint8_t reg_addr, void* data, size_t len)
 		return false;
 	}
 
-	err = i2c_master_write_read_device(I2C_MASTER_NUM, MAX17049_ADDR, &reg_addr, 1, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+	err = i2c_master_transmit_receive(g_fg.dev_handle, &reg_addr, 1,  data, len, I2C_MASTER_TIMEOUT_MS);
 	if (ESP_OK != err) {
-		ERROR("i2c_master_write_read_device\n");
+		ERROR("i2c_master_transmit_receive\n");
 		ESP_printErr(err);
 		g_fg.failCount--;
 		if (!g_fg.failCount) {
@@ -69,9 +71,10 @@ static bool _write(uint8_t reg_addr, void* data, size_t len)
 	}
 
 	memcpy(write_buf + 1, data, len);
-	err = i2c_master_write_to_device(I2C_MASTER_NUM, MAX17049_ADDR, write_buf, len + 1, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+	err = i2c_master_transmit(g_fg.dev_handle, write_buf, len + 1, I2C_MASTER_TIMEOUT_MS);
+
 	if (ESP_OK != err) {
-		ERROR("i2c_master_write_to_device\n");
+		ERROR("i2c_master_transmit\n");
 		ESP_printErr(err);
 		g_fg.failCount--;
 		if (!g_fg.failCount) {
@@ -119,23 +122,29 @@ static bool _i2c_master_init(void)
 {
 	int err;
 
-	i2c_config_t conf = {
-		.mode = I2C_MODE_MASTER,
+	i2c_master_bus_config_t i2c_mst_config = {
+		.clk_source = I2C_CLK_SRC_DEFAULT,
+		.i2c_port = I2C_MASTER_NUM,
 		.sda_io_num = GPIO_SDA_FG,
 		.scl_io_num = GPIO_SCL_FG,
-		.sda_pullup_en = GPIO_PULLUP_DISABLE, //The board has a built-in pullup resistor
-		.scl_pullup_en = GPIO_PULLUP_DISABLE, //The board has a built-in pullup resistor
-		.master.clk_speed = I2C_MASTER_FREQ_HZ,
+		.flags.enable_internal_pullup = false,
 	};
 
-	err = i2c_param_config(I2C_MASTER_NUM, &conf);
+	err = i2c_new_master_bus(&i2c_mst_config, &g_fg.bus_handle);
+
 	if (ESP_OK != err) {
-		ERROR("i2c_param_config %d\n", err);
+		ERROR("i2c_new_master_bus %d\n", err);
 	}
 
-	err = i2c_driver_install(I2C_MASTER_NUM, conf.mode, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
+	i2c_device_config_t dev_cfg = {
+		.dev_addr_length = I2C_ADDR_BIT_LEN_7,
+		.device_address = MAX17049_ADDR,
+		.scl_speed_hz = I2C_MASTER_FREQ_HZ,
+	};
+	
+	err = i2c_master_bus_add_device(g_fg.bus_handle, &dev_cfg, &g_fg.dev_handle);
 	if (ESP_OK != err) {
-		ERROR("i2c_driver_install %d\n", err);
+		ERROR("i2c_master_bus_add_device %d\n", err);
 	}
 
 	return true;
@@ -204,7 +213,7 @@ static bool dbgWr(uint8_t argc, char** argv)
 {
 	bool	ret;
 	uint8_t	reg;
-	uint8_t	val;
+	uint16_t	val;
 
 	if (argc < 3) {
 		return false;
@@ -212,7 +221,7 @@ static bool dbgWr(uint8_t argc, char** argv)
 
 	reg	= strtoul(argv[1], NULL, 16);
 	val	= strtoul(argv[2], NULL, 16);
-	ret = _write(reg, &val, 1);
+	ret = _wrReg(reg, val);
 	if (!ret) {
 		ERROR("_write failed\n");
 	}
