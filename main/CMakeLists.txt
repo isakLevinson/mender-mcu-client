@@ -22,6 +22,7 @@ idf_component_register(
 				"mmi.c"
 				"nvs.c"
 				"config.c"
+				"factory.c"
 #				"ota.c"
 				"mender_ota.c"
 

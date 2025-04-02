@@ -31,6 +31,7 @@
 #include "adc.h"
 #include "mmi.h"
 #include "nvs.h"
+#include "factory.h"
 #include "config.h"
 #include "max30001.h"
 #include "max17049.h"
@@ -130,6 +131,7 @@ void app_main(void)
 
 	uart_init();
 	CLI_init();
+	FACTORY_init();
 	CFG_init();
 	NVS_init();
 	MENDER_init();

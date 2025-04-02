@@ -11,6 +11,7 @@
 #include "driver/gpio.h"
 #include "time.h"
 #include "wifi.h"
+#include "factory.h"
 #include "config.h"
 #include "led_strip.h"
 #include "max17049.h"
@@ -65,7 +66,7 @@ static void _task(void* arg)
 	bool    ret;
 	int32_t time;
 
-	ret = CFG_factoryGetSn(NULL);
+	ret = FACTORY_factoryGetSn(NULL);
 	if (!ret) {
 		ERROR("no SN in factory storage. Halting on error\n");
 		g_led.r = 100;
