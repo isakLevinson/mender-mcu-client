@@ -20,6 +20,7 @@ static struct {
 
 nvs_arr_t g_id[] = {
 	NVS_LIST(NVS_ARR)
+	{.pId = NULL, .pDefault = NULL}
 };
 
 static bool _get(char* key,  char* val)
@@ -91,6 +92,20 @@ store:
 exit:
 	nvs_close(handle);
 	return ret;
+}
+
+bool NVS_isValidName(char* pName)
+{
+	uint8_t	i= 1 ; // first one is "INVALID"
+
+	while (g_id[i].pId) {
+		if (!strcmp(g_id[i].pId, pName)) {
+			return true;
+		}
+		i++;
+	}
+
+	return false;
 }
 
 bool NVS_get(nvs_id_t id,  char* val)

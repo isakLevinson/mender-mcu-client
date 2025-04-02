@@ -6,12 +6,12 @@
 #include "dbgPrint.h"
 #include "parseArgs.h"
 
-
 #include <stdio.h>
 
 #include "driver/gpio.h"
 #include "time.h"
 #include "wifi.h"
+#include "factory.h"
 #include "config.h"
 #include "led_strip.h"
 #include "max17049.h"
@@ -28,7 +28,6 @@ static struct {
 	int32_t  switchTime;
 	bool     isConfigurated;
 } g_led;
-
 
 static bool _update(int8_t r, int8_t g, int8_t b)
 {
@@ -67,7 +66,7 @@ static void _task(void* arg)
 	bool    ret;
 	int32_t time;
 
-	ret = CFG_factoryGetSn(NULL);
+	ret = FACTORY_factoryGetSn(NULL);
 	if (!ret) {
 		ERROR("no SN in factory storage. Halting on error\n");
 		g_led.r = 100;
@@ -217,6 +216,20 @@ static bool dbgSet(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgFactory(uint8_t argc, char** argv)
+{
+	if (argc < 1) {
+		return false;
+	}
+
+	if ('1' != argv[1][0]) {
+		return false;
+	}
+
+	CFG_default();
+	return true;
+}
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
 	PRINT("rgb: %d %d %d\n", g_led.r, g_led.g, g_led.b);
@@ -226,14 +239,15 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-	DEBUG_MENU_DIR("led", NULL)
+	DEBUG_MENU_DIR("mmi", NULL)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("set",	    NULL,		NULL, dbgSet)
+		DEBUG_MENU_CMD("factory",	"<1>",		NULL, dbgFactory)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
 
-bool LED_init(void)
+bool MMI_init(void)
 {
 	DBG_TREE_add("/", g_menu);
 

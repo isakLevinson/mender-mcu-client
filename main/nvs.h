@@ -33,6 +33,7 @@ typedef enum {
 
 void NVS_init(void);
 bool NVS_eraseAll(void);
+bool NVS_isValidName(char* pName);
 bool NVS_set(nvs_id_t id,  char* val);
 bool NVS_get(nvs_id_t id,  char* val);
 bool NVS_get_ssid(char* ssid, char* passwd);

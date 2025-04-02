@@ -358,8 +358,12 @@ static esp_err_t events_handler(httpd_req_t* req)
 
 static esp_err_t _config_handler(httpd_req_t* req)
 {
-	bool    ret;
-	char    buf[256];
+	//esp_err_t ret;
+	bool    	ret;
+	char    	buf[256];
+	bool    	validSsid;
+	bool    	validPasswd;
+	const char* pResp = "OK\n";
 
 	INFO("config_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
 
@@ -376,13 +380,16 @@ static esp_err_t _config_handler(httpd_req_t* req)
 
 	//INFO("POST: %.*s\n", ret, buf);
 	INFO_BUF("/config POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
-	CFG_parseWssCommand(buf, req->content_len);
+	ret = CFG_parseWssCommand(buf, req->content_len);
+	if (!ret) {
+		pResp = "ERROR\n";
+	}
 
 	/* Send response with body set as the
 	 * string passed in user context*/
 	//const char* resp_str = (const char*) req->user_ctx;
 	//httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
-	httpd_resp_send(req, "OK\n", HTTPD_RESP_USE_STRLEN);
+	httpd_resp_send(req, pResp, HTTPD_RESP_USE_STRLEN);
 
 	// End response
 	httpd_resp_send_chunk(req, NULL, 0);

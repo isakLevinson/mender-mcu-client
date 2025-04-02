@@ -1,10 +1,10 @@
 
 if (CONFIG_BUILD_TYPE_PNU)
-	set(SPECIFIC_SRC "ctrl.c" "pump.c" "max17049.c" "adc.c" "led.c")
+	set(SPECIFIC_SRC "ctrl.c" "pump.c" "max17049.c" "adc.c" "mmi.c")
 endif()
 
 if (CONFIG_BUILD_TYPE_GSR)
-	set(SPECIFIC_SRC "max30001.c" "adc.c" "led.c")
+	set(SPECIFIC_SRC "max30001.c" "adc.c" "mmi.c")
 endif()
 
 if (CONFIG_BUILD_TYPE_EEG)
@@ -24,6 +24,7 @@ idf_component_register(
 				"wss_keepalive.c"
 				"nvs.c"
 				"config.c"
+				"factory.c"
 #				"ota.c"
 				"mender_ota.c"
 

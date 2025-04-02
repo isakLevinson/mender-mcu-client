@@ -4,6 +4,7 @@ import asyncio
 import websockets
 import ssl
 import binascii
+import time
 
 cert_path = "main/certs/servercert.pem"
 #uri = "wss://192.168.1.148"
@@ -90,13 +91,17 @@ async def events():
         print("events connected")
 
         async def recv_data():
+            count = 0
             print(f"evt recv_data")
             while True:
+                count = count+1
                 response = await websocket.recv()
+
+                ms = int(round(time.time() * 1000))
 #                print("evt: (%d) %s" % (len(response), response[0:16]))
 #                bin = binascii.hexlify(response)
                 bin = binascii.b2a_qp(response[0:20])
-                print("evt:", bin)
+                print("evt:", count, len(response), ms, bin)
 
         await asyncio.gather(recv_data())
 
