@@ -29,7 +29,7 @@
 #include "pump.h"
 #include "ctrl.h"
 #include "adc.h"
-#include "led.h"
+#include "mmi.h"
 #include "nvs.h"
 #include "config.h"
 #include "max30001.h"
@@ -138,7 +138,7 @@ void app_main(void)
 
 	max30001_init();
 	fg_init();
-	LED_init();
+	MMI_init();
 	WIFI_init();
 
 	PMP_init();

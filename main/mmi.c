@@ -6,7 +6,6 @@
 #include "dbgPrint.h"
 #include "parseArgs.h"
 
-
 #include <stdio.h>
 
 #include "driver/gpio.h"
@@ -28,7 +27,6 @@ static struct {
 	int32_t  switchTime;
 	bool     isConfigurated;
 } g_led;
-
 
 static bool _update(int8_t r, int8_t g, int8_t b)
 {
@@ -233,7 +231,7 @@ DEBUG_MENU_START(g_menu)
 DEBUG_MENU_END
 // *INDENT-ON*
 
-bool LED_init(void)
+bool MMI_init(void)
 {
 	DBG_TREE_add("/", g_menu);
 
