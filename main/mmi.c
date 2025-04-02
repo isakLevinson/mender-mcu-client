@@ -215,6 +215,20 @@ static bool dbgSet(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgFactory(uint8_t argc, char** argv)
+{
+	if (argc < 1) {
+		return false;
+	}
+
+	if ('1' != argv[1][0]) {
+		return false;
+	}
+
+	CFG_default();
+	return true;
+}
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
 	PRINT("rgb: %d %d %d\n", g_led.r, g_led.g, g_led.b);
@@ -224,9 +238,10 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-	DEBUG_MENU_DIR("led", NULL)
+	DEBUG_MENU_DIR("mmi", NULL)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("set",	    NULL,		NULL, dbgSet)
+		DEBUG_MENU_CMD("factory",	"<1>",		NULL, dbgFactory)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
