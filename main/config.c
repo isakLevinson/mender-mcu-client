@@ -52,6 +52,16 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 		return false;
 	}
 
+	object = json;
+	while (object) {
+		const cJSON* child = object->child;
+		PRINT("%x, child:%x\n", object, child);
+		if (object->string) {
+			PRINT("name:%s\n", object->string);
+		}
+		object = object->next;
+	}
+
 	objectSsid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
 	if (objectSsid) {
 		INFO("ssid: %s\n", objectSsid->valuestring);
@@ -358,17 +368,39 @@ static bool dbgJson(uint8_t argc, char** argv)
 	cJSON* json = NULL;
 	const cJSON* object = NULL;
 
-	if (argc < 3) {
+	if (argc < 2) {
 		return false;
 	}
+
+	PRINT("parsing <%s>\n", argv[1]);
 
 	//cJSON_ParseWithLength
 	json = cJSON_Parse(argv[1]);
 	if (!json) {
 		PRINT("json parse error\n");
-		return false;
+		return true;
 	}
 
+	object = json;
+	while (object) {
+		const cJSON* child = object->child;
+		PRINT("%x, child:%x\n", object, child);
+
+		while (child) {
+			if (child->string) {
+				PRINT("name:%s\n", child->string);
+			}
+			child = child->next;
+		}
+
+		object = object->next;
+	}
+
+	if (argc < 3) {
+		return true;
+	}
+
+	PRINT("searching <%s>\n", argv[2]);
 	object = cJSON_GetObjectItemCaseSensitive(json, argv[2]);
 	if (!object) {
 		PRINT("object not found\n");
@@ -402,7 +434,6 @@ static bool dbgJson(uint8_t argc, char** argv)
 			i++;
 		}
 	}
-
 
 	return true;
 }
