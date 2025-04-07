@@ -141,7 +141,7 @@ static bool _i2c_master_init(void)
 		.device_address = MAX17049_ADDR,
 		.scl_speed_hz = I2C_MASTER_FREQ_HZ,
 	};
-	
+
 	err = i2c_master_bus_add_device(g_fg.bus_handle, &dev_cfg, &g_fg.dev_handle);
 	if (ESP_OK != err) {
 		ERROR("i2c_master_bus_add_device %d\n", err);

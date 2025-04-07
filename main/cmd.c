@@ -148,9 +148,10 @@ static struct {
 	int32_t				streamSentTime;
 	int32_t				batteryCheckTime;
 	uint8_t				socNextThreshold;
+	uint32_t			counter;
 } g_cmd;
 
-bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint8_t size)
+bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t size)
 {
 	bool	ret;
 	CMD_CONTEXT* pContext = i_pContext;
@@ -190,19 +191,22 @@ static void _streamPeriod(uint32_t period)
 	g_cmd.socNextThreshold	= 100;
 }
 
+#if USE_STREAM
 static void _taskStreamer(void* arg)
 {
-#if CONFIG_BUILD_TYPE_PNU
 	bool	ret;
 	int32_t	t;
-	int16_t	press[4];
+	int16_t	press[4] = {0};
 	CMD_RSPBUF_EVT_STREAM	rsp;
 	uint32_t	i;
+
+#if CONFIG_BUILD_TYPE_EEG
+	static char buf[1500];
 #endif
 
 	while (true) {
-		vTaskDelay(10);
-#if CONFIG_BUILD_TYPE_PNU
+		vTaskDelay(1);
+
 		if (!g_cmd.streamPeriod) {
 			continue;
 		}
@@ -213,6 +217,7 @@ static void _taskStreamer(void* arg)
 		}
 		g_cmd.streamSentTime += g_cmd.streamPeriod;
 
+#if CONFIG_BUILD_TYPE_PNU
 		CTRL_getPressure(press);
 		TRACE("stream %d: %3d %3d %3d %3d\n", t, press[0], press[1], press[2], press[3]);
 
@@ -253,10 +258,20 @@ static void _taskStreamer(void* arg)
 				}
 			}
 		}
+#endif
 
+#if CONFIG_BUILD_TYPE_EEG
+		sprintf(buf, "%d: %d", TIME_get32(), g_cmd.counter++);
+		TRACE("trace counter: %d\n", g_cmd.counter);
+		ret = _sendResp(&g_cmd.streamContext, CMD_RSP_EVT_STREAM, &buf, sizeof(buf));
+		if (!ret) {
+			ERROR("failed to send. stopping streaming\n");
+			_streamPeriod(0);
+		}
 #endif
 	}
 }
+#endif
 
 static bool _init(void)
 {
@@ -265,11 +280,13 @@ static bool _init(void)
 	g_cmd.semaphore = xSemaphoreCreateBinary();
 	xSemaphoreGive(g_cmd.semaphore);
 
+#if USE_STREAM
 	ret = xTaskCreate(_taskStreamer, "streamer", 8192, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task %s failed\n", "streamer");
 		return false;
 	}
+#endif
 
 	return true;
 }
@@ -510,7 +527,7 @@ static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i
 	INFO("SET_VALVES\n");
 
 	CMD_RSPBUF_OTA_START		rsp;
-	CMD_RSPBUF_EVT_OTA_STATUS	evt;
+	//	CMD_RSPBUF_EVT_OTA_STATUS	evt;
 
 	rsp.ok = 1;
 
@@ -679,6 +696,7 @@ static bool dbgReset(uint8_t argc, char** argv)
 	return true;
 }
 
+#if USE_STREAM
 static bool dbgStream(uint8_t argc, char** argv)
 {
 	uint32_t	period;
@@ -689,13 +707,18 @@ static bool dbgStream(uint8_t argc, char** argv)
 
 	period = strtoul(argv[1], NULL, 10);
 
+	g_cmd.counter = 0;
 	_streamPeriod(period);
 
 	return true;
 }
+#endif
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
+	PRINT("stream period %d\n", g_cmd.streamPeriod);
+	PRINT("stream time   %d\n", g_cmd.streamSentTime);
+
 	return true;
 }
 
@@ -704,7 +727,9 @@ DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("cmd", NULL)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("reset",		NULL,		NULL, dbgReset)
+#if USE_STREAM
 		DEBUG_MENU_CMD("stream",	NULL,		NULL, dbgStream)
+#endif
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

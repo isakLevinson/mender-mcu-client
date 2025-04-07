@@ -4,10 +4,11 @@ import asyncio
 import websockets
 import ssl
 import binascii
+import time
 
 cert_path = "main/certs/servercert.pem"
 #uri = "wss://192.168.1.148"
-uri = "wss://pnu-esp32.local"
+uri = "wss://pnu_5.local"
 uri_ws = "/ws"
 uri_events = "/events"
 
@@ -42,7 +43,7 @@ async def test_wss():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=60000) as websocket:
+    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=360000) as websocket:
         print("ws connected")
 
       # Shared event to signal exit
@@ -71,6 +72,7 @@ async def test_wss():
                 response = await websocket.recv()
                 #bin = response.decode('latin-1')
                 bin = binascii.hexlify(response)
+#                bin = binascii.a2b_uu(response)
                 print("recv:", bin)
 #                print("recv:", string_to_binary_array(response))
 #                print("recv:", response)
@@ -85,16 +87,21 @@ async def events():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    async with websockets.connect(uri + uri_events, ssl=ssl_context, ping_timeout=60000) as websocket:
+    async with websockets.connect(uri + uri_events, ssl=ssl_context, ping_timeout=360000, ping_interval=60000) as websocket:
         print("events connected")
 
         async def recv_data():
+            count = 0
             print(f"evt recv_data")
             while True:
+                count = count+1
                 response = await websocket.recv()
-#                print("evt:", response)
-                bin = binascii.hexlify(response)
-                print("evt:", bin)
+
+                ms = int(round(time.time() * 1000))
+#                print("evt: (%d) %s" % (len(response), response[0:16]))
+#                bin = binascii.hexlify(response)
+                bin = binascii.b2a_qp(response[0:20])
+                print("evt:", count, len(response), ms, bin)
 
         await asyncio.gather(recv_data())
 

@@ -1,10 +1,14 @@
 
 if (CONFIG_BUILD_TYPE_PNU)
-	set(SPECIFIC_SRC "ctrl.c" "pump.c" "max17049.c")
+	set(SPECIFIC_SRC "ctrl.c" "pump.c" "max17049.c" "adc.c" "mmi.c")
 endif()
 
 if (CONFIG_BUILD_TYPE_GSR)
-	set(SPECIFIC_SRC "max30001.c")
+	set(SPECIFIC_SRC "max30001.c" "adc.c" "mmi.c")
+endif()
+
+if (CONFIG_BUILD_TYPE_EEG)
+	set(SPECIFIC_SRC "")
 endif()
 
 message(SPECIFIC_SRC = "${SPECIFIC_SRC}")
@@ -16,10 +20,8 @@ idf_component_register(
 				"cmd.c"
 				"wifi.c"
 				"time.c"
-				"adc.c"
 				"wss.c"
 				"wss_keepalive.c"
-				"mmi.c"
 				"nvs.c"
 				"config.c"
 				"factory.c"

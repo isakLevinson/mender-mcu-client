@@ -67,11 +67,12 @@ static struct {
 
 static bool _mdnsInit(void)
 {
-	bool    ret;
-	char*	sn;
+	esp_err_t	err;
+	bool    	ret;
+	char*		sn;
 
 	INFO("mDNS init\n");
-	esp_err_t err = mdns_init();
+	err = mdns_init();
 	if (err) {
 		ERROR("MDNS Init failed: %d\n", err);
 		return false;
@@ -80,7 +81,11 @@ static bool _mdnsInit(void)
 	ret = FACTORY_factoryGetSn(&sn);
 	if (ret) {
 		INFO("setting MDNS to SN %s\n", sn);
-		mdns_hostname_set(sn);
+		err = mdns_hostname_set(sn);
+		if (ESP_OK != err) {
+			ERROR("failed to set mdns\n");
+			ESP_printErr(err);
+		}
 	} else {
 		ERROR("MDNS not defined, and no SN in configuration\n");
 	}
@@ -277,7 +282,6 @@ static esp_ip4_addr_t  wifi_getSelfIp(void)
 
 static void task_tcp_server(void* arg)
 {
-	bool	ret;
 	esp_ip4_addr_t  ip  = {0};
 
 	INFO("TCP started\n");
@@ -426,7 +430,6 @@ static bool _startAp(void)
 static void _init(void)
 {
 	static bool initialized = false;
-	esp_err_t err;
 	bool    ret = true;
 	char    ssid[32];
 	char    passwd[32];

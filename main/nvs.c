@@ -179,7 +179,6 @@ bool NVS_set_ssid(char* ssid, char* passwd)
 
 bool NVS_eraseAll(void)
 {
-	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
 
@@ -336,7 +335,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 		PRINT("namespace_count: %d\n", nvs_stats.namespace_count);
 	}
 
-	for (i=nvs_id_invalid+1; i<sizeof(g_id)/sizeof(g_id[0]); i++) {
+	for (i = nvs_id_invalid + 1; i < sizeof(g_id) / sizeof(g_id[0]); i++) {
 		ret = NVS_get(i, val);
 		if (ret) {
 			PRINT("%2d %-12s: %s\n", i, g_id[i].pId, val);
