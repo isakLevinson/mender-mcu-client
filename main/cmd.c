@@ -245,13 +245,18 @@ static void _taskStreamer(void* arg)
 		if (ret) {
 			if (soc < g_cmd.socNextThreshold) {
 				CMD_sendBatteryEvent(soc, vbat);
-				switch (soc) {
+				switch (g_cmd.socNextThreshold) {
 					case BATTERY_THRESHOLD_LOW:
 						g_cmd.socNextThreshold = BATTERY_THRESHOLD_CRITICAL;
 						break;
 					case BATTERY_THRESHOLD_CRITICAL:
 						g_cmd.socNextThreshold = BATTERY_THRESHOLD_EMPTY;
 						break;
+					case BATTERY_THRESHOLD_EMPTY:
+					break;
+
+					default:
+						WARN("unexpected voltage threshold %d\n", g_cmd.socNextThreshold);
 				}
 			}
 		}
@@ -563,6 +568,8 @@ bool CMD_sendBatteryEvent(uint8_t soc, uint16_t voltage_mv)
 {
 	CMD_RSPBUF_EVT_BATTERY_STATUS		rsp;
 
+	INFO("CMD_sendBatteryEvent soc:%d v:%d\n", soc, voltage_mv);
+
 	rsp.soc		= soc;
 	rsp.voltage	= voltage_mv /100;
 	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_BATTERY_STATUS, &rsp, sizeof(rsp));
@@ -714,8 +721,9 @@ static bool dbgStream(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-	PRINT("stream period %d\n", g_cmd.streamPeriod);
-	PRINT("stream time   %d\n", g_cmd.streamSentTime);
+	PRINT("stream period     %d\n", g_cmd.streamPeriod);
+	PRINT("stream time       %d\n", g_cmd.streamSentTime);
+	PRINT("voltage threshold %d\n", g_cmd.socNextThreshold);
 
 	return true;
 }
