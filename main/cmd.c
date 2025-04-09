@@ -188,7 +188,7 @@ static void _streamPeriod(uint32_t period)
 	g_cmd.streamSentTime	= time;
 	g_cmd.batteryCheckTime	= time;
 	g_cmd.streamPeriod		= period;
-	g_cmd.socNextThreshold	= 100;
+	g_cmd.socNextThreshold	= BATTERY_THRESHOLD_LOW;
 }
 
 #if USE_STREAM
@@ -246,14 +246,11 @@ static void _taskStreamer(void* arg)
 			if (soc < g_cmd.socNextThreshold) {
 				CMD_sendBatteryEvent(soc, vbat);
 				switch (soc) {
-					case 30:
-						g_cmd.socNextThreshold = 15;
+					case BATTERY_THRESHOLD_LOW:
+						g_cmd.socNextThreshold = BATTERY_THRESHOLD_CRITICAL;
 						break;
-					case 15:
-						g_cmd.socNextThreshold = 5;
-						break;
-					case 5:
-						g_cmd.socNextThreshold = 0;
+					case BATTERY_THRESHOLD_CRITICAL:
+						g_cmd.socNextThreshold = BATTERY_THRESHOLD_EMPTY;
 						break;
 				}
 			}
@@ -372,7 +369,7 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 
 	ret = fg_get_vbat(&voltage);
 	if (ret) {
-		rsp.voltage = voltage / 10;
+		rsp.voltage = voltage / 100;
 	} else {
 		rsp.voltage = 0;
 	}
@@ -561,12 +558,13 @@ static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i
 	return true;
 }
 
-bool CMD_sendBatteryEvent(uint8_t soc, uint8_t voltage)
+// voltage in mV
+bool CMD_sendBatteryEvent(uint8_t soc, uint16_t voltage_mv)
 {
 	CMD_RSPBUF_EVT_BATTERY_STATUS		rsp;
 
 	rsp.soc		= soc;
-	rsp.voltage	= voltage;
+	rsp.voltage	= voltage_mv /100;
 	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_BATTERY_STATUS, &rsp, sizeof(rsp));
 
 	return true;
