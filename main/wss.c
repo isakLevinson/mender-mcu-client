@@ -98,7 +98,7 @@ bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
 	status = httpd_ws_send_frame_async(hd, fd, &ws_pkt);
 
 	if (ESP_OK != status) {
-		ERROR("send_binary: failed to queue packet %d\n", status);
+		ERROR("send_binary: httpd_ws_send_frame_async %d\n", status);
 		return false;
 	} else {
 		g_server.dbg.counter++;
@@ -167,7 +167,7 @@ static esp_err_t ws_handler(httpd_req_t* req)
 	// First receive the full ws message
 	esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
 	if (ret != ESP_OK) {
-		ERROR("httpd_ws_recv_frame failed to get frame len with %d\n", ret);
+		ERROR("httpd_ws_recv_frame ws failed to get frame len with %d\n", ret);
 		return ret;
 	}
 
@@ -280,7 +280,7 @@ static esp_err_t events_handler(httpd_req_t* req)
 	// First receive the full ws message
 	ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
 	if (ret != ESP_OK) {
-		ERROR("httpd_ws_recv_frame failed to get frame len with %d\n", ret);
+		ERROR("httpd_ws_recv_frame evt failed to get frame len with %d\n", ret);
 		return ret;
 	}
 	if (ws_pkt.len) {

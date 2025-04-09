@@ -72,6 +72,11 @@
 											uint8_t		hw[3];)			\
 	rsp(EVT_BATTERY_STATUS,			0x17,	uint8_t		voltage;		\
 											uint8_t		soc;)			\
+	req(KA_CNT,						0x18,	uint16_t	cnt;)			\
+	rsp(KA_CNT,						0x19,	uint16_t	cnt;			\
+											uint8_t		batVoltage;		\
+											uint8_t		soc;)			\
+										
 
 // *INDENT-ON*
 
@@ -300,14 +305,53 @@ static bool	_req_NOP_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_NOP* i_pReq, uint1
 
 static bool	_req_KEEPALIVE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KEEPALIVE* i_pReq, uint16_t size)
 {
+	bool	ret;
 	CMD_RSPBUF_KEEPALIVE	rsp;
+	uint16_t	soc;
+	uint16_t	voltage;
 
 	INFO("KEEPALIVE\n");
 
-	// TODO: use real values
-	rsp.batVoltage	= 37;
-	rsp.soc			= 85;
+	ret = fg_get_soc(&soc);
+	ret &= fg_get_vbat(&voltage);
+
+	if (ret) {
+		rsp.batVoltage	= voltage;
+		rsp.soc			= soc;
+	} else {
+		rsp.batVoltage	= 37;
+		rsp.soc			= 85;
+	}
+
 	_sendResp(i_pContext, CMD_RSP_KEEPALIVE, &rsp, sizeof(rsp));
+
+	return true;
+}
+
+static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq, uint16_t size)
+{
+	bool	ret;
+	CMD_RSPBUF_KA_CNT	rsp;
+	uint16_t	soc;
+	uint16_t	voltage;
+
+	INFO("KA_CNT %d\n", i_pReq->cnt);
+
+	// TODO: use real values
+	rsp.cnt			= i_pReq->cnt;
+
+	ret = fg_get_soc(&soc);
+	ret &= fg_get_vbat(&voltage);
+
+	if (ret) {
+		rsp.batVoltage	= voltage;
+		rsp.soc			= soc;
+	} else {
+		rsp.batVoltage	= 37;
+		rsp.soc			= 85;
+	}
+
+	_sendResp(i_pContext, CMD_RSP_KA_CNT, &rsp, sizeof(rsp));
 
 	return true;
 }
