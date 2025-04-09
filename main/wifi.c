@@ -341,8 +341,6 @@ static int _startServer(void)
 
 	INFO("starting listener tasks\n");
 
-	wss_start_server();
-
 	ret = xTaskCreate(task_tcp_server, "tcp_server", 8192, NULL, 4, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task %s failed\n", task_tcp_server);
@@ -474,6 +472,8 @@ static void _init(void)
 
 	ESP_ERROR_CHECK(esp_wifi_start());
 	esp_netif_set_default_netif(g_server.netif_sta);
+
+	wss_init();
 	_startServer();
 
 	ret = NVS_get_ssid(ssid, passwd);

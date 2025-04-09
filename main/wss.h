@@ -9,7 +9,7 @@ struct async_resp_arg {
 	int fd;
 };
 
-bool	wss_start_server(void);
+bool	wss_init(void);
 bool	wss_config_start(void);
 bool	wss_config_stop(void);
 bool	wss_send(struct async_resp_arg* i_pAsync, void* pBuf, size_t len);
