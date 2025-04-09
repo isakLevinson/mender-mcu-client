@@ -28,6 +28,8 @@
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
 #endif
 
+#define MAX_SOCKETS_COUNT	8
+
 struct send_arg_t {
 	httpd_handle_t  	hd;
 	int             	fd;
@@ -46,8 +48,56 @@ static struct {
 	bool			ota_new_restart;
 	struct {
 		int	counter;
+		struct {
+			int	fd;
+			char* type;
+		} sockets[MAX_SOCKETS_COUNT];
 	} dbg;
-} g_server;
+} g_server = {0};
+
+static bool _socketAdd(int fd)
+{
+	uint8_t	i;
+	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
+		if (!g_server.dbg.sockets[i].fd) {
+			g_server.dbg.sockets[i].fd = fd;
+			return true;
+		}
+	}
+	ERROR("acn't add new socket %d\n", fd);
+
+	return false;
+}
+
+static bool _socketDel(int fd)
+{
+	uint8_t	i;
+	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
+		if (g_server.dbg.sockets[i].fd == fd) {
+			g_server.dbg.sockets[i].fd = 0;
+			return true;
+		}
+	}
+
+	ERROR("trying to close unexsisting socket %d\n", fd);
+	return false;
+}
+
+static bool _socketSetType(int fd, char* type)
+{
+	uint8_t	i;
+	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
+		if (g_server.dbg.sockets[i].fd == fd) {
+			g_server.dbg.sockets[i].type = type;
+			return true;
+		}
+	}
+
+	ERROR("trying to set type of an unexsisting socket %d\n", fd);
+
+	return false;
+}
+
 
 static void send_ping(void* arg)
 {
@@ -68,10 +118,10 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
 {
 	int status;
 	TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
+#if 0
 	struct async_resp_arg* resp_arg = malloc(sizeof(struct async_resp_arg));
 	resp_arg->hd = wss_keep_alive_get_user_ctx(h);
 	resp_arg->fd = fd;
-#if 0
 	status = httpd_queue_work(resp_arg->hd, send_ping, resp_arg);
 	if (ESP_OK != status) {
 		ERROR("check_client_alive_cb: failed to send ping\n");
@@ -98,7 +148,7 @@ bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
 	status = httpd_ws_send_frame_async(hd, fd, &ws_pkt);
 
 	if (ESP_OK != status) {
-		ERROR("send_binary: failed to queue packet %d\n", status);
+		ERROR("send_binary: httpd_ws_send_frame_async %d\n", status);
 		return false;
 	} else {
 		g_server.dbg.counter++;
@@ -151,13 +201,15 @@ bool _cmdSendResp(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
 }
 static esp_err_t ws_handler(httpd_req_t* req)
 {
-	TRACE("ws_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
+	int fd = httpd_req_to_sockfd(req);
+	TRACE("ws_handler method=%d hd:0x%x fd:%d\n", req->method, req->handle, fd);
 
 	//mbedtls_ssl_context *ssl_ctx = httpd_ssl_get_ssl_ctx(req);
 	httpd_resp_set_hdr(req, "Connection", "keep-alive");
 
 	if (req->method == HTTP_GET) {
 		INFO("WS HTTP_GET Handshake done, the new connection was opened\n");
+		_socketSetType(fd, "WS");
 		return ESP_OK;
 	}
 	httpd_ws_frame_t ws_pkt;
@@ -167,12 +219,12 @@ static esp_err_t ws_handler(httpd_req_t* req)
 	// First receive the full ws message
 	esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
 	if (ret != ESP_OK) {
-		ERROR("httpd_ws_recv_frame failed to get frame len with %d\n", ret);
+		ERROR("httpd_ws_recv_frame ws failed to get frame len with %d\n", ret);
 		return ret;
 	}
 
 	if (ws_pkt.len) {
-		INFO("ws frame len is %d\n", ws_pkt.len);
+		TRACE("WS frame len is %d\n", ws_pkt.len);
 		buf = calloc(1, ws_pkt.len + 1);
 		if (buf == NULL) {
 			ERROR("Failed to calloc memory for buf\n");
@@ -189,25 +241,24 @@ static esp_err_t ws_handler(httpd_req_t* req)
 
 	switch (ws_pkt.type) {
 		case HTTPD_WS_TYPE_PING:
-			INFO("WS PING frame, Replying PONG\n");
+			INFO("WS PING frame, Replying with PONG\n");
 			ws_pkt.type = HTTPD_WS_TYPE_PONG;
 			break;
 
 		case HTTPD_WS_TYPE_PONG:
 			INFO("WS PONG message h:%x\n", req->handle);
 			free(buf);
-			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), httpd_req_to_sockfd(req));
+			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
 			break;
 
 		case HTTPD_WS_TYPE_TEXT:
-		case HTTPD_WS_TYPE_BINARY:
-			INFO("WS Received packet with message: type=%d\n", ws_pkt.type);
-			INFO_BUF("WS Received packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, ws_pkt.payload, ws_pkt.len);
+			INFO("HTTPD_WS_TYPE_TEXT len:%d\n", ws_pkt.len);
+			break;
 
-			if (ws_pkt.len >= 3) {
+		case HTTPD_WS_TYPE_BINARY: {
 				struct async_resp_arg async = {
 					.hd = req->handle,
-					.fd = httpd_req_to_sockfd(req),
+					.fd = fd,
 				};
 
 				CMD_CONTEXT context = {
@@ -215,27 +266,33 @@ static esp_err_t ws_handler(httpd_req_t* req)
 					.pArg       = &async,
 				};
 
-				//uint8_t len = ws_pkt.payload[0];
-				uint8_t type = ws_pkt.payload[2];
+				if (ws_pkt.len < 3) {
+					WARN("HTTPD_WS_TYPE_BINARY short incoming message. ignoring len:%s\n", ws_pkt.len);
+				}
 
+				uint8_t len = ws_pkt.payload[0];
+				uint8_t type = ws_pkt.payload[2];
+				INFO("HTTPD_WS_TYPE_BINARY len:%d\n", ws_pkt.len);
+				INFO("WS Received packet with message: type=%d len=%d cmd:(t:%d, l:%d)\n", ws_pkt.type, ws_pkt.len, type, len);
 				CMD_processMessage(&context, type, ws_pkt.payload + 3, ws_pkt.len - 3);
 			}
 			break;
 
 		case HTTPD_WS_TYPE_CLOSE:
+			INFO("CLOSE\n");
 			ws_pkt.len = 0;
 			ws_pkt.payload = NULL;
 			break;
 
 		case HTTPD_WS_TYPE_CONTINUE:
-			INFO("continue\n");
+			INFO("CONTINUE\n");
 			break;
 	}
 
-	INFO("ws_handler: httpd_handle_t=%p, sockfd=%d, client_info:%d\n",
+	TRACE("ws_handler: httpd_handle_t=%p, fd=%d, client_info:%d\n",
 	    req->handle,
 	    httpd_req_to_sockfd(req),
-	    httpd_ws_get_fd_info(req->handle, httpd_req_to_sockfd(req)));
+	    httpd_ws_get_fd_info(req->handle, fd));
 
 	free(buf);
 	return ESP_OK;
@@ -247,12 +304,15 @@ static esp_err_t events_handler(httpd_req_t* req)
 	httpd_ws_frame_t ws_pkt;
 	uint8_t* buf = NULL;
 
-	TRACE("events_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
+	int fd = httpd_req_to_sockfd(req);
+
+	TRACE("events_handler method=%d hd:0x%x fd:%d\n", req->method, req->handle, fd);
 
 	if (req->method == HTTP_GET) {
 		INFO("EVENTS HTTP_GET\n");
 		events_async_resp.hd  = req->handle;
-		events_async_resp.fd  = httpd_req_to_sockfd(req);
+		events_async_resp.fd  = fd;
+		_socketSetType(fd, "EVT");
 
 		CMD_CONTEXT context = {
 			.p_cbSend   = _cmdSendResp,
@@ -268,10 +328,6 @@ static esp_err_t events_handler(httpd_req_t* req)
 			NVS_set(nvs_id_ota_updated,  "0");
 		}
 
-		//		while (true) {
-		//			vTaskDelay(10);
-		//		}
-
 		return ESP_OK;
 	}
 
@@ -280,7 +336,7 @@ static esp_err_t events_handler(httpd_req_t* req)
 	// First receive the full ws message
 	ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
 	if (ret != ESP_OK) {
-		ERROR("httpd_ws_recv_frame failed to get frame len with %d\n", ret);
+		ERROR("httpd_ws_recv_frame evt failed to get frame len with %d\n", ret);
 		return ret;
 	}
 	if (ws_pkt.len) {
@@ -302,7 +358,7 @@ static esp_err_t events_handler(httpd_req_t* req)
 	if (ws_pkt.type == HTTPD_WS_TYPE_PONG) {
 		INFO("Events PONG message\n");
 		free(buf);
-		return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), httpd_req_to_sockfd(req));
+		return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
 
 	}
 	free(buf);
@@ -319,10 +375,14 @@ static esp_err_t _config_handler(httpd_req_t* req)
 	bool    	validPasswd;
 	const char* pResp = "OK\n";
 
-	INFO("config_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
+	int fd = httpd_req_to_sockfd(req);
+
+	INFO("config_handler method=%d hd:0x%x fd:%d\n", req->method, req->handle, fd);
 
 	if (req->method != HTTP_POST) {
 		WARN("unsupported method %s. must be POST\n", req->method);
+		_socketSetType(fd, "CFG");
+
 		return ESP_OK;
 	}
 
@@ -356,10 +416,13 @@ static esp_err_t rest_handler(httpd_req_t* req)
 	bool    ret;
 	char    buf[256];
 
-	INFO("rest_handler method=%d hd:0x%x fd:0x%x\n", req->method, req->handle, httpd_req_to_sockfd(req));
+	int fd = httpd_req_to_sockfd(req);
+
+	INFO("rest_handler method=%d hd:0x%x fd:%d\n", req->method, req->handle, fd);
 
 	if (req->method != HTTP_POST) {
 		WARN("unsupported method %s. must be POST\n", req->method);
+		_socketSetType(fd, "REST");
 		return ESP_OK;
 	}
 
@@ -377,29 +440,30 @@ static esp_err_t rest_handler(httpd_req_t* req)
 	return ESP_OK;
 }
 
-esp_err_t wss_open_fd(httpd_handle_t hd, int sockfd)
+esp_err_t wss_open_fd(httpd_handle_t hd, int fd)
 {
-	INFO("wss_open hd:0x%x fd:0x%x\n", hd, sockfd);
-
-	//mbedtls_ssl_context *ssl_ctx = (mbedtls_ssl_context*) httpd_ssl_get_socket_ctx(hd, sockfd);
-	//mbedtls_ssl_context *ssl_ctx = httpd_ssl_get_ctx_from_sock(hd, sockfd);
+	INFO("wss_open hd:0x%x fd:%d\n", hd, fd);
 
 	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
-	return wss_keep_alive_add_client(h, sockfd);
+
+	_socketAdd(fd);
+
+	return wss_keep_alive_add_client(h, fd);
 }
 
-void wss_close_fd(httpd_handle_t hd, int sockfd)
+void wss_close_fd(httpd_handle_t hd, int fd)
 {
-	if ((events_async_resp.hd == hd) && (events_async_resp.fd == sockfd)) {
-		INFO("events_close_fd hd:0x%x fd:0x%x\n", hd, sockfd);
+	if ((events_async_resp.hd == hd) && (events_async_resp.fd == fd)) {
+		INFO("events_close_fd hd:0x%x fd:%d\n", hd, fd);
 		memset(&events_async_resp, 0, sizeof(events_async_resp));
 	} else {
-		INFO("wss_close_fd hd:0x%x fd:0x%x\n", hd, sockfd);
+		INFO("wss_close_fd hd:0x%x fd:%d\n", hd, fd);
 	}
 
 	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
-	wss_keep_alive_remove_client(h, sockfd);
-	close(sockfd);
+	wss_keep_alive_remove_client(h, fd);
+	close(fd);
+	_socketDel(fd);
 }
 
 bool client_not_alive_cb(wss_keep_alive_t h, int fd)
@@ -436,7 +500,57 @@ static const httpd_uri_t uri_rest = {
 	.handle_ws_control_frames = true
 };
 
-bool wss_start_server(void)
+bool wss_config_start(void)
+{
+	static const httpd_uri_t uri_config = {
+		.uri        = "/config",
+		.method     = HTTP_POST,
+		.handler    = _config_handler,
+		.user_ctx   = NULL,
+		.is_websocket = true,
+		.handle_ws_control_frames = true
+	};
+
+	INFO("wss_config_start\n");
+	httpd_register_uri_handler(g_server.handle, &uri_config);
+
+	return true;
+}
+
+bool wss_config_stop(void)
+{
+	httpd_unregister_uri(g_server.handle, "/config");
+
+	return true;
+}
+
+static bool dbgStatus(uint8_t argc, char** argv)
+{
+
+	uint8_t	i;
+	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
+		if (g_server.dbg.sockets[i].fd) {
+			PRINT("%d ", g_server.dbg.sockets[i].fd);
+			if (g_server.dbg.sockets[i].type) {
+				PRINT("%s ", g_server.dbg.sockets[i].type);
+			}
+			PRINT("\n");
+		}
+	}
+	PRINT("\n");
+
+	return true;
+}
+
+// *INDENT-OFF*
+DEBUG_MENU_START(g_menu)
+	DEBUG_MENU_DIR("wss", NULL)
+		DEBUG_MENU_CMD("status",	        NULL,		NULL, dbgStatus)
+	DEBUG_MENU_DIR_END
+DEBUG_MENU_END
+// *INDENT-ON*
+
+bool wss_init(void)
 {
 	bool		ret;
 	esp_err_t	err;
@@ -446,6 +560,9 @@ bool wss_start_server(void)
 		WARN("wss already started\n");
 		return false;
 	}
+
+	DBG_TREE_add("/", g_menu);
+
 	// Start the httpd server
 	INFO("Starting server");
 
@@ -516,30 +633,6 @@ bool wss_start_server(void)
 	httpd_register_uri_handler(g_server.handle, &uri_ws);
 	httpd_register_uri_handler(g_server.handle, &uri_events);
 	httpd_register_uri_handler(g_server.handle, &uri_rest);
-
-	return true;
-}
-
-bool wss_config_start(void)
-{
-	static const httpd_uri_t uri_config = {
-		.uri        = "/config",
-		.method     = HTTP_POST,
-		.handler    = _config_handler,
-		.user_ctx   = NULL,
-		.is_websocket = true,
-		.handle_ws_control_frames = true
-	};
-
-	INFO("wss_config_start\n");
-	httpd_register_uri_handler(g_server.handle, &uri_config);
-
-	return true;
-}
-
-bool wss_config_stop(void)
-{
-	httpd_unregister_uri(g_server.handle, "/config");
 
 	return true;
 }

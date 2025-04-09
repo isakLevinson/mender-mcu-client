@@ -72,6 +72,11 @@
 											uint8_t		hw[3];)			\
 	rsp(EVT_BATTERY_STATUS,			0x17,	uint8_t		voltage;		\
 											uint8_t		soc;)			\
+	req(KA_CNT,						0x18,	uint16_t	cnt;)			\
+	rsp(KA_CNT,						0x19,	uint16_t	cnt;			\
+											uint8_t		batVoltage;		\
+											uint8_t		soc;)			\
+										
 
 // *INDENT-ON*
 
@@ -188,7 +193,9 @@ static void _streamPeriod(uint32_t period)
 	g_cmd.streamSentTime	= time;
 	g_cmd.batteryCheckTime	= time;
 	g_cmd.streamPeriod		= period;
-	g_cmd.socNextThreshold	= 100;
+#ifdef BATTERY_THRESHOLD_LOW
+	g_cmd.socNextThreshold	= BATTERY_THRESHOLD_LOW;
+#endif
 }
 
 #if USE_STREAM
@@ -245,16 +252,18 @@ static void _taskStreamer(void* arg)
 		if (ret) {
 			if (soc < g_cmd.socNextThreshold) {
 				CMD_sendBatteryEvent(soc, vbat);
-				switch (soc) {
-					case 30:
-						g_cmd.socNextThreshold = 15;
+				switch (g_cmd.socNextThreshold) {
+					case BATTERY_THRESHOLD_LOW:
+						g_cmd.socNextThreshold = BATTERY_THRESHOLD_CRITICAL;
 						break;
-					case 15:
-						g_cmd.socNextThreshold = 5;
+					case BATTERY_THRESHOLD_CRITICAL:
+						g_cmd.socNextThreshold = BATTERY_THRESHOLD_EMPTY;
 						break;
-					case 5:
-						g_cmd.socNextThreshold = 0;
-						break;
+					case BATTERY_THRESHOLD_EMPTY:
+					break;
+
+					default:
+						WARN("unexpected voltage threshold %d\n", g_cmd.socNextThreshold);
 				}
 			}
 		}
@@ -298,14 +307,53 @@ static bool	_req_NOP_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_NOP* i_pReq, uint1
 
 static bool	_req_KEEPALIVE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KEEPALIVE* i_pReq, uint16_t size)
 {
+	bool	ret;
 	CMD_RSPBUF_KEEPALIVE	rsp;
+	uint16_t	soc;
+	uint16_t	voltage;
 
 	INFO("KEEPALIVE\n");
 
-	// TODO: use real values
-	rsp.batVoltage	= 37;
-	rsp.soc			= 85;
+	ret = fg_get_soc(&soc);
+	ret &= fg_get_vbat(&voltage);
+
+	if (ret) {
+		rsp.batVoltage	= voltage;
+		rsp.soc			= soc;
+	} else {
+		rsp.batVoltage	= 37;
+		rsp.soc			= 85;
+	}
+
 	_sendResp(i_pContext, CMD_RSP_KEEPALIVE, &rsp, sizeof(rsp));
+
+	return true;
+}
+
+static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq, uint16_t size)
+{
+	bool	ret;
+	CMD_RSPBUF_KA_CNT	rsp;
+	uint16_t	soc;
+	uint16_t	voltage;
+
+	INFO("KA_CNT %d\n", i_pReq->cnt);
+
+	// TODO: use real values
+	rsp.cnt			= i_pReq->cnt;
+
+	ret = fg_get_soc(&soc);
+	ret &= fg_get_vbat(&voltage);
+
+	if (ret) {
+		rsp.batVoltage	= voltage;
+		rsp.soc			= soc;
+	} else {
+		rsp.batVoltage	= 37;
+		rsp.soc			= 85;
+	}
+
+	_sendResp(i_pContext, CMD_RSP_KA_CNT, &rsp, sizeof(rsp));
 
 	return true;
 }
@@ -372,7 +420,7 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 
 	ret = fg_get_vbat(&voltage);
 	if (ret) {
-		rsp.voltage = voltage / 10;
+		rsp.voltage = voltage / 100;
 	} else {
 		rsp.voltage = 0;
 	}
@@ -561,12 +609,15 @@ static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i
 	return true;
 }
 
-bool CMD_sendBatteryEvent(uint8_t soc, uint8_t voltage)
+// voltage in mV
+bool CMD_sendBatteryEvent(uint8_t soc, uint16_t voltage_mv)
 {
 	CMD_RSPBUF_EVT_BATTERY_STATUS		rsp;
 
+	INFO("CMD_sendBatteryEvent soc:%d v:%d\n", soc, voltage_mv);
+
 	rsp.soc		= soc;
-	rsp.voltage	= voltage;
+	rsp.voltage	= voltage_mv /100;
 	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_BATTERY_STATUS, &rsp, sizeof(rsp));
 
 	return true;
@@ -716,8 +767,9 @@ static bool dbgStream(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-	PRINT("stream period %d\n", g_cmd.streamPeriod);
-	PRINT("stream time   %d\n", g_cmd.streamSentTime);
+	PRINT("stream period     %d\n", g_cmd.streamPeriod);
+	PRINT("stream time       %d\n", g_cmd.streamSentTime);
+	PRINT("voltage threshold %d\n", g_cmd.socNextThreshold);
 
 	return true;
 }

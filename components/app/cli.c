@@ -16,6 +16,7 @@
 #include "esp_timer.h"
 #include "esp_mac.h"
 #include "esp_partition.h"
+#include "factory.h"
 
 #include "main.h"
 #include "cli.h"
@@ -227,8 +228,12 @@ static bool dbgVer(uint8_t argc, char** argv)
 	char*	proj;
 	char*	ver;
 	uint32_t	numbers[3];
+	char*		sn;
 
 	MENDER_version(&proj, &ver, numbers);
+	FACTORY_factoryGetSn(&sn);
+
+	PRINT("sn: %s\n", sn);
 	PRINT("proj: %s\n", proj);
 	PRINT("sw ver: \"%s\" [%d.%d.%d]\n", ver, numbers[0], numbers[1], numbers[2]);
 

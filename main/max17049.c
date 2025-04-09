@@ -169,6 +169,7 @@ bool fg_get_soc(uint16_t* o_pVal)
 	return true;
 }
 
+// voltage in mV
 bool fg_get_vbat(uint16_t* o_pVal)
 {
 	bool	ret;
