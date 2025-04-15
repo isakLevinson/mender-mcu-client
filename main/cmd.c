@@ -767,8 +767,10 @@ static bool dbgStream(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
+	int32_t time = TIME_get32();
+
 	PRINT("stream period     %d\n", g_cmd.streamPeriod);
-	PRINT("stream time       %d\n", g_cmd.streamSentTime);
+	PRINT("stream time       %d (%d)\n", g_cmd.streamSentTime, time - g_cmd.streamSentTime);
 	PRINT("voltage threshold %d\n", g_cmd.socNextThreshold);
 
 	return true;
