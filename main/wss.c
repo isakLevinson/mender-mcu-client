@@ -391,12 +391,21 @@ static esp_err_t events_handler(httpd_req_t* req)
 		}
 	}
 
-	if (ws_pkt.type == HTTPD_WS_TYPE_PONG) {
-		INFO("Events PONG message\n");
-		free(buf);
-		return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
+	switch (ws_pkt.type) {
+		case HTTPD_WS_TYPE_PING:
+			INFO("Events PING frame, Replying with PONG\n");
+			ws_pkt.type = HTTPD_WS_TYPE_PONG;
+			break;
 
+		case HTTPD_WS_TYPE_PONG:
+			INFO("Events PONG message\n");
+			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
+			break;
+
+		default:
+			INFO("Events unhandles type\n");
 	}
+
 	free(buf);
 
 	return ESP_OK;
