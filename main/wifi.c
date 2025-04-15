@@ -280,33 +280,6 @@ static esp_ip4_addr_t  wifi_getSelfIp(void)
 	return ip.ip;
 }
 
-static void task_tcp_server(void* arg)
-{
-	esp_ip4_addr_t  ip  = {0};
-
-	INFO("TCP started\n");
-
-	while (true) {
-		if (!ip.addr) {
-			TRACE("waiting for FLAG_GOT_IP\n");
-			int bits = xEventGroupWaitBits(g_server.event_group, FLAG_GOT_IP_TCP, 1, 1, 1000);
-
-			if (bits & FLAG_GOT_IP_TCP) {
-				INFO("got FLAG_GOT_IP\n");
-				ip = wifi_getSelfIp();
-				INFO("got ip=%08x\n", ip.addr);
-			}
-		}
-
-		if (!ip.addr) {
-			continue;
-		}
-
-		vTaskDelay(1000);
-		ip = wifi_getSelfIp();
-	}
-}
-
 static void task_udp_time_server(void* arg)
 {
 	esp_ip4_addr_t  ip  = {0};
@@ -340,12 +313,6 @@ static int _startServer(void)
 	BaseType_t ret;
 
 	INFO("starting listener tasks\n");
-
-	ret = xTaskCreate(task_tcp_server, "tcp_server", 8192, NULL, 4, NULL);
-	if (ret != pdPASS) {
-		ERROR("create task %s failed\n", task_tcp_server);
-		return ESP_FAIL;
-	}
 
 	ret = xTaskCreate(task_udp_time_server, "udp_time", 4096, NULL, 3, NULL);
 	if (ret != pdPASS) {

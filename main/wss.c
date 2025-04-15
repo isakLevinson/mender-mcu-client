@@ -95,47 +95,45 @@ static bool _socketAdd(int fd)
 			return true;
 		}
 	}
-	ERROR("acn't add new socket %d\n", fd);
+	ERROR("can't add new socket %d\n", fd);
 
 	return false;
 }
 
 static bool _socketDel(int fd)
 {
-	uint8_t	i;
+	struct socket_desc_t* sock = _socketGet(fd);
 
-	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
-		if (g_server.dbg.sockets[i].fd == fd) {
-			g_server.dbg.sockets[i].fd = 0;
-
-			if (g_server.dbg.sockets[i].type) {
-				INFO("closed %d %s\n", fd, g_server.dbg.sockets[i].type);
-			} else {
-				INFO("closed %d UNKNOWN\n", fd);
-			}
-			return true;
-		}
+	if (!sock) {
+		ERROR("trying to close unexsisting socket %d\n", fd);
+		return false;
 	}
 
-	ERROR("trying to close unexsisting socket %d\n", fd);
-	return false;
+	if (sock->type) {
+		INFO("closed %d %s\n", fd, sock->type);
+	} else {
+		INFO("closed %d UNKNOWN\n", fd);
+	}
+
+	sock->fd = 0;
+
+	return true;
 }
 
 static bool _socketSetType(int fd, char* type)
 {
-	uint8_t	i;
-	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
-		if (g_server.dbg.sockets[i].fd == fd) {
-			g_server.dbg.sockets[i].type = type;
-			return true;
-		}
+	struct socket_desc_t* sock = _socketGet(fd);
+
+	if (!sock) {
+		ERROR("trying to set type of an unexsisting socket %d\n", fd);
+		return false;
 	}
 
-	ERROR("trying to set type of an unexsisting socket %d\n", fd);
+	INFO("set socket type %d %s\n", fd, type);
+	sock->type = type;
 
-	return false;
+	return true;
 }
-
 
 static void send_ping(void* arg)
 {
