@@ -39,6 +39,11 @@ struct send_arg_t {
 	uint8_t         	buf[];
 };
 
+struct socket_desc_t {
+	int	fd;
+	char* type;
+};
+
 struct async_resp_arg events_async_resp;
 
 static const size_t max_clients = 4;
@@ -48,12 +53,38 @@ static struct {
 	bool			ota_new_restart;
 	struct {
 		int	counter;
-		struct {
-			int	fd;
-			char* type;
-		} sockets[MAX_SOCKETS_COUNT];
+		struct socket_desc_t sockets[MAX_SOCKETS_COUNT];
 	} dbg;
 } g_server = {0};
+
+
+static struct socket_desc_t* _socketGet(int fd)
+{
+	uint8_t	i;
+	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
+		if (g_server.dbg.sockets[i].fd == fd) {
+			return &g_server.dbg.sockets[i];
+		}
+	}
+
+	return NULL;
+}
+
+static void _socketPrint(char* prefix, int fd)
+{
+	struct socket_desc_t*	sock = _socketGet(fd);
+	if (!sock) {
+		WARN("%s unexpected socket %d\n", prefix, fd);
+		return;
+	}
+
+	if (!sock->type) {
+		WARN("%s unknown socket type %d\n", prefix, fd);
+		return;
+	}
+
+	INFO("%s %d %s\n", prefix, fd, sock->type);
+}
 
 static bool _socketAdd(int fd)
 {
@@ -72,9 +103,16 @@ static bool _socketAdd(int fd)
 static bool _socketDel(int fd)
 {
 	uint8_t	i;
+
 	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
 		if (g_server.dbg.sockets[i].fd == fd) {
 			g_server.dbg.sockets[i].fd = 0;
+
+			if (g_server.dbg.sockets[i].type) {
+				INFO("closed %d %s\n", fd, g_server.dbg.sockets[i].type);
+			} else {
+				INFO("closed %d UNKNOWN\n", fd);
+			}
 			return true;
 		}
 	}

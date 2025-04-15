@@ -193,7 +193,9 @@ static void _streamPeriod(uint32_t period)
 	g_cmd.streamSentTime	= time;
 	g_cmd.batteryCheckTime	= time;
 	g_cmd.streamPeriod		= period;
+#ifdef BATTERY_THRESHOLD_LOW
 	g_cmd.socNextThreshold	= BATTERY_THRESHOLD_LOW;
+#endif
 }
 
 #if USE_STREAM
