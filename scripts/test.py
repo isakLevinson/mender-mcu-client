@@ -43,7 +43,7 @@ async def test_wss():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=360000) as websocket:
+    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=60, ping_interval=5) as websocket:
         print("ws connected")
 
       # Shared event to signal exit
