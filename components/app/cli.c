@@ -21,6 +21,7 @@
 #include "main.h"
 #include "cli.h"
 #include "fifo.h"
+#include "time.h"
 #include "mender_ota.h"
 
 static struct {
@@ -89,7 +90,11 @@ static void _free(void* i_pBuf)
 
 uint64_t _getTime(void)
 {
-	return esp_timer_get_time() / 1000;
+	int64_t t;
+
+	TIME_get64(&t);
+
+	return t / 1000;
 }
 
 #if USE_FLASH_LOG
@@ -480,11 +485,26 @@ static bool dbgLogTail(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgTime(uint8_t argc, char** argv)
+{
+	int64_t	t;
+
+	TIME_get64(&t);
+
+	uint32_t	us = t % 1000000;
+	t /= 1000000;
+
+	PRINT("%d.%06d", (int32_t)t, us);
+
+	return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-	DEBUG_MENU_CMD("ver",		NULL,		NULL, dbgVer)
-	DEBUG_MENU_CMD("ps",		NULL,		NULL, dbgPs)
-	DEBUG_MENU_CMD("tail",	NULL,		NULL, dbgLogTail)
+	DEBUG_MENU_CMD("ver",	NULL,	NULL, dbgVer)
+	DEBUG_MENU_CMD("ps",	NULL,	NULL, dbgPs)
+	DEBUG_MENU_CMD("tail",	NULL,	NULL, dbgLogTail)
+	DEBUG_MENU_CMD("time",	NULL,	NULL, dbgTime)
 	DEBUG_MENU_DIR("log", NULL)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgLogStatus)
 		DEBUG_MENU_CMD("clear",		NULL,		NULL, dbgLogClear)

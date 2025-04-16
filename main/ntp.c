@@ -11,15 +11,20 @@
 
 static void sntp_sync_time_cb(struct timeval *tv)
 {
-	INFO("sntp_sync_time_cb %d %d sec\n", tv->tv_sec, (uint32_t)(tv->tv_usec/1000000));
+	int64_t	t;
+	int32_t t32;
+	
+	INFO("sntp_sync_time_cb %d %d sec\n", tv->tv_sec, (uint32_t)(tv->tv_usec));
+
+	TIME_set64((int64_t)tv->tv_sec * 1000000);
+	TIME_get64(&t);
+
+	t32 = TIME_get32();
+	INFO("time: %d.%d\n", (int32_t)(t/1000000), (int32_t)(t % 1000000));
+	INFO("t32 : %d\n", t32);
 }
 
 static void _init(void)
-{
-
-}
-
-static bool dbgNetifInit(uint8_t argc, char** argv)
 {
 	esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
 
@@ -28,13 +33,21 @@ static bool dbgNetifInit(uint8_t argc, char** argv)
 	sntp_set_time_sync_notification_cb(sntp_sync_time_cb);
 
 //	esp_sntp_init();
+	sntp_set_sync_mode(SNTP_SYNC_MODE_SMOOTH);
+	//sntp_set_sync_interval(3600000);
+}
+
+bool ntp_restart(void)
+{
+	bool ret = sntp_restart();
+	INFO("sntp_restart %d\n", ret);
 
 	return true;
 }
 
 static bool dbgInit(uint8_t argc, char** argv)
 {
-	esp_sntp_init();
+	_init();
 	return true;
 }
 
@@ -73,8 +86,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 static bool dbgRestart(uint8_t argc, char** argv)
 {
-	bool ret = sntp_restart();
-	PRINT("%d\n", ret);
+	ntp_restart();
 	return true;
 }
 
@@ -82,7 +94,6 @@ static bool dbgRestart(uint8_t argc, char** argv)
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("ntp", NULL)
 		DEBUG_MENU_CMD("status",	        NULL,		NULL, dbgStatus)
-		DEBUG_MENU_CMD("netIfInit",	        NULL,		NULL, dbgNetifInit)
 		DEBUG_MENU_CMD("init",		        NULL,		NULL, dbgInit)
 		DEBUG_MENU_CMD("restart",	        NULL,		NULL, dbgRestart)
 	DEBUG_MENU_DIR_END

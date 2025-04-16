@@ -38,6 +38,7 @@
 #include "factory.h"
 #include "config.h"
 #include "mender_ota.h"
+#include "ntp.h"
 
 #define FLAG_CONNECTED            BIT0
 #define FLAG_DISCONNECT           BIT1
@@ -139,6 +140,7 @@ static void got_ip_handler(void* arg, esp_event_base_t event_base,
 	WIFI_stopAp();
 	wss_config_stop();
 	MENDER_execute();
+	ntp_restart();
 }
 
 static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)

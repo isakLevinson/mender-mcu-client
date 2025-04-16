@@ -42,16 +42,16 @@ void TIME_get64(int64_t* o_pTime)
 	int64_t t;
 
 	t = esp_timer_get_time();
-	*o_pTime = (t - g_timerDb.offset64) / 1000;
+	*o_pTime = t - g_timerDb.offset64;
 }
 
 int32_t TIME_get32(void)
 {
 	int64_t t;
 
-	TIME_get64(&t);
+	t = esp_timer_get_time();
 
-	return (int32_t)(t & 0xffffffff);
+	return (int32_t)((t/1000) & 0xffffffff);
 }
 
 
