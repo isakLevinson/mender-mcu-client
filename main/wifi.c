@@ -21,8 +21,6 @@
 #include "esp_netif.h"
 #include "esp_timer.h"
 #include "esp_coexist.h"
-#include "esp_netif_sntp.h"
-#include "esp_sntp.h"
 
 #include "mdns.h"
 #include "esp_mac.h"
@@ -309,11 +307,6 @@ static void task_udp_time_server(void* arg)
 	}
 
 	vTaskDelete(NULL);
-}
-
-static void sntp_sync_time_cb(struct timeval *tv)
-{
-	INFO("sntp_sync_time_cb %d sec\n", (uint32_t)(tv->tv_usec/1000000));
 }
 
 static int _startServer(void)
@@ -690,55 +683,6 @@ static bool dbgConfig(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgNtpNetifInit(uint8_t argc, char** argv)
-{
-	esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
-
-	esp_netif_sntp_init(&config);
-
-	sntp_set_time_sync_notification_cb(sntp_sync_time_cb);
-
-	return true;
-}
-
-static bool dbgNtpInit(uint8_t argc, char** argv)
-{
-	esp_sntp_init();
-	return true;
-}
-
-static bool dbgNtpStatus(uint8_t argc, char** argv)
-{
-	sntp_sync_status_t status = sntp_get_sync_status();	
-	uint8_t	i;
-
-	switch (status) {
-		case SNTP_SYNC_STATUS_COMPLETED: PRINT("SNTP_SYNC_STATUS_COMPLETED\n");	break;
-		case SNTP_SYNC_STATUS_RESET: PRINT("SNTP_SYNC_STATUS_RESET\n");	break;
-		case SNTP_SYNC_STATUS_IN_PROGRESS: PRINT("SNTP_SYNC_STATUS_IN_PROGRESS\n");	break;
-		default: PRINT("sntp_get_sync_status %d\n", status);
-	}
-
-	sntp_sync_mode_t mode = sntp_get_sync_mode();
-	switch (mode) {
-		case SNTP_SYNC_MODE_IMMED: PRINT("SNTP_SYNC_MODE_IMMED\n");		break;
-		case SNTP_SYNC_MODE_SMOOTH: PRINT("SNTP_SYNC_MODE_SMOOTH\n");	break;
-		default: PRINT("sntp_get_sync_mode %d\n", mode);
-	}
-
-	uint32_t	interval = sntp_get_sync_interval();
-	PRINT("interval: %d\n", interval);
-
-	for (i=0; i<8; i++) {
-		char* srvr = esp_sntp_getservername(i);
-		if (srvr) {
-			PRINT("%d: %s\n", i, srvr);
-		}
-	}
-
-	return true;
-}
-
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("wifi", NULL)
@@ -749,11 +693,6 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
 		DEBUG_MENU_CMD("ap",	          	"<0/1>",    NULL, dbgAp)
 		DEBUG_MENU_CMD("config",          	"<0/1>",    NULL, dbgConfig)
-		DEBUG_MENU_DIR("ntp", NULL)
-			DEBUG_MENU_CMD("status",	        NULL,		NULL, dbgNtpStatus)
-			DEBUG_MENU_CMD("netIfInit",	        NULL,		NULL, dbgNtpNetifInit)
-			DEBUG_MENU_CMD("init",		        NULL,		NULL, dbgNtpInit)
-		DEBUG_MENU_DIR_END
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
