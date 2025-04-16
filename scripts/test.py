@@ -43,7 +43,7 @@ async def test_wss():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=360000) as websocket:
+    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=3600000) as websocket:
         print("ws connected")
 
       # Shared event to signal exit
@@ -100,7 +100,7 @@ async def events():
                 ms = int(round(time.time() * 1000))
 #                print("evt: (%d) %s" % (len(response), response[0:16]))
 #                bin = binascii.hexlify(response)
-                bin = binascii.b2a_qp(response[0:20])
+                bin = binascii.b2a_qp(response[0:40])
                 print("evt:", count, len(response), ms, bin)
 
         await asyncio.gather(recv_data())
