@@ -87,7 +87,7 @@ static bool update_client(wss_keep_alive_t h, int sockfd, uint64_t timestamp)
 
 static bool remove_client(wss_keep_alive_t h, int sockfd)
 {
-	INFO("remove_client %x\n", sockfd);
+	INFO("remove_client %d\n", sockfd);
 
 	for (int i = 0; i < h->max_clients; ++i) {
 		TRACE("%d: %d %d", i, h->clients[i].type, h->clients[i].fd);

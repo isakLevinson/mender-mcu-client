@@ -39,6 +39,11 @@ struct send_arg_t {
 	uint8_t         	buf[];
 };
 
+struct socket_desc_t {
+	int	fd;
+	char* type;
+};
+
 struct async_resp_arg events_async_resp;
 
 static const size_t max_clients = 4;
@@ -48,12 +53,38 @@ static struct {
 	bool			ota_new_restart;
 	struct {
 		int	counter;
-		struct {
-			int	fd;
-			char* type;
-		} sockets[MAX_SOCKETS_COUNT];
+		struct socket_desc_t sockets[MAX_SOCKETS_COUNT];
 	} dbg;
 } g_server = {0};
+
+
+static struct socket_desc_t* _socketGet(int fd)
+{
+	uint8_t	i;
+	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
+		if (g_server.dbg.sockets[i].fd == fd) {
+			return &g_server.dbg.sockets[i];
+		}
+	}
+
+	return NULL;
+}
+
+static void _socketPrint(char* prefix, int fd)
+{
+	struct socket_desc_t*	sock = _socketGet(fd);
+	if (!sock) {
+		WARN("%s unexpected socket %d\n", prefix, fd);
+		return;
+	}
+
+	if (!sock->type) {
+		WARN("%s unknown socket type %d\n", prefix, fd);
+		return;
+	}
+
+	INFO("%s %d %s\n", prefix, fd, sock->type);
+}
 
 static bool _socketAdd(int fd)
 {
@@ -64,40 +95,45 @@ static bool _socketAdd(int fd)
 			return true;
 		}
 	}
-	ERROR("acn't add new socket %d\n", fd);
+	ERROR("can't add new socket %d\n", fd);
 
 	return false;
 }
 
 static bool _socketDel(int fd)
 {
-	uint8_t	i;
-	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
-		if (g_server.dbg.sockets[i].fd == fd) {
-			g_server.dbg.sockets[i].fd = 0;
-			return true;
-		}
+	struct socket_desc_t* sock = _socketGet(fd);
+
+	if (!sock) {
+		ERROR("trying to close unexsisting socket %d\n", fd);
+		return false;
 	}
 
-	ERROR("trying to close unexsisting socket %d\n", fd);
-	return false;
+	if (sock->type) {
+		INFO("closed %d %s\n", fd, sock->type);
+	} else {
+		INFO("closed %d UNKNOWN\n", fd);
+	}
+
+	sock->fd = 0;
+
+	return true;
 }
 
 static bool _socketSetType(int fd, char* type)
 {
-	uint8_t	i;
-	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
-		if (g_server.dbg.sockets[i].fd == fd) {
-			g_server.dbg.sockets[i].type = type;
-			return true;
-		}
+	struct socket_desc_t* sock = _socketGet(fd);
+
+	if (!sock) {
+		ERROR("trying to set type of an unexsisting socket %d\n", fd);
+		return false;
 	}
 
-	ERROR("trying to set type of an unexsisting socket %d\n", fd);
+	INFO("set socket type %d %s\n", fd, type);
+	sock->type = type;
 
-	return false;
+	return true;
 }
-
 
 static void send_ping(void* arg)
 {
@@ -355,12 +391,21 @@ static esp_err_t events_handler(httpd_req_t* req)
 		}
 	}
 
-	if (ws_pkt.type == HTTPD_WS_TYPE_PONG) {
-		INFO("Events PONG message\n");
-		free(buf);
-		return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
+	switch (ws_pkt.type) {
+		case HTTPD_WS_TYPE_PING:
+			INFO("Events PING frame, Replying with PONG\n");
+			ws_pkt.type = HTTPD_WS_TYPE_PONG;
+			break;
 
+		case HTTPD_WS_TYPE_PONG:
+			INFO("Events PONG message\n");
+			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
+			break;
+
+		default:
+			INFO("Events unhandles type\n");
 	}
+
 	free(buf);
 
 	return ESP_OK;

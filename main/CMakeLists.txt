@@ -19,6 +19,7 @@ idf_component_register(
 				"main.c"
 				"cmd.c"
 				"wifi.c"
+				"ntp.c"
 				"time.c"
 				"wss.c"
 				"wss_keepalive.c"
