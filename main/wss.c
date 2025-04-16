@@ -359,6 +359,8 @@ static esp_err_t events_handler(httpd_req_t* req)
 
 	TRACE("events_handler method=%d hd:0x%x fd:%d\n", req->method, req->handle, fd);
 
+	common_handler(req, &ws_pkt);
+
 	if (req->method == HTTP_GET) {
 		INFO("EVENTS HTTP_GET\n");
 		events_async_resp.hd  = req->handle;
@@ -382,46 +384,8 @@ static esp_err_t events_handler(httpd_req_t* req)
 		return ESP_OK;
 	}
 
-	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-
-	// First receive the full ws message
-	ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
-	if (ret != ESP_OK) {
-		ERROR("httpd_ws_recv_frame evt failed to get frame len with %d\n", ret);
-		return ret;
-	}
-	if (ws_pkt.len) {
-		INFO("ev events frame len is %d\n", ws_pkt.len);
-		buf = calloc(1, ws_pkt.len + 1);
-		if (buf == NULL) {
-			ERROR("Failed to calloc memory for buf\n");
-			return ESP_ERR_NO_MEM;
-		}
-		ws_pkt.payload = buf;
-		ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
-		if (ret != ESP_OK) {
-			ERROR("events httpd_ws_recv_frame %d\n", ret);
-			free(buf);
-			return ret;
-		}
-	}
-
-	switch (ws_pkt.type) {
-		case HTTPD_WS_TYPE_PING:
-			INFO("Events PING frame, Replying with PONG\n");
-			ws_pkt.type = HTTPD_WS_TYPE_PONG;
-			break;
-
-		case HTTPD_WS_TYPE_PONG:
-			INFO("Events PONG message\n");
-			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
-			break;
-
-		default:
-			INFO("Events unhandles type\n");
-	}
-
-	free(buf);
+	free(ws_pkt.payload);
+	ws_pkt.payload = NULL;
 
 	return ESP_OK;
 }
