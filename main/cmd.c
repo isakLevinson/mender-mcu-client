@@ -154,7 +154,16 @@ static struct {
 	int32_t				batteryCheckTime;
 	uint8_t				socNextThreshold;
 	uint32_t			counter;
-} g_cmd;
+
+	#if CONFIG_BUILD_TYPE_EEG
+	char		streamBuf[2000];
+	uint16_t	streamSize;
+	#endif
+} g_cmd = {
+	.streamSize = 1500,
+};
+
+
 
 bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t size)
 {
@@ -206,10 +215,6 @@ static void _taskStreamer(void* arg)
 	int16_t	press[4] = {0};
 	CMD_RSPBUF_EVT_STREAM	rsp;
 	uint32_t	i;
-
-#if CONFIG_BUILD_TYPE_EEG
-	static char buf[1500];
-#endif
 
 	while (true) {
 		vTaskDelay(1);
@@ -270,9 +275,12 @@ static void _taskStreamer(void* arg)
 #endif
 
 #if CONFIG_BUILD_TYPE_EEG
-		sprintf(buf, "%d: %d", TIME_get32(), g_cmd.counter++);
+		int64_t t64;
+		TIME_get64(&t64);
+
+		sprintf(g_cmd.streamBuf, "## %d.%03d: i:%d dt:%d   ##", (uint32_t)(t64/1000000), (uint32_t)((t64/1000) % 1000), g_cmd.counter++, t - g_cmd.streamSentTime);
 		TRACE("trace counter: %d\n", g_cmd.counter);
-		ret = _sendResp(&g_cmd.streamContext, CMD_RSP_EVT_STREAM, &buf, sizeof(buf));
+		ret = _sendResp(&g_cmd.streamContext, CMD_RSP_EVT_STREAM, &g_cmd.streamBuf, g_cmd.streamSize);
 		if (!ret) {
 			ERROR("failed to send. stopping streaming\n");
 			_streamPeriod(0);
@@ -758,6 +766,10 @@ static bool dbgStream(uint8_t argc, char** argv)
 
 	period = strtoul(argv[1], NULL, 10);
 
+	if ( argc >= 3) {
+		g_cmd.streamSize = MIN(strtoul(argv[2], NULL, 10), sizeof(g_cmd.streamBuf));
+	}
+
 	g_cmd.counter = 0;
 	_streamPeriod(period);
 
@@ -767,8 +779,11 @@ static bool dbgStream(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
+	int32_t time = TIME_get32();
+
 	PRINT("stream period     %d\n", g_cmd.streamPeriod);
-	PRINT("stream time       %d\n", g_cmd.streamSentTime);
+	PRINT("stream size       %d\n", g_cmd.streamSize);
+	PRINT("stream time       %d (%d)\n", g_cmd.streamSentTime, time - g_cmd.streamSentTime);
 	PRINT("voltage threshold %d\n", g_cmd.socNextThreshold);
 
 	return true;

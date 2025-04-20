@@ -99,7 +99,7 @@ async def events():
                 ms = int(round(time.time() * 1000))
 #                print("evt: (%d) %s" % (len(response), response[0:16]))
 #                bin = binascii.hexlify(response)
-                bin = binascii.b2a_qp(response[0:20])
+                bin = binascii.b2a_qp(response[0:40])
                 print("evt:", count, len(response), ms, bin)
 
         await asyncio.gather(recv_data())

@@ -26,6 +26,7 @@
 #include "cli.h"
 #include "cmd.h"
 #include "wifi.h"
+#include "ntp.h"
 #include "pump.h"
 #include "ctrl.h"
 #include "adc.h"
@@ -142,6 +143,7 @@ void app_main(void)
 	fg_init();
 	MMI_init();
 	WIFI_init();
+	ntp_init();
 
 	PMP_init();
 	CTRL_init();
