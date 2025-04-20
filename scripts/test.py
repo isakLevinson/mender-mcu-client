@@ -86,7 +86,7 @@ async def events():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    async with websockets.connect(uri + uri_events, ssl=ssl_context, ping_timeout=10, ping_interval=2) as websocket:
+    async with websockets.connect(uri + uri_events, ssl=ssl_context, ping_timeout=10, ping_interval=1) as websocket:
         print("events connected")
 
         async def recv_data():

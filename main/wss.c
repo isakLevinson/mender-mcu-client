@@ -295,7 +295,7 @@ static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 		case HTTPD_WS_TYPE_PING:
 			INFO("PING frame, Replying with PONG fd:%d (%s)\n", fd, fdType);
 			pkt->type = HTTPD_WS_TYPE_PONG;
-			ret = httpd_ws_send_frame(req, pkt);
+			ret = _tx(req->handle, fd, pkt);
 			break;
 
 		case HTTPD_WS_TYPE_PONG:
@@ -314,7 +314,7 @@ static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 			pkt->len = 0;
 			free(pkt->payload);
 			pkt->payload = NULL;
-			ret = httpd_ws_send_frame(req, pkt);
+			ret = _tx(req->handle, fd, pkt);
 			break;
 
 		case HTTPD_WS_TYPE_CONTINUE:
