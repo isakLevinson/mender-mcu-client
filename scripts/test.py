@@ -7,7 +7,6 @@ import binascii
 import time
 
 cert_path = "main/certs/servercert.pem"
-#uri = "wss://192.168.1.148"
 uri = "wss://pnu_5.local"
 uri_ws = "/ws"
 uri_events = "/events"
@@ -43,7 +42,7 @@ async def test_wss():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=60, ping_interval=5) as websocket:
+    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=10, ping_interval=2) as websocket:
         print("ws connected")
 
       # Shared event to signal exit
@@ -87,7 +86,7 @@ async def events():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    async with websockets.connect(uri + uri_events, ssl=ssl_context, ping_timeout=360000, ping_interval=60000) as websocket:
+    async with websockets.connect(uri + uri_events, ssl=ssl_context, ping_timeout=10, ping_interval=2) as websocket:
         print("events connected")
 
         async def recv_data():

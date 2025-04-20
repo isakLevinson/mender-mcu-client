@@ -57,7 +57,6 @@ static struct {
 	} dbg;
 } g_server = {0};
 
-
 static struct socket_desc_t* _socketGet(int fd)
 {
 	uint8_t	i;
@@ -242,6 +241,14 @@ static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 	httpd_resp_set_hdr(req, "Connection", "keep-alive");
 	memset(pkt, 0, sizeof(httpd_ws_frame_t));
 	int fd = httpd_req_to_sockfd(req);
+	struct socket_desc_t* desc = _socketGet(fd);
+	char* fdType = "";
+
+	if (desc) {
+		fdType = desc->type;
+	}
+
+	TRACE("common_handler %d (%s)\n", fd, fdType);
 
 	// First receive the full ws message
 	ret = httpd_ws_recv_frame(req, pkt, 0);
@@ -251,7 +258,7 @@ static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 	}
 
 	if (pkt->len) {
-		TRACE("WS frame len is %d\n", pkt->len);
+		TRACE("frame len is %d\n", pkt->len);
 		pkt->payload = calloc(1, pkt->len + 1);
 		if (!pkt->payload) {
 			ERROR("Failed to calloc memory for ws_pkt.payload\n");
@@ -268,13 +275,13 @@ static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 
 	switch (pkt->type) {
 		case HTTPD_WS_TYPE_PING:
-			INFO("WS PING frame, Replying with PONG\n");
+			INFO("PING frame, Replying with PONG fd:%d (%s)\n", fd, fdType);
 			pkt->type = HTTPD_WS_TYPE_PONG;
 			ret = httpd_ws_send_frame(req, pkt);
 			break;
 
 		case HTTPD_WS_TYPE_PONG:
-			INFO("WS PONG message h:%x\n", req->handle);
+			INFO("PONG message h:%x, fd:%d\n", req->handle, fd);
 			free(pkt->payload);
 			pkt->payload = NULL;
 			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
@@ -285,7 +292,7 @@ static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 			break;
 
 		case HTTPD_WS_TYPE_CLOSE:
-			INFO("CLOSE\n");
+			INFO("CLOSE fd:%d\n", fd);
 			pkt->len = 0;
 			free(pkt->payload);
 			pkt->payload = NULL;
@@ -293,7 +300,7 @@ static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 			break;
 
 		case HTTPD_WS_TYPE_CONTINUE:
-			INFO("CONTINUE\n");
+			INFO("CONTINUE fd:%d\n", fd);
 			break;
 
 		default:
@@ -304,7 +311,7 @@ static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 
 static esp_err_t ws_handler(httpd_req_t* req)
 {
-	httpd_ws_frame_t ws_pkt;
+	httpd_ws_frame_t pkt;
 
 	int fd = httpd_req_to_sockfd(req);
 	TRACE("ws_handler method=%d hd:0x%x fd:%d\n", req->method, req->handle, fd);
@@ -315,9 +322,9 @@ static esp_err_t ws_handler(httpd_req_t* req)
 		return ESP_OK;
 	}
 
-	common_handler(req, &ws_pkt);
+	common_handler(req, &pkt);
 
-	if (HTTPD_WS_TYPE_BINARY == ws_pkt.type) {
+	if (HTTPD_WS_TYPE_BINARY == pkt.type) {
 		struct async_resp_arg async = {
 			.hd = req->handle,
 			.fd = fd,
@@ -328,15 +335,15 @@ static esp_err_t ws_handler(httpd_req_t* req)
 			.pArg       = &async,
 		};
 
-		if (ws_pkt.len < 3) {
-			WARN("HTTPD_WS_TYPE_BINARY short incoming message. ignoring len:%s\n", ws_pkt.len);
+		if (pkt.len < 3) {
+			WARN("HTTPD_WS_TYPE_BINARY short incoming message. ignoring len:%s\n", pkt.len);
 		}
 
-		uint8_t len = ws_pkt.payload[0];
-		uint8_t type = ws_pkt.payload[2];
-		INFO("HTTPD_WS_TYPE_BINARY len:%d\n", ws_pkt.len);
-		INFO("WS Received packet with message: type=%d len=%d cmd:(t:%d, l:%d)\n", ws_pkt.type, ws_pkt.len, type, len);
-		CMD_processMessage(&context, type, ws_pkt.payload + 3, ws_pkt.len - 3);
+		uint8_t len = pkt.payload[0];
+		uint8_t type = pkt.payload[2];
+		INFO("HTTPD_WS_TYPE_BINARY len:%d\n", pkt.len);
+		INFO("WS Received packet with message: type=%d len=%d cmd:(t:%d, l:%d)\n", pkt.type, pkt.len, type, len);
+		CMD_processMessage(&context, type, pkt.payload + 3, pkt.len - 3);
 	}
 
 	TRACE("ws_handler: httpd_handle_t=%p, fd=%d, client_info:%d\n",
@@ -344,22 +351,20 @@ static esp_err_t ws_handler(httpd_req_t* req)
 	    httpd_req_to_sockfd(req),
 	    httpd_ws_get_fd_info(req->handle, fd));
 
-	free(ws_pkt.payload);
-	ws_pkt.payload = NULL;
+	free(pkt.payload);
+	pkt.payload = NULL;
 	return ESP_OK;
 }
 
 static esp_err_t events_handler(httpd_req_t* req)
 {
 	esp_err_t ret;
-	httpd_ws_frame_t ws_pkt;
+	httpd_ws_frame_t pkt;
 	uint8_t* buf = NULL;
 
 	int fd = httpd_req_to_sockfd(req);
 
 	TRACE("events_handler method=%d hd:0x%x fd:%d\n", req->method, req->handle, fd);
-
-	common_handler(req, &ws_pkt);
 
 	if (req->method == HTTP_GET) {
 		INFO("EVENTS HTTP_GET\n");
@@ -384,8 +389,10 @@ static esp_err_t events_handler(httpd_req_t* req)
 		return ESP_OK;
 	}
 
-	free(ws_pkt.payload);
-	ws_pkt.payload = NULL;
+	common_handler(req, &pkt);
+
+	free(pkt.payload);
+	pkt.payload = NULL;
 
 	return ESP_OK;
 }
