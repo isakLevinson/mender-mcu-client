@@ -40,8 +40,10 @@ struct send_arg_t {
 };
 
 struct socket_desc_t {
-	int	fd;
-	char* type;
+	int					fd;
+	char*				type;
+	SemaphoreHandle_t	txMutex;
+	StaticSemaphore_t	txMutexBuffer;
 };
 
 struct async_resp_arg events_async_resp;
@@ -51,7 +53,6 @@ static const size_t max_clients = 4;
 static struct {
 	httpd_handle_t 		handle;
 	bool				ota_new_restart;
-	SemaphoreHandle_t	txMutex;
 
 	struct {
 		int	counter;
@@ -93,6 +94,7 @@ static bool _socketAdd(int fd)
 	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
 		if (!g_server.dbg.sockets[i].fd) {
 			g_server.dbg.sockets[i].fd = fd;
+			g_server.dbg.sockets[i].txMutex = xSemaphoreCreateMutexStatic(&g_server.dbg.sockets[i].txMutexBuffer);
 			return true;
 		}
 	}
@@ -109,6 +111,8 @@ static bool _socketDel(int fd)
 		ERROR("trying to close unexsisting socket %d\n", fd);
 		return false;
 	}
+
+	vSemaphoreDelete(sock->txMutex);
 
 	if (sock->type) {
 		INFO("closed %d %s\n", fd, sock->type);
@@ -139,8 +143,12 @@ static bool _socketSetType(int fd, char* type)
 static bool _tx(httpd_handle_t hd, int fd, httpd_ws_frame_t* pkt)
 {
 	esp_err_t	status;
+	struct socket_desc_t*	sock = _socketGet(fd);
+	if (!sock) {
+		return false;
+	}
 
-	xSemaphoreTake(g_server.txMutex, portMAX_DELAY);
+	xSemaphoreTake(sock->txMutex, portMAX_DELAY);
 
 	status = httpd_ws_send_frame_async(hd, fd, pkt);
 	if (ESP_OK != status) {
@@ -148,12 +156,10 @@ static bool _tx(httpd_handle_t hd, int fd, httpd_ws_frame_t* pkt)
 		return false;
 	}
 
-	xSemaphoreGive(g_server.txMutex);
+	xSemaphoreGive(sock->txMutex);
 
 	return true;
 }
-
-
 
 static void send_ping(void* arg)
 {
@@ -622,8 +628,6 @@ bool wss_init(void)
 			g_server.ota_new_restart = true;
 		}
 	}
-
-	g_server.txMutex = xSemaphoreCreateMutex();
 
 	// Create and initialize the keep-alive configuration
 	wss_keep_alive_config_t keep_alive_config = KEEP_ALIVE_CONFIG_DEFAULT();
