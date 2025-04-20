@@ -235,94 +235,108 @@ bool _cmdSendResp(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
 
 	return ret;
 }
+
+static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
+{
+	esp_err_t		ret;
+	httpd_resp_set_hdr(req, "Connection", "keep-alive");
+	memset(pkt, 0, sizeof(httpd_ws_frame_t));
+	int fd = httpd_req_to_sockfd(req);
+
+	// First receive the full ws message
+	ret = httpd_ws_recv_frame(req, pkt, 0);
+	if (ret != ESP_OK) {
+		ERROR("httpd_ws_recv_frame ws failed to get frame len with %d\n", ret);
+		return false;
+	}
+
+	if (pkt->len) {
+		TRACE("WS frame len is %d\n", pkt->len);
+		pkt->payload = calloc(1, pkt->len + 1);
+		if (!pkt->payload) {
+			ERROR("Failed to calloc memory for ws_pkt.payload\n");
+			return false;
+		}
+
+		ret = httpd_ws_recv_frame(req, pkt, pkt->len);
+		if (ret != ESP_OK) {
+			ERROR("httpd_ws_recv_frame failed with %d\n", ret);
+			free(pkt->payload);
+			return false;
+		}
+	}
+
+	switch (pkt->type) {
+		case HTTPD_WS_TYPE_PING:
+			INFO("WS PING frame, Replying with PONG\n");
+			pkt->type = HTTPD_WS_TYPE_PONG;
+			ret = httpd_ws_send_frame(req, pkt);
+			break;
+
+		case HTTPD_WS_TYPE_PONG:
+			INFO("WS PONG message h:%x\n", req->handle);
+			free(pkt->payload);
+			pkt->payload = NULL;
+			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
+			break;
+
+		case HTTPD_WS_TYPE_TEXT:
+			INFO("HTTPD_WS_TYPE_TEXT len:%d\n", pkt->len);
+			break;
+
+		case HTTPD_WS_TYPE_CLOSE:
+			INFO("CLOSE\n");
+			pkt->len = 0;
+			free(pkt->payload);
+			pkt->payload = NULL;
+			ret = httpd_ws_send_frame(req, pkt);
+			break;
+
+		case HTTPD_WS_TYPE_CONTINUE:
+			INFO("CONTINUE\n");
+			break;
+
+		default:
+	}
+
+	return true;
+}
+
 static esp_err_t ws_handler(httpd_req_t* req)
 {
+	httpd_ws_frame_t ws_pkt;
+
 	int fd = httpd_req_to_sockfd(req);
 	TRACE("ws_handler method=%d hd:0x%x fd:%d\n", req->method, req->handle, fd);
-
-	//mbedtls_ssl_context *ssl_ctx = httpd_ssl_get_ssl_ctx(req);
-	httpd_resp_set_hdr(req, "Connection", "keep-alive");
 
 	if (req->method == HTTP_GET) {
 		INFO("WS HTTP_GET Handshake done, the new connection was opened\n");
 		_socketSetType(fd, "WS");
 		return ESP_OK;
 	}
-	httpd_ws_frame_t ws_pkt;
-	uint8_t* buf = NULL;
-	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
 
-	// First receive the full ws message
-	esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
-	if (ret != ESP_OK) {
-		ERROR("httpd_ws_recv_frame ws failed to get frame len with %d\n", ret);
-		return ret;
-	}
+	common_handler(req, &ws_pkt);
 
-	if (ws_pkt.len) {
-		TRACE("WS frame len is %d\n", ws_pkt.len);
-		buf = calloc(1, ws_pkt.len + 1);
-		if (buf == NULL) {
-			ERROR("Failed to calloc memory for buf\n");
-			return ESP_ERR_NO_MEM;
+	if (HTTPD_WS_TYPE_BINARY == ws_pkt.type) {
+		struct async_resp_arg async = {
+			.hd = req->handle,
+			.fd = fd,
+		};
+
+		CMD_CONTEXT context = {
+			.p_cbSend   = _cmdSendResp,
+			.pArg       = &async,
+		};
+
+		if (ws_pkt.len < 3) {
+			WARN("HTTPD_WS_TYPE_BINARY short incoming message. ignoring len:%s\n", ws_pkt.len);
 		}
-		ws_pkt.payload = buf;
-		ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
-		if (ret != ESP_OK) {
-			ERROR("httpd_ws_recv_frame failed with %d\n", ret);
-			free(buf);
-			return ret;
-		}
-	}
 
-	switch (ws_pkt.type) {
-		case HTTPD_WS_TYPE_PING:
-			INFO("WS PING frame, Replying with PONG\n");
-			ws_pkt.type = HTTPD_WS_TYPE_PONG;
-			break;
-
-		case HTTPD_WS_TYPE_PONG:
-			INFO("WS PONG message h:%x\n", req->handle);
-			free(buf);
-			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
-			break;
-
-		case HTTPD_WS_TYPE_TEXT:
-			INFO("HTTPD_WS_TYPE_TEXT len:%d\n", ws_pkt.len);
-			break;
-
-		case HTTPD_WS_TYPE_BINARY: {
-				struct async_resp_arg async = {
-					.hd = req->handle,
-					.fd = fd,
-				};
-
-				CMD_CONTEXT context = {
-					.p_cbSend   = _cmdSendResp,
-					.pArg       = &async,
-				};
-
-				if (ws_pkt.len < 3) {
-					WARN("HTTPD_WS_TYPE_BINARY short incoming message. ignoring len:%s\n", ws_pkt.len);
-				}
-
-				uint8_t len = ws_pkt.payload[0];
-				uint8_t type = ws_pkt.payload[2];
-				INFO("HTTPD_WS_TYPE_BINARY len:%d\n", ws_pkt.len);
-				INFO("WS Received packet with message: type=%d len=%d cmd:(t:%d, l:%d)\n", ws_pkt.type, ws_pkt.len, type, len);
-				CMD_processMessage(&context, type, ws_pkt.payload + 3, ws_pkt.len - 3);
-			}
-			break;
-
-		case HTTPD_WS_TYPE_CLOSE:
-			INFO("CLOSE\n");
-			ws_pkt.len = 0;
-			ws_pkt.payload = NULL;
-			break;
-
-		case HTTPD_WS_TYPE_CONTINUE:
-			INFO("CONTINUE\n");
-			break;
+		uint8_t len = ws_pkt.payload[0];
+		uint8_t type = ws_pkt.payload[2];
+		INFO("HTTPD_WS_TYPE_BINARY len:%d\n", ws_pkt.len);
+		INFO("WS Received packet with message: type=%d len=%d cmd:(t:%d, l:%d)\n", ws_pkt.type, ws_pkt.len, type, len);
+		CMD_processMessage(&context, type, ws_pkt.payload + 3, ws_pkt.len - 3);
 	}
 
 	TRACE("ws_handler: httpd_handle_t=%p, fd=%d, client_info:%d\n",
@@ -330,7 +344,8 @@ static esp_err_t ws_handler(httpd_req_t* req)
 	    httpd_req_to_sockfd(req),
 	    httpd_ws_get_fd_info(req->handle, fd));
 
-	free(buf);
+	free(ws_pkt.payload);
+	ws_pkt.payload = NULL;
 	return ESP_OK;
 }
 
@@ -343,6 +358,8 @@ static esp_err_t events_handler(httpd_req_t* req)
 	int fd = httpd_req_to_sockfd(req);
 
 	TRACE("events_handler method=%d hd:0x%x fd:%d\n", req->method, req->handle, fd);
+
+	common_handler(req, &ws_pkt);
 
 	if (req->method == HTTP_GET) {
 		INFO("EVENTS HTTP_GET\n");
@@ -367,46 +384,8 @@ static esp_err_t events_handler(httpd_req_t* req)
 		return ESP_OK;
 	}
 
-	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-
-	// First receive the full ws message
-	ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
-	if (ret != ESP_OK) {
-		ERROR("httpd_ws_recv_frame evt failed to get frame len with %d\n", ret);
-		return ret;
-	}
-	if (ws_pkt.len) {
-		INFO("ev events frame len is %d\n", ws_pkt.len);
-		buf = calloc(1, ws_pkt.len + 1);
-		if (buf == NULL) {
-			ERROR("Failed to calloc memory for buf\n");
-			return ESP_ERR_NO_MEM;
-		}
-		ws_pkt.payload = buf;
-		ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
-		if (ret != ESP_OK) {
-			ERROR("events httpd_ws_recv_frame %d\n", ret);
-			free(buf);
-			return ret;
-		}
-	}
-
-	switch (ws_pkt.type) {
-		case HTTPD_WS_TYPE_PING:
-			INFO("Events PING frame, Replying with PONG\n");
-			ws_pkt.type = HTTPD_WS_TYPE_PONG;
-			break;
-
-		case HTTPD_WS_TYPE_PONG:
-			INFO("Events PONG message\n");
-			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
-			break;
-
-		default:
-			INFO("Events unhandles type\n");
-	}
-
-	free(buf);
+	free(ws_pkt.payload);
+	ws_pkt.payload = NULL;
 
 	return ESP_OK;
 }

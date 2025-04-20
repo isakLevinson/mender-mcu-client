@@ -149,7 +149,7 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
 	char* strBase    = "";
 
 	if (event_base == WIFI_EVENT) {
-		strBase = "WIFI";
+		strBase = "WiFi";
 		switch (event_id) {
 			case WIFI_EVENT_AP_STACONNECTED:
 				strEvent = "WIFI_EVENT_AP_STACONNECTED";
@@ -169,9 +169,9 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
 			case WIFI_EVENT_STA_CONNECTED:
 				strEvent = "WIFI_EVENT_STA_CONNECTED";
 				break;
-
-
-
+			case WIFI_EVENT_STA_DISCONNECTED:
+				strEvent = "_WIFI_EVENT_STA_DISCONNECTED";
+				break;
 			default:
 		}
 	} else if (event_base == IP_EVENT) {
@@ -187,7 +187,11 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
 	}
 
 	if (strEvent) {
-		INFO("event_handler %s\n", strEvent);
+		if ('_' == strEvent[0]) {
+			TRACE("event_handler %s\n", strEvent+1);
+		} else {
+			INFO("event_handler %s\n", strEvent);
+		}
 	} else {
 		INFO("event_handler %s %d\n", strBase, event_id);
 	}
