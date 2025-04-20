@@ -49,8 +49,10 @@ struct async_resp_arg events_async_resp;
 static const size_t max_clients = 4;
 
 static struct {
-	httpd_handle_t handle;
-	bool			ota_new_restart;
+	httpd_handle_t 		handle;
+	bool				ota_new_restart;
+	SemaphoreHandle_t	txMutex;
+
 	struct {
 		int	counter;
 		struct socket_desc_t sockets[MAX_SOCKETS_COUNT];
@@ -134,18 +136,37 @@ static bool _socketSetType(int fd, char* type)
 	return true;
 }
 
+static bool _tx(httpd_handle_t hd, int fd, httpd_ws_frame_t* pkt)
+{
+	esp_err_t	status;
+
+	xSemaphoreTake(g_server.txMutex, portMAX_DELAY);
+
+	status = httpd_ws_send_frame_async(hd, fd, pkt);
+	if (ESP_OK != status) {
+		ERROR("send_binary: httpd_ws_send_frame_async %d\n", status);
+		return false;
+	}
+
+	xSemaphoreGive(g_server.txMutex);
+
+	return true;
+}
+
+
+
 static void send_ping(void* arg)
 {
 	struct async_resp_arg* resp_arg = arg;
 	httpd_handle_t hd = resp_arg->hd;
 	int fd = resp_arg->fd;
-	httpd_ws_frame_t ws_pkt;
-	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-	ws_pkt.payload = NULL;
-	ws_pkt.len = 0;
-	ws_pkt.type = HTTPD_WS_TYPE_PING;
+	httpd_ws_frame_t pkt;
+	memset(&pkt, 0, sizeof(httpd_ws_frame_t));
+	pkt.payload = NULL;
+	pkt.len = 0;
+	pkt.type = HTTPD_WS_TYPE_PING;
 
-	httpd_ws_send_frame_async(hd, fd, &ws_pkt);
+	_tx(hd, fd, &pkt);
 	free(resp_arg);
 }
 
@@ -167,23 +188,20 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
 	return true;
 }
 
-static portMUX_TYPE my_spinlock = portMUX_INITIALIZER_UNLOCKED;
-
 bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
 {
-	int status;
+	bool ret;
 	TRACE("send_binary fd:%d\n", fd);
 
-	httpd_ws_frame_t ws_pkt;
-	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-	ws_pkt.payload = pBuf;
-	ws_pkt.len = size;
-	ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+	httpd_ws_frame_t pkt;
+	memset(&pkt, 0, sizeof(httpd_ws_frame_t));
+	pkt.payload = pBuf;
+	pkt.len = size;
+	pkt.type = HTTPD_WS_TYPE_BINARY;
 
-	status = httpd_ws_send_frame_async(hd, fd, &ws_pkt);
+	ret = _tx(hd, fd, &pkt);
 
-	if (ESP_OK != status) {
-		ERROR("send_binary: httpd_ws_send_frame_async %d\n", status);
+	if (!ret) {
 		return false;
 	} else {
 		g_server.dbg.counter++;
@@ -479,7 +497,8 @@ esp_err_t wss_open_fd(httpd_handle_t hd, int fd)
 
 	_socketAdd(fd);
 
-	return wss_keep_alive_add_client(h, fd);
+	return ESP_OK;
+//	return wss_keep_alive_add_client(h, fd);
 }
 
 void wss_close_fd(httpd_handle_t hd, int fd)
@@ -603,6 +622,8 @@ bool wss_init(void)
 			g_server.ota_new_restart = true;
 		}
 	}
+
+	g_server.txMutex = xSemaphoreCreateMutex();
 
 	// Create and initialize the keep-alive configuration
 	wss_keep_alive_config_t keep_alive_config = KEEP_ALIVE_CONFIG_DEFAULT();
