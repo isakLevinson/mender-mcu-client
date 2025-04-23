@@ -517,7 +517,7 @@ void wss_close_fd(httpd_handle_t hd, int fd)
 	}
 
 	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
-	wss_keep_alive_remove_client(h, fd);
+//	wss_keep_alive_remove_client(h, fd);
 	close(fd);
 	_socketDel(fd);
 }
