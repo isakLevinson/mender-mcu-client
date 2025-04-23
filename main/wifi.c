@@ -172,6 +172,9 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
 			case WIFI_EVENT_STA_DISCONNECTED:
 				strEvent = "_WIFI_EVENT_STA_DISCONNECTED";
 				break;
+			case WIFI_EVENT_STA_BEACON_TIMEOUT:
+				strEvent = "WIFI_EVENT_STA_BEACON_TIMEOUT";
+				break;
 			default:
 		}
 	} else if (event_base == IP_EVENT) {

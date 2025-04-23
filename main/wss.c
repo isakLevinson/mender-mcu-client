@@ -480,9 +480,10 @@ static esp_err_t rest_handler(httpd_req_t* req)
 
 	if (req->method != HTTP_POST) {
 		WARN("unsupported method %s. must be POST\n", req->method);
-		_socketSetType(fd, "REST");
 		return ESP_OK;
 	}
+
+	_socketSetType(fd, "REST");
 
 	ret = httpd_req_recv(req, buf, req->content_len);
 	if (!ret) {
@@ -520,7 +521,7 @@ void wss_close_fd(httpd_handle_t hd, int fd)
 	}
 
 	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
-	wss_keep_alive_remove_client(h, fd);
+//	wss_keep_alive_remove_client(h, fd);
 	close(fd);
 	_socketDel(fd);
 }

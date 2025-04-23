@@ -42,7 +42,7 @@ async def test_wss():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=10, ping_interval=2) as websocket:
+    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=300, ping_interval=60) as websocket:
         print("ws connected")
 
       # Shared event to signal exit
@@ -69,7 +69,7 @@ async def test_wss():
                 message = binary_array_to_string(binary_array)
 #                print("sending", message, binary_array)
                 await websocket.send(message)
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(5)
 
 
         async def recv_data():
@@ -93,7 +93,7 @@ async def events():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-    async with websockets.connect(uri + uri_events, ssl=ssl_context, ping_timeout=10, ping_interval=1) as websocket:
+    async with websockets.connect(uri + uri_events, ssl=ssl_context, ping_timeout=600, ping_interval=120) as websocket:
         print("events connected")
 
         async def recv_data():
