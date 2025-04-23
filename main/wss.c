@@ -120,7 +120,7 @@ static bool _socketDel(int fd)
 		INFO("closed %d UNKNOWN\n", fd);
 	}
 
-	sock->fd = 0;
+	memset(sock, 0, sizeof(*sock));
 
 	return true;
 }
