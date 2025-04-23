@@ -17,9 +17,9 @@
 
 orsource "../components/mender-mcu-client/mender-mcu-client/esp-idf/Kconfig"
 
-menu "build type"
+menu "project type"
     choice BUILD_TYPE
-        prompt "build type"
+        prompt "project type"
         default BUILD_TYPE_PNU
 
         config BUILD_TYPE_PNU
@@ -33,7 +33,7 @@ menu "build type"
     endchoice
 endmenu
 
-menu "Example Configuration"
+menu "Mender"
     config EXAMPLE_AUTHENTICATION_FAILS_MAX_TRIES
         int "Maximum number of retries when Mender client authentification fails"
         default 3

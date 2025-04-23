@@ -160,10 +160,10 @@ static struct {
 	uint16_t	streamSize;
 	#endif
 } g_cmd = {
+#if CONFIG_BUILD_TYPE_EEG
 	.streamSize = 1500,
+#endif
 };
-
-
 
 bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t size)
 {
@@ -766,9 +766,11 @@ static bool dbgStream(uint8_t argc, char** argv)
 
 	period = strtoul(argv[1], NULL, 10);
 
+#if CONFIG_BUILD_TYPE_EEG
 	if ( argc >= 3) {
 		g_cmd.streamSize = MIN(strtoul(argv[2], NULL, 10), sizeof(g_cmd.streamBuf));
 	}
+#endif
 
 	g_cmd.counter = 0;
 	_streamPeriod(period);
@@ -782,9 +784,11 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	int32_t time = TIME_get32();
 
 	PRINT("stream period     %d\n", g_cmd.streamPeriod);
-	PRINT("stream size       %d\n", g_cmd.streamSize);
 	PRINT("stream time       %d (%d)\n", g_cmd.streamSentTime, time - g_cmd.streamSentTime);
 	PRINT("voltage threshold %d\n", g_cmd.socNextThreshold);
+#if CONFIG_BUILD_TYPE_EEG
+	PRINT("stream size       %d\n", g_cmd.streamSize);
+#endif
 
 	return true;
 }
