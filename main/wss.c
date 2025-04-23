@@ -22,7 +22,7 @@
 #include "mdns.h"
 #include "config.h"
 
-#define USE_SSL 1
+#define USE_SSL 0
 
 #if !CONFIG_HTTPD_WS_SUPPORT
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
