@@ -677,8 +677,11 @@ bool wss_init(void)
 #else
 	httpd_config_t conf = HTTPD_DEFAULT_CONFIG();
 
-	esp_err_t ret = httpd_start(&server, &conf);
-	if (ESP_OK != ret) {
+	conf.open_fn = wss_open_fd;
+	conf.close_fn = wss_close_fd;
+
+	err = httpd_start(&g_server.handle, &conf);
+	if (ESP_OK != err) {
 		ERROR("Error starting server!\n");
 		return NULL;
 	}
