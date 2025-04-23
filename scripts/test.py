@@ -50,19 +50,26 @@ async def test_wss():
 
         async def send_data():
             print(f"send_data")
+            count = 0
             while True:
-#                message = input("Enter message to send: ")
-                message = await asyncio.get_event_loop().run_in_executor(None, input, "> ")
-                if message.lower() == "exit":
-                    print("Exiting...")
-                    stop_event.set()  # Signal to stop receiving
-                    await websocket.close()
-                    break
+#                message = await asyncio.get_event_loop().run_in_executor(None, input, "> ")
+#                if message.lower() == "exit":
+#                    print("Exiting...")
+#                    stop_event.set()  # Signal to stop receiving
+#                    await websocket.close()
+#                    break
+
+                message = "123418%02x00" % (count)
+                print("sending", message)
+                count += 1
+                if count>255:
+                    count = 0
 
                 binary_array = ascii_hex_to_binary_array(message)
-                #print(binary_array)
                 message = binary_array_to_string(binary_array)
+#                print("sending", message, binary_array)
                 await websocket.send(message)
+                await asyncio.sleep(0.1)
 
 
         async def recv_data():

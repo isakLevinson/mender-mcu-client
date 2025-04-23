@@ -311,9 +311,10 @@ static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
 			break;
 
-		case HTTPD_WS_TYPE_TEXT:
-			INFO("HTTPD_WS_TYPE_TEXT len:%d\n", pkt->len);
-			break;
+//		case HTTPD_WS_TYPE_TEXT:
+//			INFO("HTTPD_WS_TYPE_TEXT len:%d\n", pkt->len);
+//			INFO_BUF("HTTPD_WS_TYPE_TEXT",	PRINT_BUF_STYLE_HEX_SIZE_NL, pkt->payload, pkt->len);
+//			break;
 
 		case HTTPD_WS_TYPE_CLOSE:
 			INFO("CLOSE fd:%d\n", fd);
@@ -348,7 +349,7 @@ static esp_err_t ws_handler(httpd_req_t* req)
 
 	common_handler(req, &pkt);
 
-	if (HTTPD_WS_TYPE_BINARY == pkt.type) {
+	if ((HTTPD_WS_TYPE_BINARY == pkt.type) || (HTTPD_WS_TYPE_TEXT == pkt.type)) {
 		struct async_resp_arg async = {
 			.hd = req->handle,
 			.fd = fd,
@@ -359,8 +360,9 @@ static esp_err_t ws_handler(httpd_req_t* req)
 			.pArg       = &async,
 		};
 
-		if (pkt.len < 3) {
+		if (pkt.len < 4) {
 			WARN("HTTPD_WS_TYPE_BINARY short incoming message. ignoring len:%s\n", pkt.len);
+			goto exit;
 		}
 
 		uint8_t len = pkt.payload[0];
@@ -375,6 +377,7 @@ static esp_err_t ws_handler(httpd_req_t* req)
 	    httpd_req_to_sockfd(req),
 	    httpd_ws_get_fd_info(req->handle, fd));
 
+	exit:
 	free(pkt.payload);
 	pkt.payload = NULL;
 	return ESP_OK;
