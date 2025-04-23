@@ -476,7 +476,7 @@ static esp_err_t rest_handler(httpd_req_t* req)
 
 	int fd = httpd_req_to_sockfd(req);
 
-	INFO("rest_handler method=%d hd:0x%x fd:%d\n", req->method, req->handle, fd);
+	INFO("rest_handler <%s> method=%d hd:0x%x fd:%d\n", req->uri, req->method, req->handle, fd);
 
 	if (req->method != HTTP_POST) {
 		WARN("unsupported method %s. must be POST\n", req->method);
@@ -551,15 +551,6 @@ static const httpd_uri_t uri_events = {
 	.handle_ws_control_frames = true
 };
 
-static const httpd_uri_t uri_rest = {
-	.uri        = "/rest",
-	.method     = HTTP_POST,
-	.handler    = rest_handler,
-	.user_ctx   = NULL,
-	.is_websocket = false,
-	.handle_ws_control_frames = true
-};
-
 bool wss_config_start(void)
 {
 	static const httpd_uri_t uri_config = {
@@ -575,6 +566,16 @@ bool wss_config_start(void)
 	httpd_register_uri_handler(g_server.handle, &uri_config);
 
 	return true;
+}
+
+bool uri_match(const char *reference_uri, const char *uri_to_match, size_t match_upto)
+{
+	bool match = false;
+
+	match = (0==strcmp(reference_uri, uri_to_match));
+	INFO("uri_match <%s> <%s> %d %d\n", reference_uri, uri_to_match, match_upto, match);
+
+	return match;
 }
 
 bool wss_config_stop(void)
@@ -616,6 +617,15 @@ bool wss_init(void)
 	esp_err_t	err;
 	char		buf[32];
 
+	httpd_uri_t uri_rest = {
+		.uri        = "/control/*",
+		.method     = HTTP_POST,
+		.handler    = rest_handler,
+		.user_ctx   = NULL,
+		.is_websocket = false,
+		.handle_ws_control_frames = true
+	};
+
 	if (g_server.handle) {
 		WARN("wss already started\n");
 		return false;
@@ -650,6 +660,7 @@ bool wss_init(void)
 	conf.httpd.max_open_sockets = max_clients;
 	conf.httpd.open_fn = wss_open_fd;
 	conf.httpd.close_fn = wss_close_fd;
+	conf.httpd.uri_match_fn = uri_match;
 
 	// Configure server certificate and private key
 	extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
