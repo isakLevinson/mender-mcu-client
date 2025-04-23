@@ -643,18 +643,18 @@ CONFIG_MENDER_SCHEDULER_WORK_QUEUE_LENGTH=10
 # end of Mender Firmware Over-the-Air support
 
 #
-# build type
+# project type
 #
 CONFIG_BUILD_TYPE_PNU=y
 # CONFIG_BUILD_TYPE_GSR is not set
 # CONFIG_BUILD_TYPE_EEG is not set
-# end of build type
+# end of project type
 
 #
-# Example Configuration
+# Mender
 #
 CONFIG_EXAMPLE_AUTHENTICATION_FAILS_MAX_TRIES=3
-# end of Example Configuration
+# end of Mender
 
 #
 # Example Connection Configuration
