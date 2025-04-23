@@ -198,9 +198,11 @@ bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t siz
 
 static void _streamPeriod(uint32_t period)
 {
-	int32_t time = TIME_get32();
-	g_cmd.streamSentTime	= time;
-	g_cmd.batteryCheckTime	= time;
+	if (!g_cmd.streamPeriod) {
+		int32_t time = TIME_get32();
+		g_cmd.streamSentTime	= time;
+		g_cmd.batteryCheckTime	= time;
+	}
 	g_cmd.streamPeriod		= period;
 #ifdef BATTERY_THRESHOLD_LOW
 	g_cmd.socNextThreshold	= BATTERY_THRESHOLD_LOW;
@@ -217,14 +219,17 @@ static void _taskStreamer(void* arg)
 	uint32_t	i;
 
 	while (true) {
-		vTaskDelay(1);
-
+		//taskYIELD();
 		if (!g_cmd.streamPeriod) {
+			vTaskDelay(10);
 			continue;
 		}
 
 		t = TIME_get32();
+		TRACE1("dt:%d\n", t - g_cmd.streamSentTime);
+
 		if (t - g_cmd.streamSentTime < g_cmd.streamPeriod) {
+			vTaskDelay(g_cmd.streamPeriod/2);
 			continue;
 		}
 		g_cmd.streamSentTime += g_cmd.streamPeriod;
@@ -770,7 +775,9 @@ static bool dbgStream(uint8_t argc, char** argv)
 		g_cmd.streamSize = MIN(strtoul(argv[2], NULL, 10), sizeof(g_cmd.streamBuf));
 	}
 
-	g_cmd.counter = 0;
+	if (!period) {
+		g_cmd.counter = 0;
+	}
 	_streamPeriod(period);
 
 	return true;
