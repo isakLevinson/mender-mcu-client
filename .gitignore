@@ -4,3 +4,5 @@ managed_components/
 *.old
 *.swp
 *.lock
+scripts/*.pem
+
