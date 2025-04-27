@@ -26,6 +26,7 @@
 #include "cli.h"
 #include "cmd.h"
 #include "wifi.h"
+#include "tls.h"
 #include "ntp.h"
 #include "pump.h"
 #include "ctrl.h"
@@ -144,6 +145,7 @@ void app_main(void)
 	MMI_init();
 	WIFI_init();
 	ntp_init();
+	TLS_init();
 
 	PMP_init();
 	CTRL_init();

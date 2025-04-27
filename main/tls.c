@@ -50,17 +50,18 @@ static void _task(void* arg)
         goto exit;
     }
 
+	mbedtls_ssl_conf_rng(&conf, mbedtls_ctr_drbg_random, &ctr_drbg);
+
     if ((ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
 		(const unsigned char *) pers, strlen(pers))) != 0) {
-			ERROR(" mbedtls_ctr_drbg_seed  %d\n", ret);
+			ERROR(" mbedtls_ctr_drbg_seed  %x\n", -ret);
 			goto exit;
 		}
 
 	INFO("mbedtls_ctr_drbg_seed ok\n");
 
-
-    if ((ret = mbedtls_net_bind(&listen_fd, NULL, "4433", MBEDTLS_NET_PROTO_TCP)) != 0) {
-        ERROR("mbedtls_net_bind %d\n", ret);
+    if ((ret = mbedtls_net_bind(&listen_fd, NULL, "1000", MBEDTLS_NET_PROTO_TCP)) != 0) {
+        ERROR("mbedtls_net_bind %x\n", -ret);
         goto exit;
     }
 
@@ -68,12 +69,12 @@ static void _task(void* arg)
 		MBEDTLS_SSL_IS_SERVER,
 		MBEDTLS_SSL_TRANSPORT_STREAM,
 		MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
-		ERROR("mbedtls_ssl_config_defaults %d\n", ret);
+		ERROR("mbedtls_ssl_config_defaults %x\n", -ret);
 		goto exit;
 	}
 
-    if ((ret = mbedtls_ssl_setup(&ssl, &conf)) != 0) {
-        ERROR("mbedtls_ssl_setup %d\n", ret);
+	if ((ret = mbedtls_ssl_setup(&ssl, &conf)) != 0) {
+        ERROR("mbedtls_ssl_setup %x\n", -ret);
         goto exit;
     }
 
@@ -83,9 +84,11 @@ static void _task(void* arg)
 		mbedtls_net_free(&client_fd);
 		mbedtls_ssl_session_reset(&ssl);
 	
+		INFO("waiting for accept\n");
+
 		if ((ret = mbedtls_net_accept(&listen_fd, &client_fd,
 			NULL, 0, NULL)) != 0) {
-			ERROR("mbedtls_net_accept %d\n\n", ret);
+			ERROR("mbedtls_net_accept %x\n", -ret);
 			goto exit;
 		}
 		INFO("accept ok\n");
@@ -94,7 +97,7 @@ static void _task(void* arg)
 
 		while ((ret = mbedtls_ssl_handshake(&ssl)) != 0) {
 			if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-				ERROR("mbedtls_ssl_handshake %d\n\n", ret);
+				ERROR("mbedtls_ssl_handshake %x\n", ret);
 				continue;
 			}
 		}
@@ -119,7 +122,7 @@ static void _task(void* arg)
 						break;
 	
 					default:
-						WARN("mbedtls_ssl_read -0x%x\n", (unsigned int) -ret);
+						WARN("mbedtls_ssl_read -0x%x\n", -ret);
 						break;
 				}
 	
@@ -144,7 +147,7 @@ static bool _init(void)
 {
 	int	ret;
 
-	ret = xTaskCreate(_task, "tls", 4096, NULL, 3, NULL);
+	ret = xTaskCreate(_task, "tls", 16384, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task failed\n");
 		return false;
