@@ -65,12 +65,10 @@ static void _task(void* arg)
         goto exit;
     }
 
-    if ((ret = mbedtls_ssl_config_defaults(&conf,
-		MBEDTLS_SSL_IS_SERVER,
-		MBEDTLS_SSL_TRANSPORT_STREAM,
-		MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
-		ERROR("mbedtls_ssl_config_defaults %x\n", -ret);
-		goto exit;
+    if ((ret = mbedtls_ssl_config_defaults(&conf, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM,
+											MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
+			ERROR("mbedtls_ssl_config_defaults %x\n", -ret);
+			goto exit;
 	}
 
 	if ((ret = mbedtls_ssl_setup(&ssl, &conf)) != 0) {
@@ -86,21 +84,22 @@ static void _task(void* arg)
 	
 		INFO("waiting for accept\n");
 
-		if ((ret = mbedtls_net_accept(&listen_fd, &client_fd,
-			NULL, 0, NULL)) != 0) {
+		if ((ret = mbedtls_net_accept(&listen_fd, &client_fd, NULL, 0, NULL)) != 0) {
 			ERROR("mbedtls_net_accept %x\n", -ret);
-			goto exit;
+			continue;
 		}
 		INFO("accept ok\n");
 
 		mbedtls_ssl_set_bio(&ssl, &client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
 
-		while ((ret = mbedtls_ssl_handshake(&ssl)) != 0) {
-			if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-				ERROR("mbedtls_ssl_handshake %x\n", ret);
-				continue;
-			}
+		do {
+			ret = mbedtls_ssl_handshake(&ssl);
+		} while (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE);
+
+		if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+			continue;
 		}
+
 		INFO("handshake ok\n");
 
 		while(1) {
