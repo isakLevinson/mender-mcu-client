@@ -37,6 +37,8 @@ mbedtls_x509_crt cacert;
 mbedtls_ssl_config conf;
 mbedtls_net_context server_fd;
 
+mbedtls_net_context listen_fd;
+mbedtls_net_context client_fd;
 
 
 static void _task(void* arg)
@@ -307,6 +309,60 @@ static bool dbgConnect(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgAccept(uint8_t argc, char** argv)
+{
+	int ret;
+	int flags;
+	char buf[512];
+
+	mbedtls_net_init(&listen_fd);
+    mbedtls_net_init(&client_fd);
+
+    ret = mbedtls_net_bind(&listen_fd, NULL, "1000", MBEDTLS_NET_PROTO_TCP);
+    if (ret) {
+		ERROR("mbedtls_net_bind %x\n", -ret);
+        return false;
+    }
+
+	INFO("waiting for accept\n");
+
+	ret = mbedtls_net_accept(&listen_fd, &client_fd, NULL, 0, NULL);
+	if (ret) {
+		ERROR("mbedtls_net_accept %x\n", -ret);
+		return false;
+	}
+	INFO("accept ok\n");
+
+	mbedtls_ssl_set_bio(&ssl, &client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
+
+	INFO("Performing the SSL/TLS handshake...\n");
+
+	while ((ret = mbedtls_ssl_handshake(&ssl)) != 0) {
+		if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+			ERROR("mbedtls_ssl_handshake -0x%x", -ret);
+			return false;
+		}
+	}
+
+	INFO("Verifying peer X.509 certificate...\n");
+
+	if ((flags = mbedtls_ssl_get_verify_result(&ssl)) != 0) {
+		/* In real life, we probably want to close connection if ret != 0 */
+		WARN("Failed to verify peer certificate!\n");
+		bzero(buf, sizeof(buf));
+		mbedtls_x509_crt_verify_info(buf, sizeof(buf), "  ! ", flags);
+		WARN("verification info: %s\n", buf);
+	}
+	else {
+		INFO("Certificate verified.\n");
+	}
+
+	INFO("Cipher suite is %s\n", mbedtls_ssl_get_ciphersuite(&ssl));
+
+	return true;
+}
+
+
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
@@ -319,6 +375,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("status",  NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("init",	  NULL,		NULL, dbgInit)
 		DEBUG_MENU_CMD("connect", NULL,		NULL, dbgConnect)
+		DEBUG_MENU_CMD("accept",  NULL,		NULL, dbgAccept)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
