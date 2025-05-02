@@ -264,15 +264,110 @@ static bool _initSsl(void)
 
 static bool _acceptLoop(void)
 {
+    int ret;
+    int len;
+    unsigned char buf[1024];
+
+    mbedtls_net_context listen_fd;
+    mbedtls_net_context client_fd;
+
+    mbedtls_net_init(&listen_fd);
+    mbedtls_net_init(&client_fd);
+
+    if ((ret = mbedtls_net_bind(&listen_fd, NULL, "4433", MBEDTLS_NET_PROTO_TCP)) != 0) {
+        ERROR("failed\n  ! mbedtls_net_bind returned %d\n", ret);
+        return false;
+    }
+
+	reset:
+
+	#ifdef MBEDTLS_ERROR_C
+    if (ret != 0) {
+        char error_buf[100];
+        mbedtls_strerror(ret, error_buf, 100);
+        mbedtls_printf("Last error was: %d - %s\n\n", ret, error_buf);
+    }
+#endif
+
+    mbedtls_net_free(&client_fd);
+    mbedtls_ssl_session_reset(&g_ssl.ssl);
+
+    INFO("Waiting for a remote connection ...\n");
+
+    if ((ret = mbedtls_net_accept(&listen_fd, &client_fd,
+                                  NULL, 0, NULL)) != 0) {
+        ERROR("failed\n  ! mbedtls_net_accept returned %d\n", ret);
+        return false;
+    }
+
+    mbedtls_ssl_set_bio(&g_ssl.ssl, &client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
+    INFO("accept ok\n");
+
+    INFO("Performing the SSL/TLS handshake...\n");
+
+    while ((ret = mbedtls_ssl_handshake(&g_ssl.ssl)) != 0) {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            ERROR("failed\n  ! mbedtls_ssl_handshake returned -%x\n", -ret);
+            goto reset;
+        }
+    }
+
+    INFO("handshake ok\n");
+
+    do {
+        len = sizeof(buf) - 1;
+        memset(buf, 0, sizeof(buf));
+        ret = mbedtls_ssl_read(&g_ssl.ssl, buf, len);
+
+        if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+            continue;
+        }
+
+        if (ret <= 0) {
+            switch (ret) {
+                case MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY:
+                    INFO("connection was closed gracefully\n");
+                    break;
+
+                case MBEDTLS_ERR_NET_CONN_RESET:
+                    INFO("connection was reset by peer\n");
+                    break;
+
+                default:
+                    WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) -ret);
+                    break;
+            }
+
+            break;
+        }
+
+        len = ret;
+        INFO_BUF("rx",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, len);
+
+        // echo back the buffer
+        while ((ret = mbedtls_ssl_write(&g_ssl.ssl, buf, len)) <= 0) {
+            if (ret == MBEDTLS_ERR_NET_CONN_RESET) {
+                ERROR("failed\n  ! peer closed the connection\n");
+                break;;
+            }
+    
+            if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+                ERROR("failed\n  ! mbedtls_ssl_write returned %d\n", ret);
+                break;
+            }
+        }
+        if (ret > 0) {
+            break;
+        }
+    } while (1);
+
     return true;
 }
 
 
 static bool dbgAccept(uint8_t argc, char** argv)
 {
-    int ret, len;
-    mbedtls_net_context listen_fd, client_fd;
-    unsigned char buf[1024];
+    int ret;
     const char *pers = "ssl_server";
         
     mbedtls_entropy_context entropy;
@@ -389,96 +484,8 @@ static bool dbgAccept(uint8_t argc, char** argv)
     }
 
     INFO("ok\n");
-
-    mbedtls_net_init(&listen_fd);
-    mbedtls_net_init(&client_fd);
-
-    if ((ret = mbedtls_net_bind(&listen_fd, NULL, "4433", MBEDTLS_NET_PROTO_TCP)) != 0) {
-        ERROR("failed\n  ! mbedtls_net_bind returned %d\n", ret);
-        return false;
-    }
-
-	reset:
-
-	#ifdef MBEDTLS_ERROR_C
-    if (ret != 0) {
-        char error_buf[100];
-        mbedtls_strerror(ret, error_buf, 100);
-        mbedtls_printf("Last error was: %d - %s\n\n", ret, error_buf);
-    }
-#endif
-
-    mbedtls_net_free(&client_fd);
-    mbedtls_ssl_session_reset(&g_ssl.ssl);
-
-    INFO("Waiting for a remote connection ...\n");
-
-    if ((ret = mbedtls_net_accept(&listen_fd, &client_fd,
-                                  NULL, 0, NULL)) != 0) {
-        ERROR("failed\n  ! mbedtls_net_accept returned %d\n", ret);
-        return false;
-    }
-
-    mbedtls_ssl_set_bio(&g_ssl.ssl, &client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
-    INFO("accept ok\n");
-
-    INFO("Performing the SSL/TLS handshake...\n");
-
-    while ((ret = mbedtls_ssl_handshake(&g_ssl.ssl)) != 0) {
-        if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-            ERROR("failed\n  ! mbedtls_ssl_handshake returned -%x\n", -ret);
-            goto reset;
-        }
-    }
-
-    INFO("handshake ok\n");
-
-    do {
-        len = sizeof(buf) - 1;
-        memset(buf, 0, sizeof(buf));
-        ret = mbedtls_ssl_read(&g_ssl.ssl, buf, len);
-
-        if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
-            continue;
-        }
-
-        if (ret <= 0) {
-            switch (ret) {
-                case MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY:
-                    INFO("connection was closed gracefully\n");
-                    break;
-
-                case MBEDTLS_ERR_NET_CONN_RESET:
-                    INFO("connection was reset by peer\n");
-                    break;
-
-                default:
-                    WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) -ret);
-                    break;
-            }
-
-            break;
-        }
-
-        len = ret;
-        INFO_BUF("rx",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, len);
-
-        // echo back the buffer
-        while ((ret = mbedtls_ssl_write(&g_ssl.ssl, buf, len)) <= 0) {
-            if (ret == MBEDTLS_ERR_NET_CONN_RESET) {
-                ERROR("failed\n  ! peer closed the connection\n");
-                break;;
-            }
     
-            if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-                ERROR("failed\n  ! mbedtls_ssl_write returned %d\n", ret);
-                break;
-            }
-        }
-        if (ret > 0) {
-            break;
-        }
-    } while (1);
+    _acceptLoop();
 
 	return true;
 }
