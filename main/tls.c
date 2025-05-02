@@ -445,23 +445,35 @@ static bool dbgAccept2(uint8_t argc, char** argv)
      * Instead, you may want to use mbedtls_x509_crt_parse_file() to read the
      * server and CA certificates, as well as mbedtls_pk_parse_keyfile().
      */
-#if 0	
-    ret = mbedtls_x509_crt_parse(&srvcert, (const unsigned char *) mbedtls_test_srv_crt,
-                                 mbedtls_test_srv_crt_len);
+#if 1
+	extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
+	extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
+	const uint8_t* servercert = server_cert_start;
+	int servercert_len = server_cert_end - server_cert_start;
+
+	extern const unsigned char prvtkey_pem_start[] asm("_binary_server_key_start");
+	extern const unsigned char prvtkey_pem_end[]   asm("_binary_server_key_end");
+	const uint8_t* prvtkey_pem = prvtkey_pem_start;
+	int prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
+
+	extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
+	extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
+	const uint8_t* cacert_pem = ca_cert_start;
+	int cacert_len = ca_cert_end - ca_cert_start;
+
+    ret = mbedtls_x509_crt_parse(&srvcert, (const unsigned char *) servercert, servercert_len);
     if (ret != 0) {
         ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
         return false;
     }
 
-   ret = mbedtls_x509_crt_parse(&srvcert, (const unsigned char *) mbedtls_test_cas_pem,
-                                 mbedtls_test_cas_pem_len);
+   ret = mbedtls_x509_crt_parse(&srvcert, (const unsigned char *) cacert_pem, cacert_len);
     if (ret != 0) {
         ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
         return false;
     }
 
-    ret =  mbedtls_pk_parse_key(&pkey, (const unsigned char *) mbedtls_test_srv_key,
-                                mbedtls_test_srv_key_len, NULL, 0,
+    ret =  mbedtls_pk_parse_key(&pkey, (const unsigned char *) prvtkey_pem, prvtkey_len, NULL, 0,
                                 mbedtls_ctr_drbg_random, &ctr_drbg);
     if (ret != 0) {
         ERROR("failed\n  !  mbedtls_pk_parse_key returned %d\n", ret);
