@@ -40,15 +40,6 @@
 
 #define WEB_SERVER "192.168.1.100"
 #define WEB_PORT	"2000"
-mbedtls_entropy_context entropy;
-mbedtls_ctr_drbg_context ctr_drbg;
-mbedtls_ssl_context ssl;
-mbedtls_x509_crt cacert;
-mbedtls_ssl_config conf;
-mbedtls_net_context server_fd;
-
-mbedtls_net_context listen_fd;
-mbedtls_net_context client_fd;
 
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
 {   
@@ -198,68 +189,6 @@ static void _task(void* arg)
 
 static bool _init(void)
 {
-	int	ret;
-
-	#ifdef CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
-    psa_status_t status = psa_crypto_init();
-    if (status != PSA_SUCCESS) {
-        ESP_LOGE(TAG, "Failed to initialize PSA crypto, returned %d", (int) status);
-        return;
-    }
-#endif
-
-    mbedtls_ssl_init(&ssl);
-    mbedtls_x509_crt_init(&cacert);
-    mbedtls_ctr_drbg_init(&ctr_drbg);
-    INFO("Seeding the random number generator\n");
-
-    mbedtls_ssl_config_init(&conf);
-
-    mbedtls_entropy_init(&entropy);
-    ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, NULL, 0);
-    if (ret) {
-        ERROR("mbedtls_ctr_drbg_seed %d\n", ret);
-        return false;
-    }
-
-    INFO("Attaching the certificate bundle...\n");
-
-    ret = esp_crt_bundle_attach(&conf);
-    if(ret < 0) {
-        ERROR("esp_crt_bundle_attach -0x%x", -ret);
-        return false;
-    }
-
-    INFO("Setting hostname for TLS session...\n");
-
-     /* Hostname set here should match CN in server certificate */
-    ret = mbedtls_ssl_set_hostname(&ssl, WEB_SERVER);
-	if (ret) {
-        ERROR("mbedtls_ssl_set_hostname returned -0x%x\n", -ret);
-        return false;
-    }
-
-    INFO("Setting up the SSL/TLS structure...\n");
-
-    ret = mbedtls_ssl_config_defaults(&conf, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT);
-    if (ret) {
-        ERROR("mbedtls_ssl_config_defaults %d\n", ret);
-        return false;
-    }
-
-    mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
-    mbedtls_ssl_conf_ca_chain(&conf, &cacert, NULL);
-    mbedtls_ssl_conf_rng(&conf, mbedtls_ctr_drbg_random, &ctr_drbg);
-#ifdef CONFIG_MBEDTLS_DEBUG
-    mbedtls_esp_enable_debug_log(&conf, CONFIG_MBEDTLS_DEBUG_LEVEL);
-#endif
-
-    ret = mbedtls_ssl_setup(&ssl, &conf);
-    if (ret) {
-        ERROR("mbedtls_ssl_setup -0x%x", -ret);
-        return false;
-    }
-
 /*
 	ret = xTaskCreate(_task, "tls", 16384, NULL, 3, NULL);
 	if (ret != pdPASS) {
@@ -278,7 +207,8 @@ static bool dbgInit(uint8_t argc, char** argv)
 
 static bool dbgConnect(uint8_t argc, char** argv)
 {
-	int ret;
+#if 0
+    int ret;
 	int flags;
 	char buf[512];
 
@@ -319,9 +249,24 @@ static bool dbgConnect(uint8_t argc, char** argv)
 	}
 
 	INFO("Cipher suite is %s\n", mbedtls_ssl_get_ciphersuite(&ssl));
-
+#endif
 	return true;
 }
+
+static struct {
+    mbedtls_ssl_context ssl;
+} g_ssl;
+
+static bool _initSsl(void)
+{
+    return true;
+}
+
+static bool _acceptLoop(void)
+{
+    return true;
+}
+
 
 static bool dbgAccept(uint8_t argc, char** argv)
 {
@@ -332,17 +277,16 @@ static bool dbgAccept(uint8_t argc, char** argv)
         
     mbedtls_entropy_context entropy;
     mbedtls_ctr_drbg_context ctr_drbg;
-    mbedtls_ssl_context ssl;
     mbedtls_ssl_config conf;
     mbedtls_x509_crt srvcert;
     mbedtls_pk_context pkey;
 #if defined(MBEDTLS_SSL_CACHE_C)
     mbedtls_ssl_cache_context cache;
 #endif  
-        
-    mbedtls_net_init(&listen_fd);
-    mbedtls_net_init(&client_fd);
-    mbedtls_ssl_init(&ssl);
+
+    _initSsl();
+
+    mbedtls_ssl_init(&g_ssl.ssl);
     mbedtls_ssl_config_init(&conf);
 #if defined(MBEDTLS_SSL_CACHE_C)
     mbedtls_ssl_cache_init(&cache);
@@ -366,9 +310,6 @@ static bool dbgAccept(uint8_t argc, char** argv)
     mbedtls_debug_set_threshold(DEBUG_LEVEL);
 #endif
 
-    /*
-     * 1. Seed the RNG
-     */
     INFO("Seeding the random number generator...\n");
 
     if ((ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
@@ -378,20 +319,8 @@ static bool dbgAccept(uint8_t argc, char** argv)
         return false;
     }
 
-    INFO("ok\n");
-
-    /*
-     * 2. Load the certificates and private RSA key
-     */
     INFO("Loading the server cert. and key...\n");
-
-    /*
-     * This demonstration program uses embedded test certificates.
-     * Instead, you may want to use mbedtls_x509_crt_parse_file() to read the
-     * server and CA certificates, as well as mbedtls_pk_parse_keyfile().
-     */
-#if 1
-	extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
+    extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
 	extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
 	const uint8_t* servercert = server_cert_start;
 	int servercert_len = server_cert_end - server_cert_start;
@@ -424,24 +353,11 @@ static bool dbgAccept(uint8_t argc, char** argv)
         ERROR("failed\n  !  mbedtls_pk_parse_key returned %d\n", ret);
         return false;
     }
-#endif
+
     INFO("ok\n");
 
-    /*
-     * 3. Setup the listening TCP socket
-     */
     INFO("Bind on https://localhost:4433/ ...\n");
 
-    if ((ret = mbedtls_net_bind(&listen_fd, NULL, "4433", MBEDTLS_NET_PROTO_TCP)) != 0) {
-        ERROR("failed\n  ! mbedtls_net_bind returned %d\n", ret);
-        return false;
-    }
-
-    INFO("ok\n");
-
-    /*
-     * 4. Setup stuff
-     */
     INFO("Setting up the SSL data....\n");
 
     if ((ret = mbedtls_ssl_config_defaults(&conf,
@@ -467,12 +383,20 @@ static bool dbgAccept(uint8_t argc, char** argv)
         return false;
     }
 
-    if ((ret = mbedtls_ssl_setup(&ssl, &conf)) != 0) {
+    if ((ret = mbedtls_ssl_setup(&g_ssl.ssl, &conf)) != 0) {
         ERROR("failed\n  ! mbedtls_ssl_setup returned %d\n", ret);
         return false;
     }
 
     INFO("ok\n");
+
+    mbedtls_net_init(&listen_fd);
+    mbedtls_net_init(&client_fd);
+
+    if ((ret = mbedtls_net_bind(&listen_fd, NULL, "4433", MBEDTLS_NET_PROTO_TCP)) != 0) {
+        ERROR("failed\n  ! mbedtls_net_bind returned %d\n", ret);
+        return false;
+    }
 
 	reset:
 
@@ -485,11 +409,8 @@ static bool dbgAccept(uint8_t argc, char** argv)
 #endif
 
     mbedtls_net_free(&client_fd);
-    mbedtls_ssl_session_reset(&ssl);
+    mbedtls_ssl_session_reset(&g_ssl.ssl);
 
-    /*
-     * 3. Wait until a client connects
-     */
     INFO("Waiting for a remote connection ...\n");
 
     if ((ret = mbedtls_net_accept(&listen_fd, &client_fd,
@@ -498,15 +419,12 @@ static bool dbgAccept(uint8_t argc, char** argv)
         return false;
     }
 
-    mbedtls_ssl_set_bio(&ssl, &client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
+    mbedtls_ssl_set_bio(&g_ssl.ssl, &client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
     INFO("accept ok\n");
 
-    /*
-     * 5. Handshake
-     */
     INFO("Performing the SSL/TLS handshake...\n");
 
-    while ((ret = mbedtls_ssl_handshake(&ssl)) != 0) {
+    while ((ret = mbedtls_ssl_handshake(&g_ssl.ssl)) != 0) {
         if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
             ERROR("failed\n  ! mbedtls_ssl_handshake returned -%x\n", -ret);
             goto reset;
@@ -518,7 +436,7 @@ static bool dbgAccept(uint8_t argc, char** argv)
     do {
         len = sizeof(buf) - 1;
         memset(buf, 0, sizeof(buf));
-        ret = mbedtls_ssl_read(&ssl, buf, len);
+        ret = mbedtls_ssl_read(&g_ssl.ssl, buf, len);
 
         if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
             continue;
@@ -546,7 +464,7 @@ static bool dbgAccept(uint8_t argc, char** argv)
         INFO_BUF("rx",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, len);
 
         // echo back the buffer
-        while ((ret = mbedtls_ssl_write(&ssl, buf, len)) <= 0) {
+        while ((ret = mbedtls_ssl_write(&g_ssl.ssl, buf, len)) <= 0) {
             if (ret == MBEDTLS_ERR_NET_CONN_RESET) {
                 ERROR("failed\n  ! peer closed the connection\n");
                 break;;
