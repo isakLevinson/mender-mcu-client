@@ -13,11 +13,21 @@
 #include "lwip/sockets.h"
 #include "mbedtls/platform.h"
 #include "mbedtls/net_sockets.h"
-#include "mbedtls/esp_debug.h"
+#include "mbedtls/x509.h"
+#include "mbedtls/debug.h"
 #include "mbedtls/ssl.h"
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
+#include "mbedtls/esp_debug.h"
 #include "mbedtls/error.h"
+
+#if defined(MBEDTLS_SSL_CACHE_C)
+#include "mbedtls/ssl_cache.h"
+#endif
+
+
+
+
 #ifdef CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
 #include "psa/crypto.h"
 #endif
@@ -227,7 +237,7 @@ static bool _init(void)
 
     INFO("Setting up the SSL/TLS structure...\n");
 
-    ret = mbedtls_ssl_config_defaults(&conf, MBEDTLS_SSL_IS_CLIENT, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT);
+    ret = mbedtls_ssl_config_defaults(&conf, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT);
     if (ret) {
         ERROR("mbedtls_ssl_config_defaults %d\n", ret);
         return false;
@@ -338,6 +348,7 @@ static bool dbgAccept(uint8_t argc, char** argv)
 	INFO("Performing the SSL/TLS handshake...\n");
 
 	while ((ret = mbedtls_ssl_handshake(&ssl)) != 0) {
+		INFO("mbedtls_ssl_handshake -%x\n", -ret);
 		if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
 			ERROR("mbedtls_ssl_handshake -0x%x", -ret);
 			return false;
@@ -362,7 +373,193 @@ static bool dbgAccept(uint8_t argc, char** argv)
 	return true;
 }
 
+static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
+{   
+	TRACE("SSLDBG: %s:%04d: %s", file, line, str);
+}
 
+static bool dbgAccept2(uint8_t argc, char** argv)
+{
+    int ret, len;
+    mbedtls_net_context listen_fd, client_fd;
+    unsigned char buf[1024];
+    const char *pers = "ssl_server";
+        
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_ssl_context ssl;
+    mbedtls_ssl_config conf;
+    mbedtls_x509_crt srvcert;
+    mbedtls_pk_context pkey;
+#if defined(MBEDTLS_SSL_CACHE_C)
+    mbedtls_ssl_cache_context cache;
+#endif  
+        
+    mbedtls_net_init(&listen_fd);
+    mbedtls_net_init(&client_fd);
+    mbedtls_ssl_init(&ssl);
+    mbedtls_ssl_config_init(&conf);
+#if defined(MBEDTLS_SSL_CACHE_C)
+    mbedtls_ssl_cache_init(&cache);
+#endif
+    mbedtls_x509_crt_init(&srvcert);
+    mbedtls_pk_init(&pkey);
+    mbedtls_entropy_init(&entropy);
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+    
+#if defined(MBEDTLS_USE_PSA_CRYPTO)
+    psa_status_t status = psa_crypto_init();
+    if (status != PSA_SUCCESS) {
+        mbedtls_fprintf(stderr, "Failed to initialize PSA Crypto implementation: %d\n",
+                        (int) status);
+        ret = MBEDTLS_ERR_SSL_HW_ACCEL_FAILED;
+        goto exit;
+    }
+#endif /* MBEDTLS_USE_PSA_CRYPTO */
+
+#if defined(MBEDTLS_DEBUG_C)
+    mbedtls_debug_set_threshold(DEBUG_LEVEL);
+#endif
+
+    /*
+     * 1. Seed the RNG
+     */
+    INFO("Seeding the random number generator...\n");
+
+    if ((ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+                                     (const unsigned char *) pers,
+                                     strlen(pers))) != 0) {
+        ERROR("failed\n  ! mbedtls_ctr_drbg_seed returned %d\n", ret);
+        return false;
+    }
+
+    INFO("ok\n");
+
+    /*
+     * 2. Load the certificates and private RSA key
+     */
+    INFO("Loading the server cert. and key...\n");
+
+    /*
+     * This demonstration program uses embedded test certificates.
+     * Instead, you may want to use mbedtls_x509_crt_parse_file() to read the
+     * server and CA certificates, as well as mbedtls_pk_parse_keyfile().
+     */
+#if 0	
+    ret = mbedtls_x509_crt_parse(&srvcert, (const unsigned char *) mbedtls_test_srv_crt,
+                                 mbedtls_test_srv_crt_len);
+    if (ret != 0) {
+        ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
+        return false;
+    }
+
+   ret = mbedtls_x509_crt_parse(&srvcert, (const unsigned char *) mbedtls_test_cas_pem,
+                                 mbedtls_test_cas_pem_len);
+    if (ret != 0) {
+        ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
+        return false;
+    }
+
+    ret =  mbedtls_pk_parse_key(&pkey, (const unsigned char *) mbedtls_test_srv_key,
+                                mbedtls_test_srv_key_len, NULL, 0,
+                                mbedtls_ctr_drbg_random, &ctr_drbg);
+    if (ret != 0) {
+        ERROR("failed\n  !  mbedtls_pk_parse_key returned %d\n", ret);
+        return false;
+    }
+#endif
+    INFO("ok\n");
+
+    /*
+     * 3. Setup the listening TCP socket
+     */
+    INFO("Bind on https://localhost:4433/ ...\n");
+
+    if ((ret = mbedtls_net_bind(&listen_fd, NULL, "4433", MBEDTLS_NET_PROTO_TCP)) != 0) {
+        ERROR("failed\n  ! mbedtls_net_bind returned %d\n", ret);
+        return false;
+    }
+
+    INFO("ok\n");
+
+    /*
+     * 4. Setup stuff
+     */
+    INFO("Setting up the SSL data....\n");
+
+    if ((ret = mbedtls_ssl_config_defaults(&conf,
+                                           MBEDTLS_SSL_IS_SERVER,
+                                           MBEDTLS_SSL_TRANSPORT_STREAM,
+                                           MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
+        ERROR("failed\n  ! mbedtls_ssl_config_defaults returned %d\n", ret);
+        return false;
+    }
+
+    mbedtls_ssl_conf_rng(&conf, mbedtls_ctr_drbg_random, &ctr_drbg);
+    mbedtls_ssl_conf_dbg(&conf, my_debug, stdout);
+
+#if defined(MBEDTLS_SSL_CACHE_C)
+    mbedtls_ssl_conf_session_cache(&conf, &cache,
+                                   mbedtls_ssl_cache_get,
+                                   mbedtls_ssl_cache_set);
+#endif
+
+    mbedtls_ssl_conf_ca_chain(&conf, srvcert.next, NULL);
+    if ((ret = mbedtls_ssl_conf_own_cert(&conf, &srvcert, &pkey)) != 0) {
+        ERROR("failed\n  ! mbedtls_ssl_conf_own_cert returned %d\n", ret);
+        return false;
+    }
+
+    if ((ret = mbedtls_ssl_setup(&ssl, &conf)) != 0) {
+        ERROR("failed\n  ! mbedtls_ssl_setup returned %d\n", ret);
+        return false;
+    }
+
+    INFO("ok\n");
+
+	reset:
+
+	#ifdef MBEDTLS_ERROR_C
+    if (ret != 0) {
+        char error_buf[100];
+        mbedtls_strerror(ret, error_buf, 100);
+        mbedtls_printf("Last error was: %d - %s\n\n", ret, error_buf);
+    }
+#endif
+
+    mbedtls_net_free(&client_fd);
+    mbedtls_ssl_session_reset(&ssl);
+
+    /*
+     * 3. Wait until a client connects
+     */
+    INFO("Waiting for a remote connection ...\n");
+
+    if ((ret = mbedtls_net_accept(&listen_fd, &client_fd,
+                                  NULL, 0, NULL)) != 0) {
+        ERROR("failed\n  ! mbedtls_net_accept returned %d\n", ret);
+        return false;
+    }
+
+    mbedtls_ssl_set_bio(&ssl, &client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
+    INFO("accept ok\n");
+
+    /*
+     * 5. Handshake
+     */
+    INFO("Performing the SSL/TLS handshake...\n");
+
+    while ((ret = mbedtls_ssl_handshake(&ssl)) != 0) {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            ERROR("failed\n  ! mbedtls_ssl_handshake returned -%x\n", -ret);
+            goto reset;
+        }
+    }
+
+    INFO("handshake ok\n");
+
+	return true;
+}
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
@@ -372,10 +569,11 @@ static bool dbgStatus(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("tls", NULL)
-		DEBUG_MENU_CMD("status",  NULL,		NULL, dbgStatus)
-		DEBUG_MENU_CMD("init",	  NULL,		NULL, dbgInit)
-		DEBUG_MENU_CMD("connect", NULL,		NULL, dbgConnect)
-		DEBUG_MENU_CMD("accept",  NULL,		NULL, dbgAccept)
+		DEBUG_MENU_CMD("status",  NULL,	NULL, dbgStatus)
+		DEBUG_MENU_CMD("init",	  NULL,	NULL, dbgInit)
+		DEBUG_MENU_CMD("connect", NULL,	NULL, dbgConnect)
+		DEBUG_MENU_CMD("accept",  NULL,	NULL, dbgAccept)
+		DEBUG_MENU_CMD("accept2", NULL,	NULL, dbgAccept2)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
