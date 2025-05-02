@@ -46,6 +46,11 @@ static struct {
     mbedtls_ssl_config conf;
     mbedtls_entropy_context entropy;
     mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_x509_crt srvcert;
+    mbedtls_pk_context pkey;
+#if defined(MBEDTLS_SSL_CACHE_C)
+    mbedtls_ssl_cache_context cache;
+#endif  
 } g_ssl;
 
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
@@ -356,6 +361,9 @@ static bool _acceptLoop(void)
         }
     } while (1);
 
+    mbedtls_net_free(&client_fd);
+    mbedtls_net_free(&listen_fd);
+
     return true;
 }
 
@@ -364,19 +372,13 @@ static bool _sslInit(void)
     int ret;
     const char *pers = "ssl_server";
 
-    mbedtls_x509_crt srvcert;
-    mbedtls_pk_context pkey;
-#if defined(MBEDTLS_SSL_CACHE_C)
-    mbedtls_ssl_cache_context cache;
-#endif  
-
     mbedtls_ssl_init(&g_ssl.ssl);
     mbedtls_ssl_config_init(&g_ssl.conf);
 #if defined(MBEDTLS_SSL_CACHE_C)
-    mbedtls_ssl_cache_init(&cache);
+    mbedtls_ssl_cache_init(&g_ssl.cache);
 #endif
-    mbedtls_x509_crt_init(&srvcert);
-    mbedtls_pk_init(&pkey);
+    mbedtls_x509_crt_init(&g_ssl.srvcert);
+    mbedtls_pk_init(&g_ssl.pkey);
     mbedtls_entropy_init(&g_ssl.entropy);
     mbedtls_ctr_drbg_init(&g_ssl.ctr_drbg);
     
@@ -419,19 +421,19 @@ static bool _sslInit(void)
 	const uint8_t* cacert_pem = ca_cert_start;
 	int cacert_len = ca_cert_end - ca_cert_start;
 
-    ret = mbedtls_x509_crt_parse(&srvcert, (const unsigned char *) servercert, servercert_len);
+    ret = mbedtls_x509_crt_parse(&g_ssl.srvcert, (const unsigned char *) servercert, servercert_len);
     if (ret != 0) {
         ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
         return false;
     }
 
-   ret = mbedtls_x509_crt_parse(&srvcert, (const unsigned char *) cacert_pem, cacert_len);
+   ret = mbedtls_x509_crt_parse(&g_ssl.srvcert, (const unsigned char *) cacert_pem, cacert_len);
     if (ret != 0) {
         ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
         return false;
     }
 
-    ret =  mbedtls_pk_parse_key(&pkey, (const unsigned char *) prvtkey_pem, prvtkey_len, NULL, 0,
+    ret =  mbedtls_pk_parse_key(&g_ssl.pkey, (const unsigned char *) prvtkey_pem, prvtkey_len, NULL, 0,
                                 mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
     if (ret != 0) {
         ERROR("failed\n  !  mbedtls_pk_parse_key returned %d\n", ret);
@@ -456,13 +458,11 @@ static bool _sslInit(void)
     mbedtls_ssl_conf_dbg(&g_ssl.conf, my_debug, stdout);
 
 #if defined(MBEDTLS_SSL_CACHE_C)
-    mbedtls_ssl_conf_session_cache(&g_ssl.conf, &cache,
-                                   mbedtls_ssl_cache_get,
-                                   mbedtls_ssl_cache_set);
+    mbedtls_ssl_conf_session_cache(&g_ssl.conf, &g_ssl.cache, mbedtls_ssl_cache_get, mbedtls_ssl_cache_set);
 #endif
 
-    mbedtls_ssl_conf_ca_chain(&g_ssl.conf, srvcert.next, NULL);
-    if ((ret = mbedtls_ssl_conf_own_cert(&g_ssl.conf, &srvcert, &pkey)) != 0) {
+    mbedtls_ssl_conf_ca_chain(&g_ssl.conf, g_ssl.srvcert.next, NULL);
+    if ((ret = mbedtls_ssl_conf_own_cert(&g_ssl.conf, &g_ssl.srvcert, &g_ssl.pkey)) != 0) {
         ERROR("failed\n  ! mbedtls_ssl_conf_own_cert returned %d\n", ret);
         return false;
     }
@@ -478,7 +478,6 @@ static bool _sslInit(void)
 
 static bool dbgAccept(uint8_t argc, char** argv)
 {
-    _sslInit();
     _acceptLoop();
 
 	return true;
@@ -504,6 +503,7 @@ bool TLS_init(void)
 {
 	DBG_TREE_add("/", g_menu);
 
+    _sslInit();
 	_init();
 	return true;
 }
