@@ -265,6 +265,37 @@ static bool dbgConnect(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool _accept(mbedtls_net_context *listen_fd, mbedtls_net_context *client_fd)
+{
+    int ret;
+
+	reset:
+    mbedtls_net_free(client_fd);
+    mbedtls_ssl_session_reset(&g_ssl.ssl);
+
+    INFO("Waiting for a remote connection ...\n");
+
+    if ((ret = mbedtls_net_accept(listen_fd, client_fd, NULL, 0, NULL)) != 0) {
+        ERROR("mbedtls_net_accept %d\n", ret);
+        return false;
+    }
+
+    mbedtls_ssl_set_bio(&g_ssl.ssl, client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
+    INFO("accept ok\n");
+
+    INFO("Performing the SSL/TLS handshake...\n");
+
+    while ((ret = mbedtls_ssl_handshake(&g_ssl.ssl)) != 0) {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            ERROR("mbedtls_ssl_handshake -%x\n", -ret);
+            goto reset;
+        }
+    }
+
+    INFO("handshake ok\n");
+    return true;
+}
+
 static bool _acceptLoop(void)
 {
     int ret;
@@ -278,44 +309,11 @@ static bool _acceptLoop(void)
     mbedtls_net_init(&client_fd);
 
     if ((ret = mbedtls_net_bind(&listen_fd, NULL, "4433", MBEDTLS_NET_PROTO_TCP)) != 0) {
-        ERROR("failed\n  ! mbedtls_net_bind returned %d\n", ret);
+        ERROR("mbedtls_net_bind %d\n", ret);
         return false;
     }
 
-	reset:
-
-	#ifdef MBEDTLS_ERROR_C
-    if (ret != 0) {
-        char error_buf[100];
-        mbedtls_strerror(ret, error_buf, 100);
-        mbedtls_printf("Last error was: %d - %s\n\n", ret, error_buf);
-    }
-#endif
-
-    mbedtls_net_free(&client_fd);
-    mbedtls_ssl_session_reset(&g_ssl.ssl);
-
-    INFO("Waiting for a remote connection ...\n");
-
-    if ((ret = mbedtls_net_accept(&listen_fd, &client_fd,
-                                  NULL, 0, NULL)) != 0) {
-        ERROR("failed\n  ! mbedtls_net_accept returned %d\n", ret);
-        return false;
-    }
-
-    mbedtls_ssl_set_bio(&g_ssl.ssl, &client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
-    INFO("accept ok\n");
-
-    INFO("Performing the SSL/TLS handshake...\n");
-
-    while ((ret = mbedtls_ssl_handshake(&g_ssl.ssl)) != 0) {
-        if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-            ERROR("failed\n  ! mbedtls_ssl_handshake returned -%x\n", -ret);
-            goto reset;
-        }
-    }
-
-    INFO("handshake ok\n");
+    _accept(&listen_fd, &client_fd);
 
     do {
         len = sizeof(buf) - 1;
