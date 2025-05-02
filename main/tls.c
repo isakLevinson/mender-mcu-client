@@ -34,6 +34,7 @@
 #include "wifi.h"
 #include "config.h"
 #include "tls.h"
+#include "cmd.h"
 
 #define WEB_SERVER "192.168.1.100"
 #define WEB_PORT	"2000"
@@ -104,6 +105,13 @@ static bool _write(mbedtls_ssl_context *ssl, void *buf, int len)
     }
 
     return true;
+}
+
+static bool _streamWrite(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
+{
+    bool ret;
+    ret = _write(&g_ssl.sslStream, i_pBuf, size);
+    return ret;
 }
 
 static void _taskCmd(void* arg)
@@ -461,8 +469,16 @@ DEBUG_MENU_END
 
 bool TLS_init(void)
 {
-	DBG_TREE_add("/", g_menu);
+    CMD_CONTEXT context = {
+        .p_cbSend   = _streamWrite,
+        .pArg       = NULL,
+    };
+
+    DBG_TREE_add("/", g_menu);
 
 	_init();
-	return true;
+
+    CMD_setStreamContext(&context);
+
+    return true;
 }
