@@ -41,6 +41,13 @@
 #define WEB_SERVER "192.168.1.100"
 #define WEB_PORT	"2000"
 
+static struct {
+    mbedtls_ssl_context ssl;
+    mbedtls_ssl_config conf;
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+} g_ssl;
+
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
 {   
 	TRACE("SSLDBG: %s:%04d: %s", file, line, str);
@@ -253,15 +260,6 @@ static bool dbgConnect(uint8_t argc, char** argv)
 	return true;
 }
 
-static struct {
-    mbedtls_ssl_context ssl;
-} g_ssl;
-
-static bool _initSsl(void)
-{
-    return true;
-}
-
 static bool _acceptLoop(void)
 {
     int ret;
@@ -364,32 +362,26 @@ static bool _acceptLoop(void)
     return true;
 }
 
-
-static bool dbgAccept(uint8_t argc, char** argv)
+static bool _sslInit(void)
 {
     int ret;
     const char *pers = "ssl_server";
-        
-    mbedtls_entropy_context entropy;
-    mbedtls_ctr_drbg_context ctr_drbg;
-    mbedtls_ssl_config conf;
+
     mbedtls_x509_crt srvcert;
     mbedtls_pk_context pkey;
 #if defined(MBEDTLS_SSL_CACHE_C)
     mbedtls_ssl_cache_context cache;
 #endif  
 
-    _initSsl();
-
     mbedtls_ssl_init(&g_ssl.ssl);
-    mbedtls_ssl_config_init(&conf);
+    mbedtls_ssl_config_init(&g_ssl.conf);
 #if defined(MBEDTLS_SSL_CACHE_C)
     mbedtls_ssl_cache_init(&cache);
 #endif
     mbedtls_x509_crt_init(&srvcert);
     mbedtls_pk_init(&pkey);
-    mbedtls_entropy_init(&entropy);
-    mbedtls_ctr_drbg_init(&ctr_drbg);
+    mbedtls_entropy_init(&g_ssl.entropy);
+    mbedtls_ctr_drbg_init(&g_ssl.ctr_drbg);
     
 #if defined(MBEDTLS_USE_PSA_CRYPTO)
     psa_status_t status = psa_crypto_init();
@@ -407,7 +399,7 @@ static bool dbgAccept(uint8_t argc, char** argv)
 
     INFO("Seeding the random number generator...\n");
 
-    if ((ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+    if ((ret = mbedtls_ctr_drbg_seed(&g_ssl.ctr_drbg, mbedtls_entropy_func, &g_ssl.entropy,
                                      (const unsigned char *) pers,
                                      strlen(pers))) != 0) {
         ERROR("failed\n  ! mbedtls_ctr_drbg_seed returned %d\n", ret);
@@ -443,7 +435,7 @@ static bool dbgAccept(uint8_t argc, char** argv)
     }
 
     ret =  mbedtls_pk_parse_key(&pkey, (const unsigned char *) prvtkey_pem, prvtkey_len, NULL, 0,
-                                mbedtls_ctr_drbg_random, &ctr_drbg);
+                                mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
     if (ret != 0) {
         ERROR("failed\n  !  mbedtls_pk_parse_key returned %d\n", ret);
         return false;
@@ -455,7 +447,7 @@ static bool dbgAccept(uint8_t argc, char** argv)
 
     INFO("Setting up the SSL data....\n");
 
-    if ((ret = mbedtls_ssl_config_defaults(&conf,
+    if ((ret = mbedtls_ssl_config_defaults(&g_ssl.conf,
                                            MBEDTLS_SSL_IS_SERVER,
                                            MBEDTLS_SSL_TRANSPORT_STREAM,
                                            MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
@@ -463,28 +455,33 @@ static bool dbgAccept(uint8_t argc, char** argv)
         return false;
     }
 
-    mbedtls_ssl_conf_rng(&conf, mbedtls_ctr_drbg_random, &ctr_drbg);
-    mbedtls_ssl_conf_dbg(&conf, my_debug, stdout);
+    mbedtls_ssl_conf_rng(&g_ssl.conf, mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
+    mbedtls_ssl_conf_dbg(&g_ssl.conf, my_debug, stdout);
 
 #if defined(MBEDTLS_SSL_CACHE_C)
-    mbedtls_ssl_conf_session_cache(&conf, &cache,
+    mbedtls_ssl_conf_session_cache(&g_ssl.conf, &cache,
                                    mbedtls_ssl_cache_get,
                                    mbedtls_ssl_cache_set);
 #endif
 
-    mbedtls_ssl_conf_ca_chain(&conf, srvcert.next, NULL);
-    if ((ret = mbedtls_ssl_conf_own_cert(&conf, &srvcert, &pkey)) != 0) {
+    mbedtls_ssl_conf_ca_chain(&g_ssl.conf, srvcert.next, NULL);
+    if ((ret = mbedtls_ssl_conf_own_cert(&g_ssl.conf, &srvcert, &pkey)) != 0) {
         ERROR("failed\n  ! mbedtls_ssl_conf_own_cert returned %d\n", ret);
         return false;
     }
 
-    if ((ret = mbedtls_ssl_setup(&g_ssl.ssl, &conf)) != 0) {
+    if ((ret = mbedtls_ssl_setup(&g_ssl.ssl, &g_ssl.conf)) != 0) {
         ERROR("failed\n  ! mbedtls_ssl_setup returned %d\n", ret);
         return false;
     }
 
     INFO("ok\n");
-    
+    return true;
+}
+
+static bool dbgAccept(uint8_t argc, char** argv)
+{
+    _sslInit();
     _acceptLoop();
 
 	return true;
