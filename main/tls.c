@@ -346,16 +346,13 @@ static bool _acceptLoop(void)
         while ((ret = mbedtls_ssl_write(&g_ssl.ssl, buf, len)) <= 0) {
             if (ret == MBEDTLS_ERR_NET_CONN_RESET) {
                 ERROR("failed\n  ! peer closed the connection\n");
-                break;;
+                break;
             }
     
             if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
                 ERROR("failed\n  ! mbedtls_ssl_write returned %d\n", ret);
                 break;
             }
-        }
-        if (ret > 0) {
-            break;
         }
     } while (1);
 
@@ -498,7 +495,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("status",  NULL,	NULL, dbgStatus)
 		DEBUG_MENU_CMD("init",	  NULL,	NULL, dbgInit)
 		DEBUG_MENU_CMD("connect", NULL,	NULL, dbgConnect)
-		DEBUG_MENU_CMD("accept", NULL,	NULL, dbgAccept)
+		DEBUG_MENU_CMD("accept",  NULL,	NULL, dbgAccept)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
