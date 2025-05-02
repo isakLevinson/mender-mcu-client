@@ -39,7 +39,6 @@
 #define WEB_PORT	"2000"
 
 static struct {
-//    mbedtls_ssl_context ssl;
     mbedtls_ssl_config conf;
     mbedtls_entropy_context entropy;
     mbedtls_ctr_drbg_context ctr_drbg;
@@ -47,14 +46,15 @@ static struct {
     mbedtls_pk_context pkey;
 #if defined(MBEDTLS_SSL_CACHE_C)
     mbedtls_ssl_cache_context cache;
-#endif  
+#endif
+
+    mbedtls_ssl_context sslStream;
 } g_ssl;
 
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
 {   
 	TRACE("SSLDBG: %s:%04d: %s", file, line, str);
 }
-
 
 static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mbedtls_net_context *client_fd)
 {
@@ -84,6 +84,25 @@ static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mb
     }
 
     INFO("handshake ok\n");
+    return true;
+}
+
+static bool _write(mbedtls_ssl_context *ssl, void *buf, int len)
+{
+    int ret;
+
+    while ((ret = mbedtls_ssl_write(ssl, buf, len)) <= 0) {
+        if (ret == MBEDTLS_ERR_NET_CONN_RESET) {
+            WARN("peer closed the connection\n");
+            return false;
+        }
+
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            WARN("mbedtls_ssl_write returned %d\n", ret);
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -149,17 +168,7 @@ static void _taskCmd(void* arg)
             INFO_BUF("cmd",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, len);
     
             // echo back the buffer
-            while ((ret = mbedtls_ssl_write(&ssl, buf, len)) <= 0) {
-                if (ret == MBEDTLS_ERR_NET_CONN_RESET) {
-                    WARN("peer closed the connection\n");
-                    break;
-                }
-        
-                if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-                    WARN("mbedtls_ssl_write returned %d\n", ret);
-                    break;
-                }
-            }
+            _write(&ssl, buf, len);
         } while (1);
     }
 
@@ -174,15 +183,14 @@ static void _taskStream(void* arg)
     int len;
     unsigned char buf[1024];
 
-    mbedtls_ssl_context ssl;
     mbedtls_net_context listen_fd;
     mbedtls_net_context client_fd;
 
     mbedtls_net_init(&listen_fd);
     mbedtls_net_init(&client_fd);
 
-    mbedtls_ssl_init(&ssl);
-    if ((ret = mbedtls_ssl_setup(&ssl, &g_ssl.conf)) != 0) {
+    mbedtls_ssl_init(&g_ssl.sslStream);
+    if ((ret = mbedtls_ssl_setup(&g_ssl.sslStream, &g_ssl.conf)) != 0) {
         ERROR("failed\n  ! mbedtls_ssl_setup returned %d\n", ret);
         goto exit;
     }
@@ -197,12 +205,12 @@ static void _taskStream(void* arg)
     while (true) {
 		vTaskDelay(100);
 
-        _accept(&ssl, &listen_fd, &client_fd);
+        _accept(&g_ssl.sslStream, &listen_fd, &client_fd);
 
         do {
             len = sizeof(buf) - 1;
             memset(buf, 0, sizeof(buf));
-            ret = mbedtls_ssl_read(&ssl, buf, len);
+            ret = mbedtls_ssl_read(&g_ssl.sslStream, buf, len);
     
             if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
                 continue;
@@ -230,17 +238,7 @@ static void _taskStream(void* arg)
             INFO_BUF("stream",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, len);
     
             // echo back the buffer
-            while ((ret = mbedtls_ssl_write(&ssl, buf, len)) <= 0) {
-                if (ret == MBEDTLS_ERR_NET_CONN_RESET) {
-                    WARN("peer closed the connection\n");
-                    break;
-                }
-        
-                if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-                    WARN("mbedtls_ssl_write returned %d\n", ret);
-                    break;
-                }
-            }
+            _write(&g_ssl.sslStream, buf, len);
         } while (1);
     }
 
@@ -422,73 +420,27 @@ static bool dbgConnect(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgAccept(uint8_t argc, char** argv)
+static bool dbgWriteStream(uint8_t argc, char** argv)
 {
-   #if 0
-    int ret;
-    int len;
-    unsigned char buf[1024];
+    bool    ret;
+	uint8_t	buf[256];
+	ARG_TYPE_ARRAY	array = {
+		.array = buf,
+		.maxSize = sizeof(buf),
+	};
 
-    mbedtls_net_context listen_fd;
-    mbedtls_net_context client_fd;
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY(NULL,	ARGS_TYPE_HEXSTR,	true,	"",						&array)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
 
-    mbedtls_net_init(&listen_fd);
-    mbedtls_net_init(&client_fd);
-
-    if ((ret = mbedtls_net_bind(&listen_fd, NULL, "4433", MBEDTLS_NET_PROTO_TCP)) != 0) {
-        ERROR("mbedtls_net_bind %d\n", ret);
+    ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+    if (!ret) {
         return false;
     }
 
-    _accept(&listen_fd, &client_fd);
-
-    do {
-        len = sizeof(buf) - 1;
-        memset(buf, 0, sizeof(buf));
-        ret = mbedtls_ssl_read(&g_ssl.ssl, buf, len);
-
-        if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
-            continue;
-        }
-
-        if (ret <= 0) {
-            switch (ret) {
-                case MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY:
-                    INFO("connection was closed gracefully\n");
-                    break;
-
-                case MBEDTLS_ERR_NET_CONN_RESET:
-                    INFO("connection was reset by peer\n");
-                    break;
-
-                default:
-                    WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) -ret);
-                    break;
-            }
-
-            break;
-        }
-
-        len = ret;
-        INFO_BUF("rx",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, len);
-
-        // echo back the buffer
-        while ((ret = mbedtls_ssl_write(&g_ssl.ssl, buf, len)) <= 0) {
-            if (ret == MBEDTLS_ERR_NET_CONN_RESET) {
-                ERROR("failed\n  ! peer closed the connection\n");
-                break;
-            }
-    
-            if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-                ERROR("failed\n  ! mbedtls_ssl_write returned %d\n", ret);
-                break;
-            }
-        }
-    } while (1);
-
-    mbedtls_net_free(&client_fd);
-    mbedtls_net_free(&listen_fd);
-#endif
+    _write(&g_ssl.sslStream, buf, array.size);
 	return true;
 }
 
@@ -500,9 +452,9 @@ static bool dbgStatus(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("tls", NULL)
-		DEBUG_MENU_CMD("status",  NULL,	NULL, dbgStatus)
-		DEBUG_MENU_CMD("connect", NULL,	NULL, dbgConnect)
-		DEBUG_MENU_CMD("accept",  NULL,	NULL, dbgAccept)
+		DEBUG_MENU_CMD("status",      NULL,	NULL, dbgStatus)
+		DEBUG_MENU_CMD("connect",     NULL,	NULL, dbgConnect)
+		DEBUG_MENU_CMD("writeStream", NULL,	NULL, dbgWriteStream)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
