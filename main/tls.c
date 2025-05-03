@@ -48,8 +48,6 @@ static struct {
 #if defined(MBEDTLS_SSL_CACHE_C)
     mbedtls_ssl_cache_context cache;
 #endif
-
-    mbedtls_ssl_context sslStream;
 } g_ssl;
 
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
@@ -107,10 +105,12 @@ static bool _write(mbedtls_ssl_context *ssl, void *buf, int len)
     return true;
 }
 
-static bool _streamWrite(void* pArg, void* i_pBuf, uint16_t size)
+static bool _cmdWrite(void* pArg, void* i_pBuf, uint16_t size)
 {
     bool ret;
-    ret = _write(&g_ssl.sslStream, i_pBuf, size);
+    mbedtls_ssl_context *ssl = (mbedtls_ssl_context *)pArg;
+
+    ret = _write(ssl, i_pBuf, size);
     return ret;
 }
 
@@ -123,6 +123,11 @@ static void _taskCmd(void* arg)
     mbedtls_ssl_context ssl;
     mbedtls_net_context listen_fd;
     mbedtls_net_context client_fd;
+
+    CMD_CONTEXT context = {
+        .p_cbSend   = _cmdWrite,
+        .pArg       = &ssl,
+    };
 
     mbedtls_net_init(&listen_fd);
     mbedtls_net_init(&client_fd);
@@ -175,8 +180,7 @@ static void _taskCmd(void* arg)
             len = ret;
             INFO_BUF("cmd",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, len);
     
-            // echo back the buffer
-            _write(&ssl, buf, len);
+            CMD_processBuffer(&context, buf, len);
         } while (1);
     }
 
@@ -191,14 +195,21 @@ static void _taskStream(void* arg)
     int len;
     unsigned char buf[1024];
 
+    mbedtls_ssl_context ssl;
     mbedtls_net_context listen_fd;
     mbedtls_net_context client_fd;
+
+    CMD_CONTEXT context = {
+        .p_cbSend   = _cmdWrite,
+        .pArg       = &ssl,
+    };
+    CMD_setStreamContext(&context);
 
     mbedtls_net_init(&listen_fd);
     mbedtls_net_init(&client_fd);
 
-    mbedtls_ssl_init(&g_ssl.sslStream);
-    if ((ret = mbedtls_ssl_setup(&g_ssl.sslStream, &g_ssl.conf)) != 0) {
+    mbedtls_ssl_init(&ssl);
+    if ((ret = mbedtls_ssl_setup(&ssl, &g_ssl.conf)) != 0) {
         ERROR("failed\n  ! mbedtls_ssl_setup returned %d\n", ret);
         goto exit;
     }
@@ -213,12 +224,12 @@ static void _taskStream(void* arg)
     while (true) {
 		vTaskDelay(100);
 
-        _accept(&g_ssl.sslStream, &listen_fd, &client_fd);
+        _accept(&ssl, &listen_fd, &client_fd);
 
         do {
             len = sizeof(buf) - 1;
             memset(buf, 0, sizeof(buf));
-            ret = mbedtls_ssl_read(&g_ssl.sslStream, buf, len);
+            ret = mbedtls_ssl_read(&ssl, buf, len);
     
             if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
                 continue;
@@ -246,7 +257,7 @@ static void _taskStream(void* arg)
             INFO_BUF("stream",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, len);
     
             // echo back the buffer
-            _write(&g_ssl.sslStream, buf, len);
+            //_write(&ssl, buf, len);
         } while (1);
     }
 
@@ -428,30 +439,6 @@ static bool dbgConnect(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgWriteStream(uint8_t argc, char** argv)
-{
-    bool    ret;
-	uint8_t	buf[256];
-	ARG_TYPE_ARRAY	array = {
-		.array = buf,
-		.maxSize = sizeof(buf),
-	};
-
-// *INDENT-OFF*
-	ARGS_ENTRY_BEGIN(args)
-		ARGS_ENTRY(NULL,	ARGS_TYPE_HEXSTR,	true,	"",						&array)
-	ARGS_ENTRY_END()
-// *INDENT-ON*
-
-    ret = ARGS_readValues(argc, argv, args, NULL, NULL);
-    if (!ret) {
-        return false;
-    }
-
-    _write(&g_ssl.sslStream, buf, array.size);
-	return true;
-}
-
 static bool dbgStatus(uint8_t argc, char** argv)
 {
 	return true;
@@ -462,23 +449,16 @@ DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("tls", NULL)
 		DEBUG_MENU_CMD("status",      NULL,	NULL, dbgStatus)
 		DEBUG_MENU_CMD("connect",     NULL,	NULL, dbgConnect)
-		DEBUG_MENU_CMD("writeStream", NULL,	NULL, dbgWriteStream)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
 
 bool TLS_init(void)
 {
-    CMD_CONTEXT context = {
-        .p_cbSend   = _streamWrite,
-        .pArg       = NULL,
-    };
-
     DBG_TREE_add("/", g_menu);
 
 	_init();
 
-    CMD_setStreamContext(&context);
 
     return true;
 }

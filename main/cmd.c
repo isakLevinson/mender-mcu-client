@@ -680,7 +680,7 @@ void CMD_parseInit(void)
 	g_cmd.received			= 0;
 }
 
-void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, uint16_t size)
+static void _processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, uint16_t size)
 {
 	bool	retVal = false;
 
@@ -713,6 +713,21 @@ void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 	}
 }
 
+bool CMD_processBuffer(CMD_CONTEXT* i_pContext, uint8_t* i_pBuf, uint16_t size)
+{
+	if (size < 4) {
+		return false;
+	}
+
+	uint8_t len = i_pBuf[0];
+	uint8_t type = i_pBuf[2];
+
+	INFO("CMD_processBuffer size:%d, len:%d, type\n", size, len, type);
+	_processMessage(i_pContext, type, i_pBuf+3, size-3);
+
+	return true;
+}
+
 void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 {
 	TRACE1("c:%02x state:%d expected:%04x, rec:%x\n", data, g_cmd.state, g_cmd.expectedLength, g_cmd.received);
@@ -740,10 +755,10 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 			if (g_cmd.received > g_cmd.expectedLength) {
 				uint8_t	type = g_cmd.rxBuf[0];
 
-				TRACE1("CMD_processMessage t:%x ", type);
+				TRACE1("_processMessage t:%x ", type);
 				TRACE1_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, g_cmd.rxBuf + 1, g_cmd.received - 1);
 
-				CMD_processMessage(i_pContext, type, g_cmd.rxBuf + 1, g_cmd.received - 1);
+				_processMessage(i_pContext, type, g_cmd.rxBuf + 1, g_cmd.received - 1);
 				CMD_parseInit();
 			}
 			break;

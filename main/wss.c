@@ -354,11 +354,9 @@ static esp_err_t ws_handler(httpd_req_t* req)
 			goto exit;
 		}
 
-		uint8_t len = pkt.payload[0];
-		uint8_t type = pkt.payload[2];
 		INFO("HTTPD_WS_TYPE_BINARY len:%d\n", pkt.len);
-		INFO("WS Received packet with message: type=%d len=%d cmd:(t:%d, l:%d)\n", pkt.type, pkt.len, type, len);
-		CMD_processMessage(&context, type, pkt.payload + 3, pkt.len - 3);
+		INFO("WS Received packet with message: type=%d len=%d\n", pkt.type, pkt.len);
+		CMD_processBuffer(&context, pkt.payload, pkt.len);
 	}
 
 	TRACE("ws_handler: httpd_handle_t=%p, fd=%d, client_info:%d\n",
