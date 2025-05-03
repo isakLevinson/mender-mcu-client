@@ -165,9 +165,12 @@ static struct {
 #endif
 };
 
-bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t size)
+static bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t size)
 {
 	bool	ret;
+	uint8_t 	buf[1600];
+	uint8_t*	pBuf = buf;
+
 	CMD_CONTEXT* pContext = i_pContext;
 
 	if (!i_pContext) {
@@ -185,11 +188,23 @@ bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t siz
 		return false;
 	}
 
+	if (size > sizeof(buf) + 3) {
+		return false;
+	}
+
 	xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
 
-	TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+	*(uint16_t*)pBuf	= size;
+	pBuf += 2;
+	*pBuf	= type;
+	pBuf++;
 
-	ret = pContext->p_cbSend(pContext->pArg, type, i_pBuf, size);
+	memcpy(pBuf, i_pBuf, size);
+	pBuf += size;
+
+	TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf-buf);
+
+	ret = pContext->p_cbSend(pContext->pArg, buf, pBuf-buf);
 
 	xSemaphoreGive(g_cmd.semaphore);
 

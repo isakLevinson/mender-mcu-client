@@ -107,7 +107,7 @@ static bool _write(mbedtls_ssl_context *ssl, void *buf, int len)
     return true;
 }
 
-static bool _streamWrite(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
+static bool _streamWrite(void* pArg, void* i_pBuf, uint16_t size)
 {
     bool ret;
     ret = _write(&g_ssl.sslStream, i_pBuf, size);

@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-typedef bool (*CMD_RESPONSE_CB)(void* pArg, uint8_t type, void* i_pBuf, uint16_t size);
+typedef bool (*CMD_RESPONSE_CB)(void* pArg, void* i_pBuf, uint16_t size);
 
 typedef struct {
 	CMD_RESPONSE_CB	p_cbSend;

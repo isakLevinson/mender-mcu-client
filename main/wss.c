@@ -236,25 +236,14 @@ bool wss_send(struct async_resp_arg* i_pAsync, void* pBuf, size_t len)
 	return true;
 }
 
-bool _cmdSendResp(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
+static bool _cmdSendResp(void* pArg, void* i_pBuf, uint16_t size)
 {
 	bool    ret;
 	struct async_resp_arg* pAsync = (struct async_resp_arg*)pArg;
 
-	uint8_t 	buf[1600];
-	uint8_t*	pBuf = buf;
+	TRACE_BUF("wss_cmdSendResp", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
-	*(uint16_t*)pBuf	= size;
-	pBuf += 2;
-	*pBuf	= type;
-	pBuf++;
-
-	memcpy(pBuf, i_pBuf, size);
-	pBuf += size;
-
-	TRACE_BUF("wss_cmdSendResp", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf - buf);
-
-	ret = wss_send(pAsync, buf, pBuf - buf);
+	ret = wss_send(pAsync, i_pBuf, size);
 
 	return ret;
 }
