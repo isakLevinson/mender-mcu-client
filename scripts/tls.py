@@ -49,17 +49,18 @@ async def cmd():
 
             bin_data = bytes.fromhex(message)
 
-            print("tx", bin_data)
+            print("tx", bin_data.hex(' '))
             writer.write(bin_data)
             await writer.drain()
             await asyncio.sleep(2)
 
     async def recv():
         while True:
-            line = await reader.readline()
+            line = await reader.read(2000)
+#            print("rx len", len(line))
             if not line:
                 break
-            print("rx", line.decode(errors="ignore").rstrip())
+            print("rx", line.hex(' '))
         print("recv exited")
 
     await asyncio.gather(send(), recv())
@@ -75,41 +76,24 @@ async def events():
     reader, writer = await asyncio.open_connection(uri, 1001, ssl=ssl_context, server_hostname='host')
 
     async def recv():
+        count = 0
         while True:
             line = await reader.readline()
             if not line:
                 break
-            print("event", line.decode(errors="ignore").rstrip())
+#            print("event", line.decode(errors="ignore").rstrip())
+            ms = int(round(time.time() * 1000))
+#                print("evt: (%d) %s" % (len(response), response[0:16]))
+#                bin = binascii.hexlify(response)
+            bin = binascii.b2a_qp(line[0:40])
+            print("evt:", count, len(line), ms, line.decode(errors="ignore").rstrip())
+            count += 1
         print("recv exited")
 
     await asyncio.gather(recv())
 
     writer.close()
     await writer.wait_closed()
-
-async def _events():
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
-
-    async with websockets.connect(uri + uri_events, ssl=ssl_context, ping_timeout=600, ping_interval=120) as websocket:
-        print("events connected")
-
-        async def recv_data():
-            count = 0
-            print(f"evt recv_data")
-            while True:
-                count = count+1
-                response = await websocket.recv()
-
-                ms = int(round(time.time() * 1000))
-#                print("evt: (%d) %s" % (len(response), response[0:16]))
-#                bin = binascii.hexlify(response)
-                bin = binascii.b2a_qp(response[0:40])
-                print("evt:", count, len(response), ms, bin)
-
-        await asyncio.gather(recv_data())
-
 
 async def main():
     await asyncio.gather(cmd(), events())
