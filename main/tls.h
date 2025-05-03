@@ -2,15 +2,13 @@
 
 #include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#if USE_TLS
 
 #include "esp_netif.h"
 
 // Register WiFi functions
 bool TLS_init(void);
 
-#ifdef __cplusplus
-}
+#else
+#define TLS_init()  true
 #endif

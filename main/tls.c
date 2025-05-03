@@ -5,6 +5,8 @@
 #include "dbgPrint.h"
 #include "parseArgs.h"
 
+#if USE_TLS
+
 #include <esp_event.h>
 #include <esp_system.h>
 #include <nvs_flash.h>
@@ -462,3 +464,5 @@ bool TLS_init(void)
 
     return true;
 }
+
+#endif

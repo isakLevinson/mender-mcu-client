@@ -8,7 +8,7 @@ import time
 
 cert_path = "main/certs/servercert.pem"
 #uri = "wss://pnu_5.local"
-uri = "ws://pnu_5.local"
+uri = "wss://pnu_5.local"
 uri_ws = "/ws"
 uri_events = "/events"
 

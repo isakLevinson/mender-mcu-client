@@ -5,6 +5,8 @@
 #include "dbgPrint.h"
 #include "parseArgs.h"
 
+#if USE_WSS
+
 #include <esp_event.h>
 #include <esp_system.h>
 #include <nvs_flash.h>
@@ -21,8 +23,6 @@
 #include "nvs.h"
 #include "mdns.h"
 #include "config.h"
-
-#define USE_SSL 0
 
 #if !CONFIG_HTTPD_WS_SUPPORT
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
@@ -630,7 +630,7 @@ bool wss_init(void)
 	wss_keep_alive_t keep_alive = wss_keep_alive_start(&keep_alive_config);
 	wss_keep_alive_set_user_ctx(keep_alive, g_server.handle);
 
-#if USE_SSL
+#if (WSS_UNSECURE == 0)
 	httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
 
 	conf.httpd.global_user_ctx = keep_alive;
@@ -686,3 +686,5 @@ bool wss_init(void)
 
 	return true;
 }
+
+#endif
