@@ -12,6 +12,8 @@
 #include <nvs_flash.h>
 #include <sys/param.h>
 #include "esp_netif.h"
+
+#include "freertos/FreeRTOS.h"
 #include "lwip/sockets.h"
 #include "mbedtls/platform.h"
 #include "mbedtls/net_sockets.h"
@@ -22,6 +24,7 @@
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/esp_debug.h"
 #include "mbedtls/error.h"
+
 
 #if defined(MBEDTLS_SSL_CACHE_C)
 #include "mbedtls/ssl_cache.h"
@@ -50,6 +53,8 @@ static struct {
 #if defined(MBEDTLS_SSL_CACHE_C)
     mbedtls_ssl_cache_context cache;
 #endif
+
+    SemaphoreHandle_t	mutex;
 } g_ssl;
 
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
@@ -72,6 +77,8 @@ static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mb
         return false;
     }
 
+    xSemaphoreTake(g_ssl.mutex, portMAX_DELAY);
+
     mbedtls_ssl_set_bio(ssl, client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
     INFO("accept ok\n");
 
@@ -83,6 +90,8 @@ static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mb
             goto reset;
         }
     }
+
+    xSemaphoreGive(g_ssl.mutex);
 
     INFO("handshake ok\n");
     return true;
@@ -379,6 +388,8 @@ static bool _init(void)
 
     _sslInit();
 
+    g_ssl.mutex = xSemaphoreCreateMutex();
+
     ret = xTaskCreate(_taskCmd, "tls_cmd", 8192, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task failed\n");
@@ -462,7 +473,6 @@ bool TLS_init(void)
     DBG_TREE_add("/", g_menu);
 
 	_init();
-
 
     return true;
 }

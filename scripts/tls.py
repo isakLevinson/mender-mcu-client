@@ -68,8 +68,6 @@ async def cmd():
     await writer.wait_closed()
 
 async def events():
-    await asyncio.sleep(2)
-
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
