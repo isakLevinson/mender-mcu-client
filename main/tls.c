@@ -112,6 +112,8 @@ static bool _cmdWrite(void* pArg, void* i_pBuf, uint16_t size)
     bool ret;
     mbedtls_ssl_context *ssl = (mbedtls_ssl_context *)pArg;
 
+    TRACE_BUF("_cmdWrite",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+
     ret = _write(ssl, i_pBuf, size);
     return ret;
 }
@@ -180,7 +182,7 @@ static void _taskCmd(void* arg)
             }
     
             len = ret;
-            INFO_BUF("cmd",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, len);
+            INFO_BUF("cmd",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, len);
     
             CMD_processBuffer(&context, buf, len);
         } while (1);
