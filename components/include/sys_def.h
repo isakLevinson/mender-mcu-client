@@ -50,6 +50,10 @@
 #define USE_WSS 0
 #define WSS_UNSECURE 0
 
+#define TLS_CMD_PORT		"1000"
+#define TLS_STREAM_PORT		"1001"
+
+
 #if USE_TLS && USE_WSS
 #error "can't use both tls and wss"
 #endif

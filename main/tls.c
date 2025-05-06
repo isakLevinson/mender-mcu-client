@@ -127,6 +127,28 @@ static bool _cmdWrite(void* pArg, void* i_pBuf, uint16_t size)
     return ret;
 }
 
+static bool _taskInit(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mbedtls_net_context *client_fd, char* port)
+{
+	int ret;
+	mbedtls_net_init(listen_fd);
+    mbedtls_net_init(client_fd);
+
+    mbedtls_ssl_init(ssl);
+    if ((ret = mbedtls_ssl_setup(ssl, &g_ssl.conf)) != 0) {
+        ERROR("mbedtls_ssl_setup %d\n", ret);
+        return false;
+    }
+
+    if ((ret = mbedtls_net_bind(listen_fd, NULL, port, MBEDTLS_NET_PROTO_TCP)) != 0) {
+        ERROR("mbedtls_net_bind %d\n", ret);
+        return false;
+    }
+
+    mbedtls_net_free(client_fd);
+	
+	return true;
+}
+
 static void _taskCmd(void* arg)
 {
     int ret;
@@ -142,26 +164,20 @@ static void _taskCmd(void* arg)
         .pArg       = &ssl,
     };
 
-    mbedtls_net_init(&listen_fd);
-    mbedtls_net_init(&client_fd);
-
-    mbedtls_ssl_init(&ssl);
-    if ((ret = mbedtls_ssl_setup(&ssl, &g_ssl.conf)) != 0) {
-        ERROR("failed\n  ! mbedtls_ssl_setup returned %d\n", ret);
-        goto exit;
-    }
-
-    if ((ret = mbedtls_net_bind(&listen_fd, NULL, "1000", MBEDTLS_NET_PROTO_TCP)) != 0) {
-        ERROR("mbedtls_net_bind %d\n", ret);
-        goto exit;
-    }
-
-    mbedtls_net_free(&client_fd);
+	ret = _taskInit(&ssl, &listen_fd, &client_fd, TLS_CMD_PORT);
+	if (!ret) {
+		goto exit;
+	}
 
     while (true) {
 		vTaskDelay(100);
 
-        _accept(&ssl, &listen_fd, &client_fd);
+        ret = _accept(&ssl, &listen_fd, &client_fd);
+		if (!ret) {
+			continue;
+		}
+
+		INFO("cmd connected\n");
 
         do {
             len = sizeof(buf) - 1;
@@ -218,26 +234,20 @@ static void _taskStream(void* arg)
     };
     CMD_setStreamContext(&context);
 
-    mbedtls_net_init(&listen_fd);
-    mbedtls_net_init(&client_fd);
-
-    mbedtls_ssl_init(&ssl);
-    if ((ret = mbedtls_ssl_setup(&ssl, &g_ssl.conf)) != 0) {
-        ERROR("failed\n  ! mbedtls_ssl_setup returned %d\n", ret);
-        goto exit;
-    }
-
-    if ((ret = mbedtls_net_bind(&listen_fd, NULL, "1001", MBEDTLS_NET_PROTO_TCP)) != 0) {
-        ERROR("mbedtls_net_bind %d\n", ret);
-        goto exit;
-    }
-
-    mbedtls_net_free(&client_fd);
+	ret = _taskInit(&ssl, &listen_fd, &client_fd, TLS_STREAM_PORT);
+	if (!ret) {
+		goto exit;
+	}
 
     while (true) {
 		vTaskDelay(100);
 
-        _accept(&ssl, &listen_fd, &client_fd);
+        ret = _accept(&ssl, &listen_fd, &client_fd);
+		if (!ret) {
+			continue;
+		}
+
+		INFO("stream connected\n");
 
         do {
             len = sizeof(buf) - 1;
@@ -473,7 +483,7 @@ bool TLS_init(void)
     DBG_TREE_add("/", g_menu);
 
 	_init();
-
+	
     return true;
 }
 
