@@ -662,12 +662,6 @@ bool wss_init(void)
 #if (WSS_UNSECURE == 0)
 	httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
 
-	conf.httpd.global_user_ctx = keep_alive;
-	conf.httpd.max_open_sockets = max_clients;
-	conf.httpd.open_fn = wss_open_fd;
-	conf.httpd.close_fn = wss_close_fd;
-	conf.httpd.uri_match_fn = uri_match;
-
 	// Configure server certificate and private key
 	extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
 	extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
@@ -686,8 +680,13 @@ bool wss_init(void)
 	conf.cacert_len = ca_cert_end - ca_cert_start;
 #endif
 
+	conf.httpd.uri_match_fn = uri_match;
+	conf.httpd.open_fn = wss_open_fd;
+	conf.httpd.close_fn = wss_close_fd;
 	conf.httpd.keep_alive_enable = false;
 	conf.session_tickets = true;
+	conf.httpd.global_user_ctx = keep_alive;
+	conf.httpd.max_open_sockets = max_clients;
 
 	err = httpd_ssl_start(&g_server.handle, &conf);
 	if (ESP_OK != err) {
@@ -700,6 +699,7 @@ bool wss_init(void)
 
 	conf.open_fn = wss_open_fd;
 	conf.close_fn = wss_close_fd;
+	conf.uri_match_fn = uri_match;
 
 	err = httpd_start(&g_server.handle, &conf);
 	if (ESP_OK != err) {

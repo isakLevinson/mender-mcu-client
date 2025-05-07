@@ -48,7 +48,7 @@
 
 #define USE_TLS 0
 #define USE_WSS 1
-#define WSS_UNSECURE 0
+#define WSS_UNSECURE 1
 
 #define TLS_CMD_PORT		"1000"
 #define TLS_STREAM_PORT		"1001"
