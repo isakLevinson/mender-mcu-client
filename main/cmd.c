@@ -165,6 +165,30 @@ static struct {
 #endif
 };
 
+static bool _sendRespRaw(CMD_CONTEXT* i_pContext, void* i_pBuf, uint16_t size)
+{
+	bool	ret;
+	if (!i_pContext) {
+		ERROR("invalid context\n");
+		return false;
+	}
+
+	if (!i_pContext->p_cbSend) {
+		ERROR("p_cbSend is NULL\n");
+		return false;
+	}
+
+	xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
+	
+	TRACE_BUF("_sendRespRaw",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+
+	ret = i_pContext->p_cbSend(i_pContext->pArg, i_pBuf, size);
+
+	xSemaphoreGive(g_cmd.semaphore);
+
+	return ret;
+}
+
 static bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t size)
 {
 	bool	ret;
@@ -178,21 +202,9 @@ static bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint1
 		pContext = &g_cmd.streamContext;
 	}
 
-	if (!pContext) {
-		ERROR("invalid context\n");
-		return false;
-	}
-
-	if (!pContext->p_cbSend) {
-		ERROR("p_cbSend is NULL\n");
-		return false;
-	}
-
 	if (size > sizeof(buf) + 3) {
 		return false;
 	}
-
-	xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
 
 	*(uint16_t*)pBuf	= size;
 	pBuf += 2;
@@ -202,12 +214,16 @@ static bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint1
 	memcpy(pBuf, i_pBuf, size);
 	pBuf += size;
 
-	TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf-buf);
+	ret = _sendRespRaw(pContext, buf, pBuf-buf);
 
-	ret = pContext->p_cbSend(pContext->pArg, buf, pBuf-buf);
+	return ret;
+}
 
-	xSemaphoreGive(g_cmd.semaphore);
 
+static bool _sendRespStr(CMD_CONTEXT* i_pContext, char *pStr)
+{
+	bool ret;
+	ret = _sendRespRaw(i_pContext, pStr, strlen(pStr));
 	return ret;
 }
 
@@ -771,6 +787,13 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 bool CMD_processJson(CMD_CONTEXT* i_pContext, char* pCommand, char* pData)
 {
 	INFO("CMD_processJson <%s> <%s>\n", pCommand, pData);
+
+	_sendRespStr(i_pContext, "Content-Type: application/json\n");
+//	_sendRespStr(i_pContext, "Content-Length: 1\n");
+//	_sendRespStr(i_pContext, "{""a"":""b""}\n");
+
+
+
 
 	return true;
 }

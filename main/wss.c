@@ -46,7 +46,7 @@ struct socket_desc_t {
 	StaticSemaphore_t	txMutexBuffer;
 };
 
-struct async_resp_arg events_async_resp;
+struct resp_arg events_async_resp;
 
 static const size_t max_clients = 4;
 
@@ -163,7 +163,7 @@ static bool _tx(httpd_handle_t hd, int fd, httpd_ws_frame_t* pkt)
 
 static void send_ping(void* arg)
 {
-	struct async_resp_arg* resp_arg = arg;
+	struct resp_arg* resp_arg = arg;
 	httpd_handle_t hd = resp_arg->hd;
 	int fd = resp_arg->fd;
 	httpd_ws_frame_t pkt;
@@ -181,7 +181,7 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
 	int status;
 	TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
 #if 0
-	struct async_resp_arg* resp_arg = malloc(sizeof(struct async_resp_arg));
+	struct resp_arg* resp_arg = malloc(sizeof(struct resp_arg));
 	resp_arg->hd = wss_keep_alive_get_user_ctx(h);
 	resp_arg->fd = fd;
 	status = httpd_queue_work(resp_arg->hd, send_ping, resp_arg);
@@ -215,10 +215,10 @@ bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
 	return true;
 }
 
-bool wss_send(struct async_resp_arg* i_pAsync, void* pBuf, size_t len)
+bool wss_send(struct resp_arg* i_pAsync, void* pBuf, size_t len)
 {
 	bool        ret;
-	struct async_resp_arg*  pAsync = i_pAsync;
+	struct resp_arg*  pAsync = i_pAsync;
 
 	TRACE_BUF("wss_send packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, pBuf, len);
 
@@ -239,13 +239,39 @@ bool wss_send(struct async_resp_arg* i_pAsync, void* pBuf, size_t len)
 static bool _cmdSendResp(void* pArg, void* i_pBuf, uint16_t size)
 {
 	bool    ret;
-	struct async_resp_arg* pAsync = (struct async_resp_arg*)pArg;
+	struct resp_arg* pAsync = (struct resp_arg*)pArg;
 
-	TRACE_BUF("wss_cmdSendResp", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+	TRACE_BUF("_cmdSendResp", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
 	ret = wss_send(pAsync, i_pBuf, size);
 
 	return ret;
+}
+
+static bool _restSendResp(void* pArg, void* i_pBuf, uint16_t size)
+{
+	esp_err_t    err;
+	struct resp_arg* pAsync = (struct resp_arg*)pArg;
+
+#if WSS_UNSECURE==0
+	httpd_ws_frame_t pkt;
+	memset(&pkt, 0, sizeof(httpd_ws_frame_t));
+	pkt.payload = i_pBuf;
+	pkt.len = size;
+	pkt.type = HTTPD_WS_TYPE_TEXT;
+	pkt.final = true;
+
+	TRACE_BUF("_restSendResp", PRINT_BUF_STYLE_ASC_SIZE_NL, i_pBuf, size);
+
+	err = httpd_ws_send_frame(pAsync->req, &pkt);
+
+#else
+	err = httpd_resp_set_status(pAsync->req, HTTPD_200);
+	//err = httpd_send(pAsync->req, i_pBuf, size);
+
+#endif
+
+	return true;
 }
 
 static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
@@ -339,7 +365,7 @@ static esp_err_t ws_handler(httpd_req_t* req)
 	common_handler(req, &pkt);
 
 	if ((HTTPD_WS_TYPE_BINARY == pkt.type) || (HTTPD_WS_TYPE_TEXT == pkt.type)) {
-		struct async_resp_arg async = {
+		struct resp_arg async = {
 			.hd = req->handle,
 			.fd = fd,
 		};
@@ -462,14 +488,13 @@ static esp_err_t rest_handler(httpd_req_t* req)
 	char    buf[256];
 	char*	pCmd;
 
-	struct async_resp_arg async = {
-		.hd = req->handle,
-		.fd = httpd_req_to_sockfd(req),
+	struct resp_arg resp = {
+		.req = req,
 	};
 
 	CMD_CONTEXT context = {
-		.p_cbSend   = _cmdSendResp,
-		.pArg       = &async,
+		.p_cbSend   = _restSendResp,
+		.pArg       = &resp,
 	};
 
 	int fd = httpd_req_to_sockfd(req);
