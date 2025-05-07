@@ -715,7 +715,8 @@ static void _processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pB
 
 bool CMD_processBuffer(CMD_CONTEXT* i_pContext, uint8_t* i_pBuf, uint16_t size)
 {
-	if (size < 4) {
+	if (size < 3) {
+		WARN("CMD_processBuffer size %d too small\n", size);
 		return false;
 	}
 
@@ -724,7 +725,6 @@ bool CMD_processBuffer(CMD_CONTEXT* i_pContext, uint8_t* i_pBuf, uint16_t size)
 
 	INFO("CMD_processBuffer size:%d, len:%d, type\n", size, len, type);
 	_processMessage(i_pContext, type, i_pBuf+3, size-3);
-
 	return true;
 }
 
