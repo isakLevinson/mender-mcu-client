@@ -559,7 +559,17 @@ bool uri_match(const char *reference_uri, const char *uri_to_match, size_t match
 {
 	bool match = false;
 
-	match = (0==strcmp(reference_uri, uri_to_match));
+	char* wildcard = strstr(reference_uri, "*");
+
+	if (wildcard) {
+		match_upto = wildcard - reference_uri;
+		INFO("found wildcard at %d\n", match_upto);
+		if (match_upto) {
+			match_upto--;
+		}
+	}
+
+	match = !strncmp(reference_uri, uri_to_match, match_upto);
 	INFO("uri_match <%s> <%s> %d %d\n", reference_uri, uri_to_match, match_upto, match);
 
 	return match;
