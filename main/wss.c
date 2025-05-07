@@ -460,10 +460,19 @@ static esp_err_t rest_handler(httpd_req_t* req)
 {
 	bool    ret;
 	char    buf[256];
+	char*	pCmd;
 
 	int fd = httpd_req_to_sockfd(req);
 
-	INFO("rest_handler <%s> method=%d hd:0x%x fd:%d\n", req->uri, req->method, req->handle, fd);
+	TRACE("rest_handler <%s> method=%d hd:0x%x fd:%d\n", req->uri, req->method, req->handle, fd);
+
+	if (strstr(req->uri, REST_HANDLER_BASE_URI) != req->uri) {
+		WARN("unexpected ori.not starting with %s\n", REST_HANDLER_BASE_URI);
+	}
+
+	pCmd = req->uri + strlen(REST_HANDLER_BASE_URI);
+
+	INFO("rest_handler cmd: <%s>\n", pCmd);
 
 	if (req->method != HTTP_POST) {
 		WARN("unsupported method %s. must be POST\n", req->method);
@@ -563,14 +572,14 @@ bool uri_match(const char *reference_uri, const char *uri_to_match, size_t match
 
 	if (wildcard) {
 		match_upto = wildcard - reference_uri;
-		INFO("found wildcard at %d\n", match_upto);
+		TRACE("found wildcard at %d\n", match_upto);
 		if (match_upto) {
 			match_upto--;
 		}
 	}
 
 	match = !strncmp(reference_uri, uri_to_match, match_upto);
-	INFO("uri_match <%s> <%s> %d %d\n", reference_uri, uri_to_match, match_upto, match);
+	TRACE("uri_match <%s> <%s> %d %d\n", reference_uri, uri_to_match, match_upto, match);
 
 	return match;
 }
@@ -615,7 +624,7 @@ bool wss_init(void)
 	char		buf[32];
 
 	httpd_uri_t uri_rest = {
-		.uri        = "/control/*",
+		.uri        = REST_HANDLER_BASE_URI "*",
 		.method     = HTTP_POST,
 		.handler    = rest_handler,
 		.user_ctx   = NULL,

@@ -52,6 +52,7 @@
 
 #define TLS_CMD_PORT		"1000"
 #define TLS_STREAM_PORT		"1001"
+#define REST_HANDLER_BASE_URI	"/control/"
 
 
 #if USE_TLS && USE_WSS
