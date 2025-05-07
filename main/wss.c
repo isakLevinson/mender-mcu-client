@@ -253,23 +253,9 @@ static bool _restSendResp(void* pArg, void* i_pBuf, uint16_t size)
 	esp_err_t    err;
 	struct resp_arg* pAsync = (struct resp_arg*)pArg;
 
-#if WSS_UNSECURE==0
-	httpd_ws_frame_t pkt;
-	memset(&pkt, 0, sizeof(httpd_ws_frame_t));
-	pkt.payload = i_pBuf;
-	pkt.len = size;
-	pkt.type = HTTPD_WS_TYPE_TEXT;
-	pkt.final = true;
+	TRACE_BUF("_restSendResp",	PRINT_BUF_STYLE_ASC_SIZE_NL, i_pBuf, size);
 
-	TRACE_BUF("_restSendResp", PRINT_BUF_STYLE_ASC_SIZE_NL, i_pBuf, size);
-
-	err = httpd_ws_send_frame(pAsync->req, &pkt);
-
-#else
-	err = httpd_resp_set_status(pAsync->req, HTTPD_200);
-	//err = httpd_send(pAsync->req, i_pBuf, size);
-
-#endif
+	err = httpd_resp_send(pAsync->req, i_pBuf, HTTPD_RESP_USE_STRLEN);
 
 	return true;
 }
@@ -532,10 +518,10 @@ static esp_err_t rest_handler(httpd_req_t* req)
 
 	INFO("rest_handler %s cmd: <%s>\n", pMethod, pCmd);
 
-	CMD_processJson(&context, pCmd, buf);
-
-	httpd_resp_send(req, "OK\n", HTTPD_RESP_USE_STRLEN);
+	httpd_resp_set_type(req, "application/json");
 	//	httpd_resp_send_chunk(req, NULL, 0);
+		
+	CMD_processJson(&context, pCmd, buf);
 
 	return ESP_OK;
 }

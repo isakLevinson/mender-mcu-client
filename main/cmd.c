@@ -788,12 +788,7 @@ bool CMD_processJson(CMD_CONTEXT* i_pContext, char* pCommand, char* pData)
 {
 	INFO("CMD_processJson <%s> <%s>\n", pCommand, pData);
 
-	_sendRespStr(i_pContext, "Content-Type: application/json\n");
-//	_sendRespStr(i_pContext, "Content-Length: 1\n");
-//	_sendRespStr(i_pContext, "{""a"":""b""}\n");
-
-
-
+	_sendRespStr(i_pContext, "{\"a\":\"b\"}");
 
 	return true;
 }
