@@ -768,6 +768,13 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 	}
 }
 
+bool CMD_processJson(CMD_CONTEXT* i_pContext, char* pCommand, char* pData)
+{
+	INFO("CMD_processJson <%s> <%s>\n", pCommand, pData);
+
+	return true;
+}
+
 bool CMD_setStreamContext(CMD_CONTEXT* i_pContext)
 {
 	if (!i_pContext) {

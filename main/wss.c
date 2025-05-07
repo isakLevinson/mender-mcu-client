@@ -462,9 +462,42 @@ static esp_err_t rest_handler(httpd_req_t* req)
 	char    buf[256];
 	char*	pCmd;
 
+	struct async_resp_arg async = {
+		.hd = req->handle,
+		.fd = httpd_req_to_sockfd(req),
+	};
+
+	CMD_CONTEXT context = {
+		.p_cbSend   = _cmdSendResp,
+		.pArg       = &async,
+	};
+
 	int fd = httpd_req_to_sockfd(req);
 
 	TRACE("rest_handler <%s> method=%d hd:0x%x fd:%d\n", req->uri, req->method, req->handle, fd);
+
+	char* pMethod = "DEFAULT";
+	switch (req->method) {
+		case HTTP_GET:	pMethod = "GET";	break;
+		case HTTP_POST:	pMethod = "POST";	break;
+		default:
+			WARN("unsupported method %s. must be POST\n", req->method);
+			return ESP_OK;
+	}
+
+	_socketSetType(fd, "REST");
+
+	if (req->content_len) {
+		ret = httpd_req_recv(req, buf, req->content_len);
+		if (!ret) {
+			ERROR("httpd_req_recv %d.\n", ret);
+			return ESP_FAIL;
+		}
+	}
+
+	buf[req->content_len] = '\0';
+
+	INFO_BUF("/rest",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
 
 	if (strstr(req->uri, REST_HANDLER_BASE_URI) != req->uri) {
 		WARN("unexpected ori.not starting with %s\n", REST_HANDLER_BASE_URI);
@@ -472,22 +505,9 @@ static esp_err_t rest_handler(httpd_req_t* req)
 
 	pCmd = req->uri + strlen(REST_HANDLER_BASE_URI);
 
-	INFO("rest_handler cmd: <%s>\n", pCmd);
+	INFO("rest_handler %s cmd: <%s>\n", pMethod, pCmd);
 
-	if (req->method != HTTP_POST) {
-		WARN("unsupported method %s. must be POST\n", req->method);
-		return ESP_OK;
-	}
-
-	_socketSetType(fd, "REST");
-
-	ret = httpd_req_recv(req, buf, req->content_len);
-	if (!ret) {
-		ERROR("httpd_req_recv failed\n");
-		return ESP_FAIL;
-	}
-
-	INFO_BUF("/rest POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
+	CMD_processJson(&context, pCmd, buf);
 
 	httpd_resp_send(req, "OK\n", HTTPD_RESP_USE_STRLEN);
 	//	httpd_resp_send_chunk(req, NULL, 0);
@@ -497,7 +517,7 @@ static esp_err_t rest_handler(httpd_req_t* req)
 
 esp_err_t wss_open_fd(httpd_handle_t hd, int fd)
 {
-	INFO("wss_open hd:0x%x fd:%d\n", hd, fd);
+	INFO("open hd:0x%x fd:%d\n", hd, fd);
 
 	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
 
@@ -513,7 +533,7 @@ void wss_close_fd(httpd_handle_t hd, int fd)
 		INFO("events_close_fd hd:0x%x fd:%d\n", hd, fd);
 		memset(&events_async_resp, 0, sizeof(events_async_resp));
 	} else {
-		INFO("wss_close_fd hd:0x%x fd:%d\n", hd, fd);
+		INFO("close_fd hd:0x%x fd:%d\n", hd, fd);
 	}
 
 	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
@@ -579,7 +599,12 @@ bool uri_match(const char *reference_uri, const char *uri_to_match, size_t match
 	}
 
 	match = !strncmp(reference_uri, uri_to_match, match_upto);
-	TRACE("uri_match <%s> <%s> %d %d\n", reference_uri, uri_to_match, match_upto, match);
+
+	if (match) {
+		INFO("uri_match <%s> <%s> %d Found !\n", reference_uri, uri_to_match, match_upto);
+	} else {
+		TRACE("uri_match <%s> <%s> %d not found\n", reference_uri, uri_to_match, match_upto);
+	}
 
 	return match;
 }
@@ -712,6 +737,8 @@ bool wss_init(void)
 	INFO("Registering URI handlers");
 	httpd_register_uri_handler(g_server.handle, &uri_ws);
 	httpd_register_uri_handler(g_server.handle, &uri_events);
+	httpd_register_uri_handler(g_server.handle, &uri_rest);
+	uri_rest.method = HTTP_GET;
 	httpd_register_uri_handler(g_server.handle, &uri_rest);
 
 	return true;
