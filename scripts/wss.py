@@ -8,7 +8,7 @@ import time
 
 cert_path = "main/certs/servercert.pem"
 #uri = "wss://pnu_5.local"
-uri = "ws://pnu_5.local"
+uri = "wss://pnu_5.local"
 uri_ws = "/ws"
 uri_events = "/events"
 
@@ -35,7 +35,7 @@ def string_to_binary_array(input_string):
     return binary_array
 
 
-async def test_wss():
+async def cmd():
 #    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 #    ssl_context.load_verify_locations(cert_path)
 
@@ -43,8 +43,7 @@ async def test_wss():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-#    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=10, ping_interval=2) as websocket:
-    async with websockets.connect(uri + uri_ws, ping_timeout=10, ping_interval=2) as websocket:
+    async with websockets.connect(uri + uri_ws, ssl=ssl_context, ping_timeout=300, ping_interval=60) as websocket:
         print("ws connected")
 
       # Shared event to signal exit
@@ -52,19 +51,26 @@ async def test_wss():
 
         async def send_data():
             print(f"send_data")
+            count = 0
             while True:
-#                message = input("Enter message to send: ")
-                message = await asyncio.get_event_loop().run_in_executor(None, input, "> ")
-                if message.lower() == "exit":
-                    print("Exiting...")
-                    stop_event.set()  # Signal to stop receiving
-                    await websocket.close()
-                    break
+#                message = await asyncio.get_event_loop().run_in_executor(None, input, "> ")
+#                if message.lower() == "exit":
+#                    print("Exiting...")
+#                    stop_event.set()  # Signal to stop receiving
+#                    await websocket.close()
+#                    break
+
+                message = "123418%02x00" % (count)
+                print("sending", message)
+                count += 1
+                if count>255:
+                    count = 0
 
                 binary_array = ascii_hex_to_binary_array(message)
-                #print(binary_array)
                 message = binary_array_to_string(binary_array)
+#                print("sending", message, binary_array)
                 await websocket.send(message)
+                await asyncio.sleep(5)
 
 
         async def recv_data():
@@ -88,8 +94,7 @@ async def events():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
 
-#    async with websockets.connect(uri + uri_events, ssl=ssl_context, ping_timeout=10, ping_interval=1) as websocket:
-    async with websockets.connect(uri + uri_events, ping_timeout=10, ping_interval=1) as websocket:
+    async with websockets.connect(uri + uri_events, ssl=ssl_context, ping_timeout=600, ping_interval=120) as websocket:
         print("events connected")
 
         async def recv_data():
@@ -109,7 +114,7 @@ async def events():
 
 
 async def main():
-    await asyncio.gather(test_wss(), events())
+    await asyncio.gather(cmd(), events())
 
 # Run the WebSocket test
 asyncio.run(main())

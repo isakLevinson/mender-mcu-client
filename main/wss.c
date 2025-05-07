@@ -5,6 +5,8 @@
 #include "dbgPrint.h"
 #include "parseArgs.h"
 
+#if USE_WSS
+
 #include <esp_event.h>
 #include <esp_system.h>
 #include <nvs_flash.h>
@@ -21,8 +23,6 @@
 #include "nvs.h"
 #include "mdns.h"
 #include "config.h"
-
-#define USE_SSL 0
 
 #if !CONFIG_HTTPD_WS_SUPPORT
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
@@ -120,7 +120,7 @@ static bool _socketDel(int fd)
 		INFO("closed %d UNKNOWN\n", fd);
 	}
 
-	sock->fd = 0;
+	memset(sock, 0, sizeof(*sock));
 
 	return true;
 }
@@ -236,25 +236,14 @@ bool wss_send(struct async_resp_arg* i_pAsync, void* pBuf, size_t len)
 	return true;
 }
 
-bool _cmdSendResp(void* pArg, uint8_t type, void* i_pBuf, uint16_t size)
+static bool _cmdSendResp(void* pArg, void* i_pBuf, uint16_t size)
 {
 	bool    ret;
 	struct async_resp_arg* pAsync = (struct async_resp_arg*)pArg;
 
-	uint8_t 	buf[1600];
-	uint8_t*	pBuf = buf;
+	TRACE_BUF("wss_cmdSendResp", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
-	*(uint16_t*)pBuf	= size;
-	pBuf += 2;
-	*pBuf	= type;
-	pBuf++;
-
-	memcpy(pBuf, i_pBuf, size);
-	pBuf += size;
-
-	TRACE_BUF("wss_cmdSendResp", PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf - buf);
-
-	ret = wss_send(pAsync, buf, pBuf - buf);
+	ret = wss_send(pAsync, i_pBuf, size);
 
 	return ret;
 }
@@ -311,9 +300,10 @@ static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
 			break;
 
-		case HTTPD_WS_TYPE_TEXT:
-			INFO("HTTPD_WS_TYPE_TEXT len:%d\n", pkt->len);
-			break;
+//		case HTTPD_WS_TYPE_TEXT:
+//			INFO("HTTPD_WS_TYPE_TEXT len:%d\n", pkt->len);
+//			INFO_BUF("HTTPD_WS_TYPE_TEXT",	PRINT_BUF_STYLE_HEX_SIZE_NL, pkt->payload, pkt->len);
+//			break;
 
 		case HTTPD_WS_TYPE_CLOSE:
 			INFO("CLOSE fd:%d\n", fd);
@@ -348,7 +338,7 @@ static esp_err_t ws_handler(httpd_req_t* req)
 
 	common_handler(req, &pkt);
 
-	if (HTTPD_WS_TYPE_BINARY == pkt.type) {
+	if ((HTTPD_WS_TYPE_BINARY == pkt.type) || (HTTPD_WS_TYPE_TEXT == pkt.type)) {
 		struct async_resp_arg async = {
 			.hd = req->handle,
 			.fd = fd,
@@ -359,15 +349,14 @@ static esp_err_t ws_handler(httpd_req_t* req)
 			.pArg       = &async,
 		};
 
-		if (pkt.len < 3) {
+		if (pkt.len < 4) {
 			WARN("HTTPD_WS_TYPE_BINARY short incoming message. ignoring len:%s\n", pkt.len);
+			goto exit;
 		}
 
-		uint8_t len = pkt.payload[0];
-		uint8_t type = pkt.payload[2];
 		INFO("HTTPD_WS_TYPE_BINARY len:%d\n", pkt.len);
-		INFO("WS Received packet with message: type=%d len=%d cmd:(t:%d, l:%d)\n", pkt.type, pkt.len, type, len);
-		CMD_processMessage(&context, type, pkt.payload + 3, pkt.len - 3);
+		INFO("WS Received packet with message: type=%d len=%d\n", pkt.type, pkt.len);
+		CMD_processBuffer(&context, pkt.payload, pkt.len);
 	}
 
 	TRACE("ws_handler: httpd_handle_t=%p, fd=%d, client_info:%d\n",
@@ -375,6 +364,7 @@ static esp_err_t ws_handler(httpd_req_t* req)
 	    httpd_req_to_sockfd(req),
 	    httpd_ws_get_fd_info(req->handle, fd));
 
+	exit:
 	free(pkt.payload);
 	pkt.payload = NULL;
 	return ESP_OK;
@@ -477,9 +467,10 @@ static esp_err_t rest_handler(httpd_req_t* req)
 
 	if (req->method != HTTP_POST) {
 		WARN("unsupported method %s. must be POST\n", req->method);
-		_socketSetType(fd, "REST");
 		return ESP_OK;
 	}
+
+	_socketSetType(fd, "REST");
 
 	ret = httpd_req_recv(req, buf, req->content_len);
 	if (!ret) {
@@ -639,7 +630,7 @@ bool wss_init(void)
 	wss_keep_alive_t keep_alive = wss_keep_alive_start(&keep_alive_config);
 	wss_keep_alive_set_user_ctx(keep_alive, g_server.handle);
 
-#if USE_SSL
+#if (WSS_UNSECURE == 0)
 	httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
 
 	conf.httpd.global_user_ctx = keep_alive;
@@ -695,3 +686,5 @@ bool wss_init(void)
 
 	return true;
 }
+
+#endif
