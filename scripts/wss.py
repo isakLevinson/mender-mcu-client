@@ -7,6 +7,7 @@ import binascii
 import time
 
 cert_path = "main/certs/servercert.pem"
+#uri = "wss://pnu_5.local"
 uri = "wss://pnu_5.local"
 uri_ws = "/ws"
 uri_events = "/events"
@@ -34,7 +35,7 @@ def string_to_binary_array(input_string):
     return binary_array
 
 
-async def test_wss():
+async def cmd():
 #    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 #    ssl_context.load_verify_locations(cert_path)
 
@@ -113,7 +114,7 @@ async def events():
 
 
 async def main():
-    await asyncio.gather(test_wss(), events())
+    await asyncio.gather(cmd(), events())
 
 # Run the WebSocket test
 asyncio.run(main())

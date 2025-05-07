@@ -21,6 +21,7 @@ idf_component_register(
 				"wifi.c"
 				"ntp.c"
 				"time.c"
+				"tls.c"
 				"wss.c"
 				"wss_keepalive.c"
 				"nvs.c"

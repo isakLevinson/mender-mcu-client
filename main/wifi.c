@@ -583,6 +583,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	wifi_config_t	cfg;
 	wifi_mode_t		mode;
 	esp_netif_ip_info_t ip;
+	esp_err_t		status;
 
 	esp_wifi_get_mode(&mode);
 
@@ -599,27 +600,42 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 	if (useAP) {
 		esp_wifi_get_config(WIFI_IF_AP, &cfg);
-		INFO("AP mode, %s %s\n", cfg.ap.ssid, cfg.ap.password);
+		PRINT("AP mode, %s %s\n", cfg.ap.ssid, cfg.ap.password);
 	}
 
 	if (useSTA) {
 		bool isConnected = WIFI_isConnected();
 		if (isConnected) {
+			wifi_bandwidth_t bw;
+
 			esp_wifi_get_config(WIFI_IF_STA, &cfg);
-			INFO("sta mode, connected %s\n", cfg.ap.ssid);
+			PRINT("sta mode, connected %s ", cfg.ap.ssid);
+			status = esp_wifi_get_bandwidth(WIFI_IF_STA, &bw);
+			if (ESP_OK == status) {
+				switch (bw) {
+					//case WIFI_BW_HT20:		PRINT("HT20");	break;
+					//case WIFI_BW_HT40:		PRINT("HT40");	break;
+					case WIFI_BW20:			PRINT("BW20");	break;
+					case WIFI_BW40:			PRINT("BW40");	break;
+					case WIFI_BW80:			PRINT("BW80");	break;
+					case WIFI_BW160:		PRINT("BW160");	break;
+					case WIFI_BW80_BW80:	PRINT("BW80_BW80");	break;
+				}
+				PRINT("\n");
+			}
 		} else {
-			INFO("sta mode, disconnected\n");
+			PRINT("sta mode, disconnected\n");
 		}
 	}
 
 	memset(&ip, 0, sizeof(esp_netif_ip_info_t));
 
 	if (esp_netif_get_ip_info(g_server.netif_sta, &ip) == 0) {
-		INFO("STA:" IPSTR " " IPSTR " " IPSTR"\n", IP2STR(&ip.ip), IP2STR(&ip.netmask), IP2STR(&ip.gw));
+		PRINT("STA:" IPSTR " " IPSTR " " IPSTR"\n", IP2STR(&ip.ip), IP2STR(&ip.netmask), IP2STR(&ip.gw));
 	}
 
 	if (esp_netif_get_ip_info(g_server.netif_ap, &ip) == 0) {
-		INFO("AP:" IPSTR " " IPSTR " " IPSTR"\n", IP2STR(&ip.ip), IP2STR(&ip.netmask), IP2STR(&ip.gw));
+		PRINT("AP:" IPSTR " " IPSTR " " IPSTR"\n", IP2STR(&ip.ip), IP2STR(&ip.netmask), IP2STR(&ip.gw));
 	}
 
 	return true;

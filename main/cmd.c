@@ -165,9 +165,12 @@ static struct {
 #endif
 };
 
-bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t size)
+static bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t size)
 {
 	bool	ret;
+	uint8_t 	buf[1600];
+	uint8_t*	pBuf = buf;
+
 	CMD_CONTEXT* pContext = i_pContext;
 
 	if (!i_pContext) {
@@ -185,11 +188,23 @@ bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t siz
 		return false;
 	}
 
+	if (size > sizeof(buf) + 3) {
+		return false;
+	}
+
 	xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
 
-	TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+	*(uint16_t*)pBuf	= size;
+	pBuf += 2;
+	*pBuf	= type;
+	pBuf++;
 
-	ret = pContext->p_cbSend(pContext->pArg, type, i_pBuf, size);
+	memcpy(pBuf, i_pBuf, size);
+	pBuf += size;
+
+	TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf-buf);
+
+	ret = pContext->p_cbSend(pContext->pArg, buf, pBuf-buf);
 
 	xSemaphoreGive(g_cmd.semaphore);
 
@@ -283,7 +298,7 @@ static void _taskStreamer(void* arg)
 		int64_t t64;
 		TIME_get64(&t64);
 
-		sprintf(g_cmd.streamBuf, "## %d.%03d: i:%d dt:%d   ##", (uint32_t)(t64/1000000), (uint32_t)((t64/1000) % 1000), g_cmd.counter++, t - g_cmd.streamSentTime);
+		sprintf(g_cmd.streamBuf, "## %d.%03d: i:%d dt:%d   ##\n", (uint32_t)(t64/1000000), (uint32_t)((t64/1000) % 1000), g_cmd.counter++, t - g_cmd.streamSentTime);
 		TRACE("trace counter: %d\n", g_cmd.counter);
 		ret = _sendResp(&g_cmd.streamContext, CMD_RSP_EVT_STREAM, &g_cmd.streamBuf, g_cmd.streamSize);
 		if (!ret) {
@@ -665,7 +680,7 @@ void CMD_parseInit(void)
 	g_cmd.received			= 0;
 }
 
-void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, uint16_t size)
+static void _processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, uint16_t size)
 {
 	bool	retVal = false;
 
@@ -698,6 +713,21 @@ void CMD_processMessage(CMD_CONTEXT* i_pContext, uint8_t type, uint8_t* i_pBuf, 
 	}
 }
 
+bool CMD_processBuffer(CMD_CONTEXT* i_pContext, uint8_t* i_pBuf, uint16_t size)
+{
+	if (size < 3) {
+		WARN("CMD_processBuffer size %d too small\n", size);
+		return false;
+	}
+
+	uint8_t len = i_pBuf[0];
+	uint8_t type = i_pBuf[2];
+
+	INFO("CMD_processBuffer size:%d, len:%d, type\n", size, len, type);
+	_processMessage(i_pContext, type, i_pBuf+3, size-3);
+	return true;
+}
+
 void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 {
 	TRACE1("c:%02x state:%d expected:%04x, rec:%x\n", data, g_cmd.state, g_cmd.expectedLength, g_cmd.received);
@@ -725,10 +755,10 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 			if (g_cmd.received > g_cmd.expectedLength) {
 				uint8_t	type = g_cmd.rxBuf[0];
 
-				TRACE1("CMD_processMessage t:%x ", type);
+				TRACE1("_processMessage t:%x ", type);
 				TRACE1_BUF("",	PRINT_BUF_STYLE_HEX_SIZE_NL, g_cmd.rxBuf + 1, g_cmd.received - 1);
 
-				CMD_processMessage(i_pContext, type, g_cmd.rxBuf + 1, g_cmd.received - 1);
+				_processMessage(i_pContext, type, g_cmd.rxBuf + 1, g_cmd.received - 1);
 				CMD_parseInit();
 			}
 			break;
@@ -774,6 +804,7 @@ static bool dbgStream(uint8_t argc, char** argv)
 #if CONFIG_BUILD_TYPE_EEG
 	if ( argc >= 3) {
 		g_cmd.streamSize = MIN(strtoul(argv[2], NULL, 10), sizeof(g_cmd.streamBuf));
+		memset(g_cmd.streamBuf, 0, g_cmd.streamSize);
 	}
 #endif
 
