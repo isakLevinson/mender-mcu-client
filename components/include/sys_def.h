@@ -65,6 +65,8 @@
 #define TCP_CMD_PORT		    5002
 #define UDP_CMD_PORT		    5002
 
+#define TIME_ZONE_HOURS	3
+
 #define MAX_PRESSURE_LIMIT	400
 
 #define CMD_INCOMING_MESSAGE_MAX_SIZE	256

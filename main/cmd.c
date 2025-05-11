@@ -33,6 +33,7 @@
 #include "max17049.h"
 #include "mender_ota.h"
 #include "cJSON.h"
+#include "factory.h"
 
 // *INDENT-OFF*
 
@@ -821,7 +822,7 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 	TIME_get64(&t);
 	t /= 1000000;
 
-	TIME_strftime(t, "%H:%M:%S", timeStr);
+	TIME_strftime(t, "%H:%M:%S.0", timeStr);
 
 	pStr += sprintf(pStr,
 		"{"
@@ -844,14 +845,37 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 
 static bool	_json_VERSION_func(CMD_CONTEXT* i_pContext, char* pContent)
 {
+	char*		ver;
+	uint32_t	numbers[3];
+	char*		sn;
+	char*		proj;
+	char		str[256];
+	char*		pStr = str;
+
+	MENDER_version(&proj, &ver, numbers);
+	FACTORY_factoryGetSn(&sn);
+
 	INFO("VERSION\n");
-	_sendRespStr(i_pContext,
+
+	PRINT("sn: %s\n", sn);
+	PRINT("proj: %s\n", proj);
+	PRINT("sw ver: \"%s\" [%d.%d.%d]\n", ver, numbers[0], numbers[1], numbers[2]);
+
+	PRINT("hw:%d.%d.%d\n",
+	    HW_VERSION_MAJOR,
+	    HW_VERSION_MINOR,
+	    HW_VERSION_BUILD);
+	
+	pStr += sprintf(pStr,
 		"{"
 		"\"message type\": \"Get Version response\","
-		"\"sw\": \"1.1.8\","
-		"\"hw\": \"1.0.0\""
-		"}\n\n"
-		);
+	);
+
+	pStr += sprintf(pStr, "\"sw\": \"%d.%d.%d\",", numbers[0], numbers[1], numbers[2]);
+	pStr += sprintf(pStr, "\"hw\": \"%d.%d.%d\"", HW_VERSION_MAJOR, HW_VERSION_MINOR, HW_VERSION_BUILD);
+	pStr += sprintf(pStr, "}\n\n");
+	
+	_sendRespStr(i_pContext, str);
 
 	return true;
 }

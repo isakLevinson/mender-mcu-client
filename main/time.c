@@ -69,6 +69,8 @@ void TIME_strftime(int64_t epoch, char* format, char* str)
     int sec = 0;
 	uint16_t i=0;
 
+	epoch += (TIME_ZONE_HOURS * 3600);
+
     // Break into days and remaining seconds
     uint32_t days = epoch / 86400;
     uint32_t rem = epoch % 86400;
