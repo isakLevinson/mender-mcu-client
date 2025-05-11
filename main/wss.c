@@ -260,6 +260,31 @@ static bool _restSendResp(void* pArg, void* i_pBuf, uint16_t size)
 	return true;
 }
 
+static bool _restSendStatus(void* pArg, uint32_t status)
+{
+	esp_err_t    err;
+	struct resp_arg* pAsync = (struct resp_arg*)pArg;
+	char* pStr = "";
+
+	TRACE("_restSendStatus %d\n", status);
+
+	switch (status) {
+		case 200:	pStr = HTTPD_200;	break;
+		case 204:	pStr = HTTPD_204;	break;
+		case 207:	pStr = HTTPD_207;	break;
+		case 400:	pStr = HTTPD_400;	break;
+		case 404:	pStr = HTTPD_404;	break;
+		case 408:	pStr = HTTPD_408;	break;
+		case 500:	pStr = HTTPD_500;	break;
+		default:
+			pStr = HTTPD_200;	break;
+	}
+
+	err = httpd_resp_set_status(pAsync->req, pStr);
+
+	return true;
+}
+
 static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 {
 	esp_err_t		ret;
@@ -480,6 +505,7 @@ static esp_err_t rest_handler(httpd_req_t* req)
 
 	CMD_CONTEXT context = {
 		.p_cbSend   = _restSendResp,
+		.p_cbStatus	= _restSendStatus,
 		.pArg       = &resp,
 	};
 
@@ -600,26 +626,9 @@ bool uri_match(const char *reference_uri, const char *uri_to_match, size_t match
 {
 	bool match = false;
 
-	// TODO: use httpd_uri_match_wildcard
+	match = httpd_uri_match_wildcard(reference_uri, uri_to_match, match_upto);
 
-	char* wildcard = strstr(reference_uri, "*");
-
-	if (wildcard) {
-		match_upto = wildcard - reference_uri;
-		TRACE("found wildcard at %d\n", match_upto);
-		if (match_upto) {
-			match_upto--;
-		}
-	}
-
-	match = !strncmp(reference_uri, uri_to_match, match_upto);
-
-	if (match) {
-		INFO("uri_match <%s> <%s> %d Found !\n", reference_uri, uri_to_match, match_upto);
-	} else {
-		TRACE("uri_match <%s> <%s> %d not found\n", reference_uri, uri_to_match, match_upto);
-	}
-
+	TRACE("uri_match %s %s %d %d\n", reference_uri, uri_to_match, match_upto, match);
 	return match;
 }
 

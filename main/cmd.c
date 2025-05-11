@@ -804,7 +804,6 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 		"}\n\n"
 		);
 
-
 	return true;
 }
 
