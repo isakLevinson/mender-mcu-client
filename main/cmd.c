@@ -32,6 +32,11 @@
 #include "ctrl.h"
 #include "max17049.h"
 #include "mender_ota.h"
+#include "cJSON.h"
+
+
+
+
 
 // *INDENT-OFF*
 
@@ -789,11 +794,21 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 
 static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 {
+	char	str[256];
+	char	timeStr[64];
+	int64_t	t;
+
 	INFO("STATUS\n");
-	_sendRespStr(i_pContext,
+
+	TIME_get64(&t);
+	t /= 1000000;
+
+	TIME_strftime(t, "%H:%M:%S", timeStr);
+
+	snprintf(str, sizeof(str),
 		"{"
 		"\"message type\": \"Get Status response\","
-		"\"time\": \"15:05:07.800198\","
+		"\"time\": \"%s\","
 		"\"pressures\": [2, 0, 1, 1],"
 		"\"valves\": [0, 0, 0, 0],"
 		"\"pumps\": [0, 0, 0, 0],"
@@ -801,7 +816,9 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 		"\"battery soc\": 71,"
 		"\"connected\": \"True\""
 		"}\n\n"
-		);
+	, timeStr);
+	
+	_sendRespStr(i_pContext, str);
 
 	return true;
 }
@@ -822,7 +839,41 @@ static bool	_json_VERSION_func(CMD_CONTEXT* i_pContext, char* pContent)
 
 static bool	_json_INFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
 {
+	bool	ret;
+	cJSON* json = NULL;
+	const cJSON* object = NULL;
+	uint16_t	press[4];
+	uint8_t		i;
+
 	INFO("INFLATE_CHANNELS\n");
+
+	json = cJSON_ParseWithLength(pContent, strlen(pContent));
+	if (!json) {
+		WARN("json parse error\n");
+		goto error;
+	}
+
+	for (i=0; i<4; i++) {
+		char entity[32];
+		sprintf(entity, "p%d", i+1);
+		object = cJSON_GetObjectItemCaseSensitive(json, entity);
+		if (!cJSON_IsNumber(object)) {
+			goto error;
+		}
+		INFO("p%d: %d\n", i+1, object->valueint);
+		press[i] = (int)object->valueint;
+	}
+
+	ret = CTRL_setTarget(press);
+	if (!ret) {
+		goto error;
+	}
+
+	goto ok;
+error:
+	i_pContext->p_cbStatus(i_pContext->pArg, 400);
+
+ok:
 	_sendRespStr(i_pContext,
 		"{"
 		"\"message type\": \"Inflate Channels Response\""
@@ -834,7 +885,15 @@ static bool	_json_INFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
 
 static bool	_json_DEFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
 {
+	bool	ret;
+	cJSON* json = NULL;
+	const cJSON* object = NULL;
+	uint16_t	press[4] = {0};
+
 	INFO("DEFLATE_CHANNELS\n");
+
+	ret = CTRL_setTarget(press);
+	
 	_sendRespStr(i_pContext,
 		"{"
 		"\"message type\": \"Deflate Channels Response\""

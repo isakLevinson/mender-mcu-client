@@ -15,6 +15,8 @@ int64_t	TIME_set64(int64_t time);
 // return time in ms
 int32_t	TIME_get32(void);
 
+void TIME_strftime(int64_t epoch, char* format, char* str);
+
 #ifdef __cplusplus
 }
 #endif
