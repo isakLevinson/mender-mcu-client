@@ -34,10 +34,6 @@
 #include "mender_ota.h"
 #include "cJSON.h"
 
-
-
-
-
 // *INDENT-OFF*
 
 //		Opcode name					OPCODE	Parameters
@@ -794,29 +790,52 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 
 static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 {
-	char	str[256];
-	char	timeStr[64];
-	int64_t	t;
+	bool		ret;
+	char		str[256];
+	char*		pStr = str;
+	char		timeStr[64];
+	int64_t		t;
+	uint16_t	soc;
+	uint16_t	voltage;
+	int16_t		press[4];
+	bool		valves[5];
+	bool		pumps[4];
+	int			i;
 
 	INFO("STATUS\n");
+
+	CTRL_getPressure(press);
+	CTRL_getValves(valves);
+	CTRL_getPump(pumps);
+	ret = fg_get_soc(&soc);
+	if (!ret) {
+		soc = 0;
+	}
+
+	ret = fg_get_vbat(&voltage);
+	if (!ret) {
+		voltage = 0;
+	}
+	voltage /= 100;
 
 	TIME_get64(&t);
 	t /= 1000000;
 
 	TIME_strftime(t, "%H:%M:%S", timeStr);
 
-	snprintf(str, sizeof(str),
+	pStr += sprintf(pStr,
 		"{"
 		"\"message type\": \"Get Status response\","
-		"\"time\": \"%s\","
-		"\"pressures\": [2, 0, 1, 1],"
-		"\"valves\": [0, 0, 0, 0],"
-		"\"pumps\": [0, 0, 0, 0],"
-		"\"battery voltage\": 7.8,"
-		"\"battery soc\": 71,"
-		"\"connected\": \"True\""
-		"}\n\n"
-	, timeStr);
+	);
+
+	pStr += sprintf(pStr, "\"time\": \"%s\",", timeStr);
+	pStr += sprintf(pStr, "\"pressures\": [%d, %d, %d, %d],", press[0], press[1], press[2], press[3]);
+	pStr += sprintf(pStr, "\"valves\": [%d, %d, %d, %d],", valves[0], valves[1], valves[2], valves[3]);
+	pStr += sprintf(pStr, "\"pumps\": [%d, %d, %d, %d],", pumps[0], pumps[1], pumps[2], pumps[3]);
+	pStr += sprintf(pStr, "\"battery voltage\": %d,", voltage);
+	pStr += sprintf(pStr, "\"battery soc\": %d,", soc);
+	pStr += sprintf(pStr, "\"connected\": \"True\"");
+	pStr += sprintf(pStr, "}\n\n");
 	
 	_sendRespStr(i_pContext, str);
 
