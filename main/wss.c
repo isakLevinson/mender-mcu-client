@@ -520,6 +520,7 @@ static esp_err_t rest_handler(httpd_req_t* req)
 
 	httpd_resp_set_type(req, "application/json");
 	//	httpd_resp_send_chunk(req, NULL, 0);
+	//TODO: use httpd_resp_set_status()
 		
 	CMD_processJson(&context, pCmd, buf);
 
@@ -598,6 +599,8 @@ bool wss_config_start(void)
 bool uri_match(const char *reference_uri, const char *uri_to_match, size_t match_upto)
 {
 	bool match = false;
+
+	// TODO: use httpd_uri_match_wildcard
 
 	char* wildcard = strstr(reference_uri, "*");
 

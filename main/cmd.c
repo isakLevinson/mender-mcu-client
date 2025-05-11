@@ -223,7 +223,11 @@ static bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint1
 static bool _sendRespStr(CMD_CONTEXT* i_pContext, char *pStr)
 {
 	bool ret;
-	ret = _sendRespRaw(i_pContext, pStr, strlen(pStr));
+	uint32_t	len = strlen(pStr);
+
+	INFO("_sendRespStr <%s>\n", pStr);
+
+	ret = _sendRespRaw(i_pContext, pStr, len);
 	return ret;
 }
 
@@ -784,11 +788,51 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 	}
 }
 
+static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
+{
+	INFO("STATUS\n");
+	_sendRespStr(i_pContext,
+		"{"
+		"\"message type\": \"Get Status response\","
+		"\"time\": \"15:05:07.800198\","
+		"\"pressures\": [2, 0, 1, 1],"
+		"\"valves\": [0, 0, 0, 0],"
+		"\"pumps\": [0, 0, 0, 0],"
+		"\"battery voltage\": 7.8,"
+		"\"battery soc\": 71,"
+		"\"connected\": \"True\""
+		"}\n\n"
+		);
+
+
+	return true;
+}
+
+static bool	_json_VERSION_func(CMD_CONTEXT* i_pContext, char* pContent)
+{
+	INFO("VERSION\n");
+	_sendRespStr(i_pContext,
+		"{"
+		"\"message type\": \"Get Version response\","
+		"\"sw\": \"1.1.8\","
+		"\"hw\": \"1.0.0\""
+		"}\n\n"
+		);
+
+	return true;
+}
+
 bool CMD_processJson(CMD_CONTEXT* i_pContext, char* pCommand, char* pData)
 {
 	INFO("CMD_processJson <%s> <%s>\n", pCommand, pData);
 
-	_sendRespStr(i_pContext, "{\"a\":\"b\"}");
+	if (!strcmp(pCommand, "status")) {
+		_json_STATUS_func(i_pContext, pData);
+
+	} else if (!strcmp(pCommand, "version")) {
+		_json_VERSION_func(i_pContext, pData);
+	}
+
 
 	return true;
 }
