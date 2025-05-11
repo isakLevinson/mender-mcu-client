@@ -219,7 +219,6 @@ static bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint1
 	return ret;
 }
 
-
 static bool _sendRespStr(CMD_CONTEXT* i_pContext, char *pStr)
 {
 	bool ret;
@@ -821,6 +820,30 @@ static bool	_json_VERSION_func(CMD_CONTEXT* i_pContext, char* pContent)
 	return true;
 }
 
+static bool	_json_INFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
+{
+	INFO("INFLATE_CHANNELS\n");
+	_sendRespStr(i_pContext,
+		"{"
+		"\"message type\": \"Inflate Channels Response\""
+		"}\n\n"
+		);
+
+	return true;
+}
+
+static bool	_json_DEFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
+{
+	INFO("DEFLATE_CHANNELS\n");
+	_sendRespStr(i_pContext,
+		"{"
+		"\"message type\": \"Deflate Channels Response\""
+		"}\n\n"
+		);
+
+	return true;
+}
+
 bool CMD_processJson(CMD_CONTEXT* i_pContext, char* pCommand, char* pData)
 {
 	INFO("CMD_processJson <%s> <%s>\n", pCommand, pData);
@@ -830,8 +853,12 @@ bool CMD_processJson(CMD_CONTEXT* i_pContext, char* pCommand, char* pData)
 
 	} else if (!strcmp(pCommand, "version")) {
 		_json_VERSION_func(i_pContext, pData);
-	}
 
+	} else if (!strcmp(pCommand, "inflate_channels")) {
+		_json_INFLATE_CHANNELS_func(i_pContext, pData);
+	} else if (!strcmp(pCommand, "deflate_channels")) {
+		_json_DEFLATE_CHANNELS_func(i_pContext, pData);
+	}
 
 	return true;
 }
