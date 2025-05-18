@@ -490,16 +490,19 @@ static bool dbgLogTail(uint8_t argc, char** argv)
 static bool dbgTime(uint8_t argc, char** argv)
 {
 	int64_t		t;
+	int32_t		t32;
 	char		str[64];
 
 	TIME_get64(&t);
+	t32 = TIME_get32();
 
 	uint32_t	us = t % 1000000;
 	t /= 1000000;
 
-	TIME_strftime(t, "%Y-%m-%d  %H:%M:%S", str);
+	TIME_strftime(t, "%Y-%m-%d %H:%M:%S", str);
+	PRINT("time from start: %dmS\n", t32);
 	PRINT("%d.%06d\n", (int32_t)t, us);
-	PRINT("<%s>\n", str);
+	PRINT("%s\n", str);
 	
 	return true;
 }

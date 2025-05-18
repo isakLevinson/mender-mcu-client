@@ -109,7 +109,7 @@ void TIME_strftime(int64_t epoch, char* format, char* str)
 
     day = days + 1;  // day of month is 1-based
 
-    INFO("time: %04d-%02d-%02d %02d:%02d:%02d\n", year, month + 1, day, hour, min, sec);
+    TRACE("time: %04d-%02d-%02d %02d:%02d:%02d\n", year, month + 1, day, hour, min, sec);
 
     for (; *format; format++) {
         if (*format == '%') {
