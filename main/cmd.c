@@ -805,6 +805,7 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 
 	INFO("STATUS\n");
 
+#if CONFIG_BUILD_TYPE_PNU
 	CTRL_getPressure(press);
 	CTRL_getValves(valves);
 	CTRL_getPump(pumps);
@@ -812,16 +813,16 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 	if (!ret) {
 		soc = 0;
 	}
-
+		
 	ret = fg_get_vbat(&voltage);
 	if (!ret) {
 		voltage = 0;
 	}
 	voltage /= 100;
+#endif
 
 	TIME_get64(&t);
 	t /= 1000000;
-
 	TIME_strftime(t, "%H:%M:%S.0", timeStr);
 
 	pStr += sprintf(pStr,
@@ -829,6 +830,7 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 		"\"message type\": \"Get Status response\","
 	);
 
+#if CONFIG_BUILD_TYPE_PNU
 	pStr += sprintf(pStr, "\"time\": \"%s\",", timeStr);
 	pStr += sprintf(pStr, "\"pressures\": [%d, %d, %d, %d],", press[0], press[1], press[2], press[3]);
 	pStr += sprintf(pStr, "\"valves\": [%d, %d, %d, %d],", valves[0], valves[1], valves[2], valves[3]);
@@ -837,7 +839,7 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 	pStr += sprintf(pStr, "\"battery soc\": %d,", soc);
 	pStr += sprintf(pStr, "\"connected\": \"True\"");
 	pStr += sprintf(pStr, "}\n\n");
-	
+#endif	
 	_sendRespStr(i_pContext, str);
 
 	return true;
