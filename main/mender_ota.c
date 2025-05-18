@@ -35,10 +35,6 @@
 #include "nvs.h"
 #include "cmd.h"
 
-#ifndef CONFIG_MENDER_SERVER_HOST
-#define CONFIG_MENDER_SERVER_HOST "https://hosted.mender.io"
-#endif /* CONFIG_MENDER_SERVER_HOST */
-
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
 #ifdef CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER
 #include <esp_littlefs.h>
@@ -663,7 +659,6 @@ static void _init(void)
 	mender_client_config_t    mender_client_config    = { .identity                     = identity,
 	                              .artifact_name                = artifact_name,
 	                              .device_type                  = device_type,
-	                              .host                         = CONFIG_MENDER_SERVER_HOST,
 	                              .tenant_token                 = NULL,
 	                              .authentication_poll_interval = -1,
 	                              .update_poll_interval         = -1,	// only attempt once

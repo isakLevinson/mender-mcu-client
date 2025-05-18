@@ -600,10 +600,9 @@ static bool	_req_SET_VALVES_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_VALVES*
 
 static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i_pReq, uint16_t size)
 {
-	INFO("SET_VALVES\n");
+	INFO("OTA_START\n");
 
 	CMD_RSPBUF_OTA_START		rsp;
-	//	CMD_RSPBUF_EVT_OTA_STATUS	evt;
 
 	rsp.ok = 1;
 
@@ -612,6 +611,8 @@ static bool	_req_OTA_START_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_OTA_START* i
 		WARN("unexpected last char %02x. expecting 0x00\n", i_pReq->url[size - 1]);
 		rsp.ok = 0;
 	}
+
+	MENDER_execute();
 
 	_sendResp(i_pContext, CMD_RSP_OTA_START, &rsp, sizeof(rsp));
 	if (!rsp.ok) {
