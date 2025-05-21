@@ -46,7 +46,7 @@ struct socket_desc_t {
 	StaticSemaphore_t	txMutexBuffer;
 };
 
-struct async_resp_arg events_async_resp;
+struct resp_arg events_async_resp;
 
 static const size_t max_clients = 4;
 
@@ -163,7 +163,7 @@ static bool _tx(httpd_handle_t hd, int fd, httpd_ws_frame_t* pkt)
 
 static void send_ping(void* arg)
 {
-	struct async_resp_arg* resp_arg = arg;
+	struct resp_arg* resp_arg = arg;
 	httpd_handle_t hd = resp_arg->hd;
 	int fd = resp_arg->fd;
 	httpd_ws_frame_t pkt;
@@ -181,7 +181,7 @@ bool check_client_alive_cb(wss_keep_alive_t h, int fd)
 	int status;
 	TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
 #if 0
-	struct async_resp_arg* resp_arg = malloc(sizeof(struct async_resp_arg));
+	struct resp_arg* resp_arg = malloc(sizeof(struct resp_arg));
 	resp_arg->hd = wss_keep_alive_get_user_ctx(h);
 	resp_arg->fd = fd;
 	status = httpd_queue_work(resp_arg->hd, send_ping, resp_arg);
@@ -215,10 +215,10 @@ bool send_binary(httpd_handle_t hd, int fd, void* pBuf, size_t size)
 	return true;
 }
 
-bool wss_send(struct async_resp_arg* i_pAsync, void* pBuf, size_t len)
+bool wss_send(struct resp_arg* i_pAsync, void* pBuf, size_t len)
 {
 	bool        ret;
-	struct async_resp_arg*  pAsync = i_pAsync;
+	struct resp_arg*  pAsync = i_pAsync;
 
 	TRACE_BUF("wss_send packet",	PRINT_BUF_STYLE_HEX_SIZE_NL, pBuf, len);
 
@@ -239,13 +239,50 @@ bool wss_send(struct async_resp_arg* i_pAsync, void* pBuf, size_t len)
 static bool _cmdSendResp(void* pArg, void* i_pBuf, uint16_t size)
 {
 	bool    ret;
-	struct async_resp_arg* pAsync = (struct async_resp_arg*)pArg;
+	struct resp_arg* pAsync = (struct resp_arg*)pArg;
 
-	TRACE_BUF("wss_cmdSendResp", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+	TRACE_BUF("_cmdSendResp", PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
 	ret = wss_send(pAsync, i_pBuf, size);
 
 	return ret;
+}
+
+static bool _restSendResp(void* pArg, void* i_pBuf, uint16_t size)
+{
+	esp_err_t    err;
+	struct resp_arg* pAsync = (struct resp_arg*)pArg;
+
+	TRACE_BUF("_restSendResp",	PRINT_BUF_STYLE_ASC_SIZE_NL, i_pBuf, size);
+
+	err = httpd_resp_send(pAsync->req, i_pBuf, HTTPD_RESP_USE_STRLEN);
+
+	return true;
+}
+
+static bool _restSendStatus(void* pArg, uint32_t status)
+{
+	esp_err_t    err;
+	struct resp_arg* pAsync = (struct resp_arg*)pArg;
+	char* pStr = "";
+
+	TRACE("_restSendStatus %d\n", status);
+
+	switch (status) {
+		case 200:	pStr = HTTPD_200;	break;
+		case 204:	pStr = HTTPD_204;	break;
+		case 207:	pStr = HTTPD_207;	break;
+		case 400:	pStr = HTTPD_400;	break;
+		case 404:	pStr = HTTPD_404;	break;
+		case 408:	pStr = HTTPD_408;	break;
+		case 500:	pStr = HTTPD_500;	break;
+		default:
+			pStr = HTTPD_200;	break;
+	}
+
+	err = httpd_resp_set_status(pAsync->req, pStr);
+
+	return true;
 }
 
 static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
@@ -339,7 +376,7 @@ static esp_err_t ws_handler(httpd_req_t* req)
 	common_handler(req, &pkt);
 
 	if ((HTTPD_WS_TYPE_BINARY == pkt.type) || (HTTPD_WS_TYPE_TEXT == pkt.type)) {
-		struct async_resp_arg async = {
+		struct resp_arg async = {
 			.hd = req->handle,
 			.fd = fd,
 		};
@@ -460,35 +497,65 @@ static esp_err_t rest_handler(httpd_req_t* req)
 {
 	bool    ret;
 	char    buf[256];
+	char*	pCmd;
+
+	struct resp_arg resp = {
+		.req = req,
+	};
+
+	CMD_CONTEXT context = {
+		.p_cbSend   = _restSendResp,
+		.p_cbStatus	= _restSendStatus,
+		.pArg       = &resp,
+	};
 
 	int fd = httpd_req_to_sockfd(req);
 
-	INFO("rest_handler method=%d hd:0x%x fd:%d\n", req->method, req->handle, fd);
+	TRACE("rest_handler <%s> method=%d hd:0x%x fd:%d\n", req->uri, req->method, req->handle, fd);
 
-	if (req->method != HTTP_POST) {
-		WARN("unsupported method %s. must be POST\n", req->method);
-		return ESP_OK;
+	char* pMethod = "DEFAULT";
+	switch (req->method) {
+		case HTTP_GET:	pMethod = "GET";	break;
+		case HTTP_POST:	pMethod = "POST";	break;
+		default:
+			WARN("unsupported method %s. must be POST\n", req->method);
+			return ESP_OK;
 	}
 
 	_socketSetType(fd, "REST");
 
-	ret = httpd_req_recv(req, buf, req->content_len);
-	if (!ret) {
-		ERROR("httpd_req_recv failed\n");
-		return ESP_FAIL;
+	if (req->content_len) {
+		ret = httpd_req_recv(req, buf, req->content_len);
+		if (!ret) {
+			ERROR("httpd_req_recv %d.\n", ret);
+			return ESP_FAIL;
+		}
 	}
 
-	INFO_BUF("/rest POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
+	buf[req->content_len] = '\0';
 
-	httpd_resp_send(req, "OK\n", HTTPD_RESP_USE_STRLEN);
+	INFO_BUF("/rest",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
+
+	if (strstr(req->uri, REST_HANDLER_BASE_URI) != req->uri) {
+		WARN("unexpected ori.not starting with %s\n", REST_HANDLER_BASE_URI);
+	}
+
+	pCmd = req->uri + strlen(REST_HANDLER_BASE_URI);
+
+	INFO("rest_handler %s cmd: <%s>\n", pMethod, pCmd);
+
+	httpd_resp_set_type(req, "application/json");
 	//	httpd_resp_send_chunk(req, NULL, 0);
+	//TODO: use httpd_resp_set_status()
+		
+	CMD_processJson(&context, pCmd, buf);
 
 	return ESP_OK;
 }
 
 esp_err_t wss_open_fd(httpd_handle_t hd, int fd)
 {
-	INFO("wss_open hd:0x%x fd:%d\n", hd, fd);
+	INFO("open hd:0x%x fd:%d\n", hd, fd);
 
 	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
 
@@ -504,7 +571,7 @@ void wss_close_fd(httpd_handle_t hd, int fd)
 		INFO("events_close_fd hd:0x%x fd:%d\n", hd, fd);
 		memset(&events_async_resp, 0, sizeof(events_async_resp));
 	} else {
-		INFO("wss_close_fd hd:0x%x fd:%d\n", hd, fd);
+		INFO("close_fd hd:0x%x fd:%d\n", hd, fd);
 	}
 
 	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
@@ -538,15 +605,6 @@ static const httpd_uri_t uri_events = {
 	.handle_ws_control_frames = true
 };
 
-static const httpd_uri_t uri_rest = {
-	.uri        = "/rest",
-	.method     = HTTP_POST,
-	.handler    = rest_handler,
-	.user_ctx   = NULL,
-	.is_websocket = false,
-	.handle_ws_control_frames = true
-};
-
 bool wss_config_start(void)
 {
 	static const httpd_uri_t uri_config = {
@@ -562,6 +620,16 @@ bool wss_config_start(void)
 	httpd_register_uri_handler(g_server.handle, &uri_config);
 
 	return true;
+}
+
+bool uri_match(const char *reference_uri, const char *uri_to_match, size_t match_upto)
+{
+	bool match = false;
+
+	match = httpd_uri_match_wildcard(reference_uri, uri_to_match, match_upto);
+
+	TRACE("uri_match %s %s %d %d\n", reference_uri, uri_to_match, match_upto, match);
+	return match;
 }
 
 bool wss_config_stop(void)
@@ -603,6 +671,15 @@ bool wss_init(void)
 	esp_err_t	err;
 	char		buf[32];
 
+	httpd_uri_t uri_rest = {
+		.uri        = REST_HANDLER_BASE_URI "*",
+		.method     = HTTP_POST,
+		.handler    = rest_handler,
+		.user_ctx   = NULL,
+		.is_websocket = false,
+		.handle_ws_control_frames = true
+	};
+
 	if (g_server.handle) {
 		WARN("wss already started\n");
 		return false;
@@ -633,11 +710,6 @@ bool wss_init(void)
 #if (WSS_UNSECURE == 0)
 	httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
 
-	conf.httpd.global_user_ctx = keep_alive;
-	conf.httpd.max_open_sockets = max_clients;
-	conf.httpd.open_fn = wss_open_fd;
-	conf.httpd.close_fn = wss_close_fd;
-
 	// Configure server certificate and private key
 	extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
 	extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
@@ -656,8 +728,13 @@ bool wss_init(void)
 	conf.cacert_len = ca_cert_end - ca_cert_start;
 #endif
 
+	conf.httpd.uri_match_fn = uri_match;
+	conf.httpd.open_fn = wss_open_fd;
+	conf.httpd.close_fn = wss_close_fd;
 	conf.httpd.keep_alive_enable = false;
 	conf.session_tickets = true;
+	conf.httpd.global_user_ctx = keep_alive;
+	conf.httpd.max_open_sockets = max_clients;
 
 	err = httpd_ssl_start(&g_server.handle, &conf);
 	if (ESP_OK != err) {
@@ -670,6 +747,7 @@ bool wss_init(void)
 
 	conf.open_fn = wss_open_fd;
 	conf.close_fn = wss_close_fd;
+	conf.uri_match_fn = uri_match;
 
 	err = httpd_start(&g_server.handle, &conf);
 	if (ESP_OK != err) {
@@ -682,6 +760,8 @@ bool wss_init(void)
 	INFO("Registering URI handlers");
 	httpd_register_uri_handler(g_server.handle, &uri_ws);
 	httpd_register_uri_handler(g_server.handle, &uri_events);
+	httpd_register_uri_handler(g_server.handle, &uri_rest);
+	uri_rest.method = HTTP_GET;
 	httpd_register_uri_handler(g_server.handle, &uri_rest);
 
 	return true;
