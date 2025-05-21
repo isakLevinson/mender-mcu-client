@@ -6,7 +6,7 @@ import ssl
 import binascii
 import time
 
-cert_path = "main/certs/servercert.pem"
+#cert_path = "main/certs/servercert.pem"
 uri = "pnu_5.local"
 
 def ascii_hex_to_binary_array(ascii_hex_string):
@@ -31,10 +31,16 @@ def string_to_binary_array(input_string):
     binary_array = [f'0x{byte:02x}' for byte in byte_array]
     return binary_array
 
-async def cmd():
-    ssl_context = ssl.create_default_context()
+def ssl_create_context():
+    ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    ssl_context.load_cert_chain(certfile="../certs/client.crt", keyfile="../certs/client.key")
+    ssl_context.load_verify_locations(cafile="../certs/ca.crt")
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
+    return ssl_context
+
+async def cmd():
+    ssl_context = ssl_create_context()
 
     reader, writer = await asyncio.open_connection(uri, 1000, ssl=ssl_context, server_hostname='host')
 
@@ -69,9 +75,7 @@ async def cmd():
     await writer.wait_closed()
 
 async def events():
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
+    ssl_context = ssl_create_context()
 
     reader, writer = await asyncio.open_connection(uri, 1001, ssl=ssl_context, server_hostname='host')
 
