@@ -14,10 +14,6 @@
 
 #include "cJSON.h"
 #include "nvs.h"
-#include "mdns.h"
-#include "wifi.h"
-#include "wss.h"
-#include "max30001.h"
 
 static const esp_partition_t* g_partition = NULL;
 static char*    g_pBuf;

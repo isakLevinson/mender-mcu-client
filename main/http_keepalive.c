@@ -19,7 +19,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-#include "wss_keepalive.h"
+#include "http_keepalive.h"
 #include "esp_timer.h"
 
 typedef enum {

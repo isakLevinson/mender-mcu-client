@@ -5,7 +5,7 @@
 #include "dbgPrint.h"
 #include "parseArgs.h"
 
-#if USE_WSS
+#if USE_HTTP
 
 #include <esp_event.h>
 #include <esp_system.h>
@@ -16,8 +16,8 @@
 #include "esp_wifi.h"
 #include "lwip/sockets.h"
 #include <esp_https_server.h>
-#include "wss_keepalive.h"
-#include "wss.h"
+#include "http_keepalive.h"
+#include "http.h"
 #include "cmd.h"
 #include "wifi.h"
 #include "nvs.h"
@@ -587,6 +587,7 @@ bool client_not_alive_cb(wss_keep_alive_t h, int fd)
 	return true;
 }
 
+#if USE_WSS	
 static const httpd_uri_t uri_ws = {
 	.uri        = "/ws",
 	.method     = HTTP_GET,
@@ -604,6 +605,7 @@ static const httpd_uri_t uri_events = {
 	.is_websocket = true,
 	.handle_ws_control_frames = true
 };
+#endif
 
 bool wss_config_start(void)
 {
@@ -659,7 +661,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-	DEBUG_MENU_DIR("wss", NULL)
+	DEBUG_MENU_DIR("http", NULL)
 		DEBUG_MENU_CMD("status",	        NULL,		NULL, dbgStatus)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
@@ -707,7 +709,7 @@ bool wss_init(void)
 	wss_keep_alive_t keep_alive = wss_keep_alive_start(&keep_alive_config);
 	wss_keep_alive_set_user_ctx(keep_alive, g_server.handle);
 
-#if (WSS_UNSECURE == 0)
+#if (HTTP_UNSECURE == 0)
 	httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
 
 	// Configure server certificate and private key
@@ -758,12 +760,15 @@ bool wss_init(void)
 
 	// Set URI handlers
 	INFO("Registering URI handlers");
+#if USE_WSS	
 	httpd_register_uri_handler(g_server.handle, &uri_ws);
 	httpd_register_uri_handler(g_server.handle, &uri_events);
+#endif
+#if USE_REST
 	httpd_register_uri_handler(g_server.handle, &uri_rest);
 	uri_rest.method = HTTP_GET;
 	httpd_register_uri_handler(g_server.handle, &uri_rest);
-
+#endif
 	return true;
 }
 

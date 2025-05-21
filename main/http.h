@@ -2,7 +2,7 @@
 
 #include <sys_def.h>
 
-#if USE_WSS
+#if USE_HTTP
 
 #include <esp_https_server.h>
 
@@ -18,10 +18,8 @@ bool	wss_config_stop(void);
 bool	wss_send(struct resp_arg* i_pAsync, void* pBuf, size_t len);
 
 #else
-
-#define wss_init()						true
-#define wss_config_start()				true
-#define wss_config_stop()				true
-#define wss_send(i_pAsync, pBuf,  len)	false
-
+#define	wss_init()						true
+#define	wss_config_start()				true
+#define	wss_config_stop()				true
+#define	wss_send(i_pAsync, pBuf, len)	true
 #endif

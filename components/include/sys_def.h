@@ -46,9 +46,11 @@
 #define HW_VERSION_MINOR		0
 #define HW_VERSION_BUILD		0
 
-#define USE_TLS 1
-#define USE_WSS 1
-#define WSS_UNSECURE 0
+#define USE_HTTP		1
+#define USE_TLS			1
+#define USE_WSS			0
+#define USE_REST		0
+#define HTTP_UNSECURE	0
 
 #define TLS_CMD_PORT		"1000"
 #define TLS_STREAM_PORT		"1001"
