@@ -24,6 +24,7 @@
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/esp_debug.h"
 #include "mbedtls/error.h"
+#include "mbedtls/oid.h"
 
 
 #if defined(MBEDTLS_SSL_CACHE_C)
@@ -91,7 +92,32 @@ static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mb
         }
     }
 
-    xSemaphoreGive(g_ssl.mutex);
+	const mbedtls_x509_crt *client_cert = mbedtls_ssl_get_peer_cert(ssl);
+	char cn[256];
+	const mbedtls_x509_name *name = &client_cert->subject;
+#if 1
+	if (client_cert) {
+		while (name) {
+			if (MBEDTLS_OID_CMP(MBEDTLS_OID_AT_CN, &name->oid) == 0) {
+				memcpy(cn, name->val.p, name->val.len);
+				cn[name->val.len] = '\0';
+				INFO("Client CN: %s\n", cn);
+				break;
+			}
+			name = name->next;
+		}	
+	} else {
+		WARN("no client certificate received\n");
+	}
+#endif
+//	INFO("cert:%x\n", client_cert);
+	//INFO("len: %d\n", name->oid.len);
+//	while (name) {
+//		//INFO("len: %d\n", name->oid.len);
+//
+//		name = name->next;
+//	}	
+	xSemaphoreGive(g_ssl.mutex);
 
     INFO("handshake ok\n");
     return true;
@@ -384,9 +410,11 @@ static bool _sslInit(void)
 
     mbedtls_ssl_conf_ca_chain(&g_ssl.conf, g_ssl.srvcert.next, NULL);
     if ((ret = mbedtls_ssl_conf_own_cert(&g_ssl.conf, &g_ssl.srvcert, &g_ssl.pkey)) != 0) {
-        ERROR("failed\n  ! mbedtls_ssl_conf_own_cert returned %d\n", ret);
+        ERROR("mbedtls_ssl_conf_own_cert returned %d\n", ret);
         return false;
     }
+
+	mbedtls_ssl_conf_authmode(&g_ssl.conf, MBEDTLS_SSL_VERIFY_REQUIRED); // MBEDTLS_SSL_VERIFY_OPTIONAL
 
     INFO("ok\n");
     return true;
