@@ -47,17 +47,12 @@
 #define HW_VERSION_BUILD		0
 
 #define USE_TLS 1
-#define USE_WSS 0
-#define WSS_UNSECURE 1
+#define USE_WSS 1
+#define WSS_UNSECURE 0
 
 #define TLS_CMD_PORT		"1000"
 #define TLS_STREAM_PORT		"1001"
 #define REST_HANDLER_BASE_URI	"/control/"
-
-
-#if USE_TLS && USE_WSS
-#error "can't use both tls and wss"
-#endif
 
 #define HTTPD_PORT              8000
 #define UDP_SERVER_PORT		    5000
