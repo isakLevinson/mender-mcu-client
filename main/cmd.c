@@ -432,9 +432,12 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 
 static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq, uint16_t size)
 {
+	CMD_RSPBUF_STATUS	rsp = {0};
+
+	INFO("STATUS\n");
+
 #if CONFIG_BUILD_TYPE_PNU
 
-	CMD_RSPBUF_STATUS	rsp;
 	bool	ret;
 	uint16_t	soc;
 	uint16_t	voltage;
@@ -442,8 +445,6 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 	bool	valves[5];
 	bool	pumps[4];
 	int		i;
-
-	INFO("STATUS\n");
 
 	CTRL_getPressure(press);
 	for (i = 0; i < 4; i++) {
@@ -474,9 +475,10 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 		rsp.voltage = 0;
 	}
 
-	_sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
 #endif
-	return true;
+
+	_sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
+return true;
 }
 
 static bool	_req_SET_PRESSURE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PRESSURE* i_pReq, uint16_t size)
@@ -744,7 +746,7 @@ bool CMD_processBuffer(CMD_CONTEXT* i_pContext, uint8_t* i_pBuf, uint16_t size)
 	uint8_t len = i_pBuf[0];
 	uint8_t type = i_pBuf[2];
 
-	INFO("CMD_processBuffer size:%d, len:%d, type\n", size, len, type);
+	INFO("CMD_processBuffer size:%d, len:%d, type %02x\n", size, len, type);
 	_processMessage(i_pContext, type, i_pBuf+3, size-3);
 	return true;
 }
