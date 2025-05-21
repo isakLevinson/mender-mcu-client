@@ -88,6 +88,7 @@ static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mb
     while ((ret = mbedtls_ssl_handshake(ssl)) != 0) {
         if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
             ERROR("mbedtls_ssl_handshake -%x\n", -ret);
+			xSemaphoreGive(g_ssl.mutex);
             goto reset;
         }
     }
@@ -116,7 +117,7 @@ static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mb
 //		//INFO("len: %d\n", name->oid.len);
 //
 //		name = name->next;
-//	}	
+//	}
 	xSemaphoreGive(g_ssl.mutex);
 
     INFO("handshake ok\n");

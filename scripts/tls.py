@@ -7,7 +7,7 @@ import binascii
 import time
 
 cert_path = "main/certs/servercert.pem"
-uri = "pnu_5.local"
+uri = "PNUV2_0003.local"
 
 def ascii_hex_to_binary_array(ascii_hex_string):
     # Ensure the string length is even
