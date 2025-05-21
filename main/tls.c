@@ -415,7 +415,7 @@ static bool _sslInit(void)
         return false;
     }
 
-	mbedtls_ssl_conf_authmode(&g_ssl.conf, MBEDTLS_SSL_VERIFY_REQUIRED); // MBEDTLS_SSL_VERIFY_OPTIONAL
+	mbedtls_ssl_conf_authmode(&g_ssl.conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
 
     INFO("ok\n");
     return true;
