@@ -212,11 +212,12 @@ static void _taskCmd(void* arg)
             len = sizeof(buf) - 1;
             memset(buf, 0, sizeof(buf));
             ret = mbedtls_ssl_read(&ssl, buf, len);
-    
+
             if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
-				TRACE("#1 %d\n", ret);
+				//TRACE("#1 %d\n", ret);
                 continue;
             }
+			//TRACE("#2 %d\n", ret);
     
             if (ret <= 0) {
                 switch (ret) {
@@ -403,6 +404,8 @@ static bool _sslInit(void)
         ERROR("failed\n  ! mbedtls_ssl_config_defaults returned %d\n", ret);
         return false;
     }
+
+	//g_ssl.conf.private_read_timeout = 1000;
 
     mbedtls_ssl_conf_rng(&g_ssl.conf, mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
     mbedtls_ssl_conf_dbg(&g_ssl.conf, my_debug, stdout);
