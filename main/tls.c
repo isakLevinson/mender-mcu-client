@@ -56,6 +56,9 @@ static struct {
 #endif
 
     SemaphoreHandle_t	mutex;
+
+	mbedtls_net_context fd_cmd;
+	mbedtls_net_context fd_stream;
 } g_ssl;
 
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
@@ -184,14 +187,13 @@ static void _taskCmd(void* arg)
 
     mbedtls_ssl_context ssl;
     mbedtls_net_context listen_fd;
-    mbedtls_net_context client_fd;
 
     CMD_CONTEXT context = {
         .p_cbSend   = _cmdWrite,
         .pArg       = &ssl,
     };
 
-	ret = _taskInit(&ssl, &listen_fd, &client_fd, TLS_CMD_PORT);
+	ret = _taskInit(&ssl, &listen_fd, &g_ssl.fd_cmd, TLS_CMD_PORT);
 	if (!ret) {
 		goto exit;
 	}
@@ -199,7 +201,7 @@ static void _taskCmd(void* arg)
     while (true) {
 		vTaskDelay(100);
 
-        ret = _accept(&ssl, &listen_fd, &client_fd);
+        ret = _accept(&ssl, &listen_fd, &g_ssl.fd_cmd);
 		if (!ret) {
 			continue;
 		}
@@ -212,6 +214,7 @@ static void _taskCmd(void* arg)
             ret = mbedtls_ssl_read(&ssl, buf, len);
     
             if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+				TRACE("#1 %d\n", ret);
                 continue;
             }
     
@@ -253,7 +256,6 @@ static void _taskStream(void* arg)
 
     mbedtls_ssl_context ssl;
     mbedtls_net_context listen_fd;
-    mbedtls_net_context client_fd;
 
     CMD_CONTEXT context = {
         .p_cbSend   = _cmdWrite,
@@ -261,7 +263,7 @@ static void _taskStream(void* arg)
     };
     CMD_setStreamContext(&context);
 
-	ret = _taskInit(&ssl, &listen_fd, &client_fd, TLS_STREAM_PORT);
+	ret = _taskInit(&ssl, &listen_fd, &g_ssl.fd_stream, TLS_STREAM_PORT);
 	if (!ret) {
 		goto exit;
 	}
@@ -269,7 +271,7 @@ static void _taskStream(void* arg)
     while (true) {
 		vTaskDelay(100);
 
-        ret = _accept(&ssl, &listen_fd, &client_fd);
+        ret = _accept(&ssl, &listen_fd, &g_ssl.fd_stream);
 		if (!ret) {
 			continue;
 		}
@@ -495,14 +497,44 @@ static bool dbgConnect(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
+	PRINT("cmd    : %d\n", g_ssl.fd_cmd.fd);
+	PRINT("stresam: %d\n", g_ssl.fd_stream.fd);
 	return true;
 }
+
+static bool dbgClose(uint8_t argc, char** argv)
+{
+	bool	isCmd = false;
+	bool	isSteam = false;
+
+	if (argc < 2) {
+		isCmd	= true;
+		isSteam	= true;
+	} else {
+		if (argv[1][0]=='c') {
+			isCmd = true;
+		}
+		if (argv[1][0]=='s') {
+			isSteam = true;
+		}
+	}
+
+	if (isCmd) {
+	    mbedtls_net_free(&g_ssl.fd_cmd);
+	}
+	if (isSteam) {
+	    mbedtls_net_free(&g_ssl.fd_stream);
+	}
+	return true;
+}
+
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("tls", NULL)
 		DEBUG_MENU_CMD("status",      NULL,	NULL, dbgStatus)
 		DEBUG_MENU_CMD("connect",     NULL,	NULL, dbgConnect)
+		DEBUG_MENU_CMD("close",  	  NULL,	NULL, dbgClose)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

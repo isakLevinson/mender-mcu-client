@@ -74,7 +74,8 @@
 											uint8_t		hw[3];)			\
 	rsp(EVT_BATTERY_STATUS,			0x17,	uint8_t		voltage;		\
 											uint8_t		soc;)			\
-	req(KA_CNT,						0x18,	uint16_t	cnt;)			\
+	req(KA_CNT,						0x18,	uint16_t	cnt;			\
+											uint16_t	timeout;)		\
 	rsp(KA_CNT,						0x19,	uint16_t	cnt;			\
 											uint8_t		batVoltage;		\
 											uint8_t		soc;)			\

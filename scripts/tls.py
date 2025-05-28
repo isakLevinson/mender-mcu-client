@@ -7,7 +7,7 @@ import binascii
 import time
 
 #cert_path = "main/certs/servercert.pem"
-uri = "pnu_5.local"
+uri = "pnu5.local"
 
 def ascii_hex_to_binary_array(ascii_hex_string):
     # Ensure the string length is even
@@ -43,6 +43,21 @@ async def cmd():
     ssl_context = ssl_create_context()
 
     reader, writer = await asyncio.open_connection(uri, 1000, ssl=ssl_context, server_hostname='host')
+    sock = writer.get_extra_info('socket')
+    if sock is None:
+        raise RuntimeError("Could not access the underlying socket")
+
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    if hasattr(socket, 'TCP_KEEPIDLE'):
+        print('TCP_KEEPALIVE')
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)  # Idle time before keepalive (Linux)
+    if hasattr(socket, 'TCP_KEEPINTVL'):
+        print('TCP_KEEPINTVL')
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 2)  # Interval between probes (Linux)
+    if hasattr(socket, 'TCP_KEEPCNT'):
+        print('TCP_KEEPCNT')
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)     # Max failed probes (Linux)
+
 
     async def send():
         count = 0
