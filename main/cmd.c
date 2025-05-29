@@ -147,6 +147,7 @@ typedef enum {
 #define BATTERY_CHECK_PERIOD	60000
 static struct {
 	SemaphoreHandle_t	semaphore;
+	TimerHandle_t		timer;
 	CMD_CONTEXT			streamContext;
 	CMD_STATE	    	state;
 	uint16_t			expectedLength;
@@ -332,6 +333,12 @@ static void _taskStreamer(void* arg)
 }
 #endif
 
+static void _timerCallback( TimerHandle_t pxTimer )
+{
+	INFO("_timerCallback\n");
+}
+
+
 static bool _init(void)
 {
 	bool	ret;
@@ -347,6 +354,10 @@ static bool _init(void)
 	}
 #endif
 
+	g_cmd.timer = xTimerCreate("KA", 500, pdFALSE, NULL, _timerCallback);
+	if (!g_cmd.timer ) {
+		ERROR("xTimerCreate\n");
+	}
 	return true;
 }
 
@@ -992,6 +1003,14 @@ static bool dbgReset(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgTimer(uint8_t argc, char** argv)
+{
+	int ret;
+	ret = xTimerStart(g_cmd.timer, 0);
+	PRINT("%d\n", ret);
+	return true;
+}
+
 #if USE_STREAM
 static bool dbgStream(uint8_t argc, char** argv)
 {
@@ -1030,6 +1049,11 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	PRINT("stream size       %d\n", g_cmd.streamSize);
 #endif
 
+	uint32_t expiration = xTimerGetExpiryTime(g_cmd.timer);
+	int32_t	ticks = xTaskGetTickCount();
+	PRINT("expiration: %d %d\n", expiration, expiration-ticks);
+	PRINT("%d\n", ticks);
+
 	return true;
 }
 
@@ -1038,6 +1062,7 @@ DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("cmd", NULL)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("reset",		NULL,		NULL, dbgReset)
+		DEBUG_MENU_CMD("timer",		NULL,		NULL, dbgTimer)
 #if USE_STREAM
 		DEBUG_MENU_CMD("stream",	NULL,		NULL, dbgStream)
 #endif

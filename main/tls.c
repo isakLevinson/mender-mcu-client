@@ -393,15 +393,11 @@ static bool _sslInit(void)
 
     INFO("ok\n");
 
-    INFO("Bind on https://localhost:4433/ ...\n");
-
-    INFO("Setting up the SSL data....\n");
-
     if ((ret = mbedtls_ssl_config_defaults(&g_ssl.conf,
                                            MBEDTLS_SSL_IS_SERVER,
                                            MBEDTLS_SSL_TRANSPORT_STREAM,
                                            MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
-        ERROR("failed\n  ! mbedtls_ssl_config_defaults returned %d\n", ret);
+        ERROR("mbedtls_ssl_config_defaults %d\n", ret);
         return false;
     }
 
