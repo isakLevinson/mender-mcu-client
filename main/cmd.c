@@ -34,6 +34,7 @@
 #include "mender_ota.h"
 #include "cJSON.h"
 #include "factory.h"
+#include "tls.h"
 
 // *INDENT-OFF*
 
@@ -147,7 +148,6 @@ typedef enum {
 #define BATTERY_CHECK_PERIOD	60000
 static struct {
 	SemaphoreHandle_t	semaphore;
-	TimerHandle_t		timer;
 	CMD_CONTEXT			streamContext;
 	CMD_STATE	    	state;
 	uint16_t			expectedLength;
@@ -333,12 +333,6 @@ static void _taskStreamer(void* arg)
 }
 #endif
 
-static void _timerCallback( TimerHandle_t pxTimer )
-{
-	INFO("_timerCallback\n");
-}
-
-
 static bool _init(void)
 {
 	bool	ret;
@@ -353,11 +347,6 @@ static bool _init(void)
 		return false;
 	}
 #endif
-
-	g_cmd.timer = xTimerCreate("KA", 500, pdFALSE, NULL, _timerCallback);
-	if (!g_cmd.timer ) {
-		ERROR("xTimerCreate\n");
-	}
 	return true;
 }
 
@@ -416,8 +405,8 @@ static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq,
 
 	_sendResp(i_pContext, CMD_RSP_KA_CNT, &rsp, sizeof(rsp));
 
-	xTimerChangePeriod(g_cmd.timer, i_pReq->timeout*100, 0);
-	ret = xTimerStart(g_cmd.timer, 0);
+	// TODO: use callback instead
+	TLS_keepaliveRestart(i_pReq->timeout * 1000);
 
 	return true;
 }
@@ -1006,20 +995,6 @@ static bool dbgReset(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgTimer(uint8_t argc, char** argv)
-{
-	int ret;
-
-	if (argc >= 2) {
-		uint32_t period = strtol(argv[1], NULL, 10);
-		xTimerChangePeriod(g_cmd.timer, period, 0);
-	}
-
-	ret = xTimerStart(g_cmd.timer, 0);
-	PRINT("%d\n", ret);
-	return true;
-}
-
 #if USE_STREAM
 static bool dbgStream(uint8_t argc, char** argv)
 {
@@ -1058,18 +1033,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	PRINT("stream size       %d\n", g_cmd.streamSize);
 #endif
 
-
-	BaseType_t timerState = xTimerIsTimerActive(g_cmd.timer);
-	uint32_t expiration = xTimerGetExpiryTime(g_cmd.timer);
-	int32_t	ticks = xTaskGetTickCount();
-	if (timerState) {
-		PRINT("timer active: %d %d %d\n", timerState, expiration, expiration-ticks);
-	} else {
-		PRINT("timer not active\n");
-	}
-	PRINT("%d\n", ticks);
-
-	return true;
+return true;
 }
 
 // *INDENT-OFF*
@@ -1077,7 +1041,6 @@ DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("cmd", NULL)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("reset",		NULL,		NULL, dbgReset)
-		DEBUG_MENU_CMD("timer",		NULL,		NULL, dbgTimer)
 #if USE_STREAM
 		DEBUG_MENU_CMD("stream",	NULL,		NULL, dbgStream)
 #endif

@@ -59,7 +59,21 @@ static struct {
 
 	mbedtls_net_context fd_cmd;
 	mbedtls_net_context fd_stream;
+
+	TimerHandle_t		kaTimer;
 } g_ssl;
+
+
+bool TLS_keepaliveRestart(uint16_t period)
+{
+	int ret;
+	xTimerChangePeriod(g_ssl.kaTimer, period/10, 0);
+	ret = xTimerStart(g_ssl.kaTimer, 0);
+	if (pdPASS != ret) {
+		return false;
+	}
+	return true;
+}
 
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
 {   
@@ -319,6 +333,11 @@ static void _taskStream(void* arg)
     vTaskDelete(NULL);
 }
 
+static void _timerCallback( TimerHandle_t pxTimer )
+{
+	INFO("_timerCallback\n");
+}
+
 static bool _sslInit(void)
 {
     int ret;
@@ -430,6 +449,11 @@ static bool _init(void)
 
     g_ssl.mutex = xSemaphoreCreateMutex();
 
+	g_ssl.kaTimer = xTimerCreate("KA", 500, pdFALSE, NULL, _timerCallback);
+	if (!g_ssl.kaTimer ) {
+		ERROR("xTimerCreate\n");
+	}
+
     ret = xTaskCreate(_taskCmd, "tls_cmd", 8192, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task failed\n");
@@ -441,7 +465,6 @@ static bool _init(void)
 		ERROR("create task failed\n");
 		return false;
 	}
-
 
     return true;
 }
@@ -494,10 +517,17 @@ static bool dbgConnect(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgStatus(uint8_t argc, char** argv)
+static bool dbgTimer(uint8_t argc, char** argv)
 {
-	PRINT("cmd    : %d\n", g_ssl.fd_cmd.fd);
-	PRINT("stresam: %d\n", g_ssl.fd_stream.fd);
+	int ret;
+
+	if (argc >= 2) {
+		uint32_t period = strtol(argv[1], NULL, 10);
+		xTimerChangePeriod(g_ssl.kaTimer, period, 0);
+	}
+
+	ret = xTimerStart(g_ssl.kaTimer, 0);
+	PRINT("%d\n", ret);
 	return true;
 }
 
@@ -527,6 +557,22 @@ static bool dbgClose(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgStatus(uint8_t argc, char** argv)
+{
+	PRINT("cmd    : %d\n", g_ssl.fd_cmd.fd);
+	PRINT("stresam: %d\n", g_ssl.fd_stream.fd);
+
+	BaseType_t timerState = xTimerIsTimerActive(g_ssl.kaTimer);
+	uint32_t expiration = xTimerGetExpiryTime(g_ssl.kaTimer);
+	int32_t	ticks = xTaskGetTickCount();
+	if (timerState) {
+		PRINT("timer active: %d %d %d\n", timerState, expiration, expiration-ticks);
+	} else {
+		PRINT("timer not active\n");
+	}
+
+	return true;
+}
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
@@ -534,6 +580,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("status",      NULL,	NULL, dbgStatus)
 		DEBUG_MENU_CMD("connect",     NULL,	NULL, dbgConnect)
 		DEBUG_MENU_CMD("close",  	  NULL,	NULL, dbgClose)
+		DEBUG_MENU_CMD("timer",  	  NULL,	NULL, dbgTimer)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
