@@ -34,6 +34,7 @@
 #include "mender_ota.h"
 #include "cJSON.h"
 #include "factory.h"
+#include "tls.h"
 
 // *INDENT-OFF*
 
@@ -346,7 +347,6 @@ static bool _init(void)
 		return false;
 	}
 #endif
-
 	return true;
 }
 
@@ -387,7 +387,7 @@ static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq,
 	uint16_t	soc;
 	uint16_t	voltage;
 
-	INFO("KA_CNT %d\n", i_pReq->cnt);
+	INFO("KA_CNT %d %d\n", i_pReq->cnt, i_pReq->timeout);
 
 	// TODO: use real values
 	rsp.cnt			= i_pReq->cnt;
@@ -404,6 +404,9 @@ static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq,
 	}
 
 	_sendResp(i_pContext, CMD_RSP_KA_CNT, &rsp, sizeof(rsp));
+
+	// TODO: use callback instead
+	TLS_keepaliveRestart(i_pReq->timeout * 1000);
 
 	return true;
 }
@@ -1030,7 +1033,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	PRINT("stream size       %d\n", g_cmd.streamSize);
 #endif
 
-	return true;
+return true;
 }
 
 // *INDENT-OFF*

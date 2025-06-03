@@ -58,11 +58,11 @@ async def cmd():
         print('TCP_KEEPCNT')
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)     # Max failed probes (Linux)
 
-
     async def send():
-        count = 0
+        count = int(0)
+        timeout = int(10)
         while True:
-            message = "123418%02x00" % (count)
+            message = "123418%02x%02x%02x" % (count%256, count>>8, timeout)
 #            print("sending", message)
             count += 1
             if count>255:
@@ -85,6 +85,7 @@ async def cmd():
         print("recv exited")
 
     await asyncio.gather(send(), recv())
+#    await asyncio.gather(recv())
 
     writer.close()
     await writer.wait_closed()

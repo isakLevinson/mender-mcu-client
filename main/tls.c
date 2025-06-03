@@ -59,7 +59,25 @@ static struct {
 
 	mbedtls_net_context fd_cmd;
 	mbedtls_net_context fd_stream;
+
+	TimerHandle_t		kaTimer;
 } g_ssl;
+
+bool TLS_keepaliveRestart(uint16_t period)
+{
+	int ret;
+	
+	if (!period) {
+		return false;
+	}
+
+	xTimerChangePeriod(g_ssl.kaTimer, period/10, 0);
+	ret = xTimerStart(g_ssl.kaTimer, 0);
+	if (pdPASS != ret) {
+		return false;
+	}
+	return true;
+}
 
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
 {   
@@ -208,6 +226,8 @@ static void _taskCmd(void* arg)
 
 		INFO("cmd connected\n");
 
+		TLS_keepaliveRestart(30000);
+
         do {
             len = sizeof(buf) - 1;
             memset(buf, 0, sizeof(buf));
@@ -233,7 +253,8 @@ static void _taskCmd(void* arg)
                         WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) -ret);
                         break;
                 }
-    
+				INFO("cmd disconnected\n");
+				ret = xTimerStop(g_ssl.kaTimer, 0);
                 break;
             }
     
@@ -302,7 +323,7 @@ static void _taskStream(void* arg)
                         WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) -ret);
                         break;
                 }
-    
+   				INFO("stream disconnected\n");
                 break;
             }
     
@@ -317,6 +338,14 @@ static void _taskStream(void* arg)
     exit:
     mbedtls_net_free(&listen_fd);
     vTaskDelete(NULL);
+}
+
+static void _kaTimerCb( TimerHandle_t pxTimer )
+{
+	INFO("_kaTimerCb\n");
+
+	mbedtls_net_free(&g_ssl.fd_cmd);
+	mbedtls_net_free(&g_ssl.fd_stream);
 }
 
 static bool _sslInit(void)
@@ -393,15 +422,11 @@ static bool _sslInit(void)
 
     INFO("ok\n");
 
-    INFO("Bind on https://localhost:4433/ ...\n");
-
-    INFO("Setting up the SSL data....\n");
-
     if ((ret = mbedtls_ssl_config_defaults(&g_ssl.conf,
                                            MBEDTLS_SSL_IS_SERVER,
                                            MBEDTLS_SSL_TRANSPORT_STREAM,
                                            MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
-        ERROR("failed\n  ! mbedtls_ssl_config_defaults returned %d\n", ret);
+        ERROR("mbedtls_ssl_config_defaults %d\n", ret);
         return false;
     }
 
@@ -434,6 +459,11 @@ static bool _init(void)
 
     g_ssl.mutex = xSemaphoreCreateMutex();
 
+	g_ssl.kaTimer = xTimerCreate("KA", 3000, pdFALSE, NULL, _kaTimerCb);
+	if (!g_ssl.kaTimer ) {
+		ERROR("xTimerCreate\n");
+	}
+
     ret = xTaskCreate(_taskCmd, "tls_cmd", 8192, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task failed\n");
@@ -445,7 +475,6 @@ static bool _init(void)
 		ERROR("create task failed\n");
 		return false;
 	}
-
 
     return true;
 }
@@ -498,10 +527,17 @@ static bool dbgConnect(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgStatus(uint8_t argc, char** argv)
+static bool dbgTimer(uint8_t argc, char** argv)
 {
-	PRINT("cmd    : %d\n", g_ssl.fd_cmd.fd);
-	PRINT("stresam: %d\n", g_ssl.fd_stream.fd);
+	int ret;
+
+	if (argc >= 2) {
+		uint32_t period = strtol(argv[1], NULL, 10);
+		xTimerChangePeriod(g_ssl.kaTimer, period, 0);
+	}
+
+	ret = xTimerStart(g_ssl.kaTimer, 0);
+	PRINT("%d\n", ret);
 	return true;
 }
 
@@ -531,6 +567,22 @@ static bool dbgClose(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgStatus(uint8_t argc, char** argv)
+{
+	PRINT("cmd    : %d\n", g_ssl.fd_cmd.fd);
+	PRINT("stresam: %d\n", g_ssl.fd_stream.fd);
+
+	BaseType_t timerState = xTimerIsTimerActive(g_ssl.kaTimer);
+	uint32_t expiration = xTimerGetExpiryTime(g_ssl.kaTimer);
+	int32_t	ticks = xTaskGetTickCount();
+	if (timerState) {
+		PRINT("timer active: %d %d %d\n", timerState, expiration, expiration-ticks);
+	} else {
+		PRINT("timer not active\n");
+	}
+
+	return true;
+}
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
@@ -538,6 +590,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("status",      NULL,	NULL, dbgStatus)
 		DEBUG_MENU_CMD("connect",     NULL,	NULL, dbgConnect)
 		DEBUG_MENU_CMD("close",  	  NULL,	NULL, dbgClose)
+		DEBUG_MENU_CMD("timer",  	  NULL,	NULL, dbgTimer)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
