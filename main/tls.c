@@ -63,10 +63,14 @@ static struct {
 	TimerHandle_t		kaTimer;
 } g_ssl;
 
-
 bool TLS_keepaliveRestart(uint16_t period)
 {
 	int ret;
+	
+	if (!period) {
+		return false;
+	}
+
 	xTimerChangePeriod(g_ssl.kaTimer, period/10, 0);
 	ret = xTimerStart(g_ssl.kaTimer, 0);
 	if (pdPASS != ret) {
@@ -222,6 +226,8 @@ static void _taskCmd(void* arg)
 
 		INFO("cmd connected\n");
 
+		TLS_keepaliveRestart(30000);
+
         do {
             len = sizeof(buf) - 1;
             memset(buf, 0, sizeof(buf));
@@ -247,7 +253,8 @@ static void _taskCmd(void* arg)
                         WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) -ret);
                         break;
                 }
-    
+				INFO("cmd disconnected\n");
+				ret = xTimerStop(g_ssl.kaTimer, 0);
                 break;
             }
     
@@ -316,7 +323,7 @@ static void _taskStream(void* arg)
                         WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) -ret);
                         break;
                 }
-    
+   				INFO("stream disconnected\n");
                 break;
             }
     
@@ -333,9 +340,12 @@ static void _taskStream(void* arg)
     vTaskDelete(NULL);
 }
 
-static void _timerCallback( TimerHandle_t pxTimer )
+static void _kaTimerCb( TimerHandle_t pxTimer )
 {
-	INFO("_timerCallback\n");
+	INFO("_kaTimerCb\n");
+
+	mbedtls_net_free(&g_ssl.fd_cmd);
+	mbedtls_net_free(&g_ssl.fd_stream);
 }
 
 static bool _sslInit(void)
@@ -449,7 +459,7 @@ static bool _init(void)
 
     g_ssl.mutex = xSemaphoreCreateMutex();
 
-	g_ssl.kaTimer = xTimerCreate("KA", 500, pdFALSE, NULL, _timerCallback);
+	g_ssl.kaTimer = xTimerCreate("KA", 3000, pdFALSE, NULL, _kaTimerCb);
 	if (!g_ssl.kaTimer ) {
 		ERROR("xTimerCreate\n");
 	}

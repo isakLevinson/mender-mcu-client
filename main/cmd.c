@@ -387,7 +387,7 @@ static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq,
 	uint16_t	soc;
 	uint16_t	voltage;
 
-	INFO("KA_CNT %d\n", i_pReq->cnt);
+	INFO("KA_CNT %d %d\n", i_pReq->cnt, i_pReq->timeout);
 
 	// TODO: use real values
 	rsp.cnt			= i_pReq->cnt;
