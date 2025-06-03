@@ -416,6 +416,9 @@ static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq,
 
 	_sendResp(i_pContext, CMD_RSP_KA_CNT, &rsp, sizeof(rsp));
 
+	xTimerChangePeriod(g_cmd.timer, i_pReq->timeout*100, 0);
+	ret = xTimerStart(g_cmd.timer, 0);
+
 	return true;
 }
 
@@ -1006,6 +1009,12 @@ static bool dbgReset(uint8_t argc, char** argv)
 static bool dbgTimer(uint8_t argc, char** argv)
 {
 	int ret;
+
+	if (argc >= 2) {
+		uint32_t period = strtol(argv[1], NULL, 10);
+		xTimerChangePeriod(g_cmd.timer, period, 0);
+	}
+
 	ret = xTimerStart(g_cmd.timer, 0);
 	PRINT("%d\n", ret);
 	return true;
@@ -1049,9 +1058,15 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	PRINT("stream size       %d\n", g_cmd.streamSize);
 #endif
 
+
+	BaseType_t timerState = xTimerIsTimerActive(g_cmd.timer);
 	uint32_t expiration = xTimerGetExpiryTime(g_cmd.timer);
 	int32_t	ticks = xTaskGetTickCount();
-	PRINT("expiration: %d %d\n", expiration, expiration-ticks);
+	if (timerState) {
+		PRINT("timer active: %d %d %d\n", timerState, expiration, expiration-ticks);
+	} else {
+		PRINT("timer not active\n");
+	}
 	PRINT("%d\n", ticks);
 
 	return true;
