@@ -32,6 +32,9 @@
 #include "ctrl.h"
 #include "max17049.h"
 #include "mender_ota.h"
+#include "cJSON.h"
+#include "factory.h"
+#include "tls.h"
 
 // *INDENT-OFF*
 
@@ -72,7 +75,8 @@
 											uint8_t		hw[3];)			\
 	rsp(EVT_BATTERY_STATUS,			0x17,	uint8_t		voltage;		\
 											uint8_t		soc;)			\
-	req(KA_CNT,						0x18,	uint16_t	cnt;)			\
+	req(KA_CNT,						0x18,	uint16_t	cnt;			\
+											uint16_t	timeout;)		\
 	rsp(KA_CNT,						0x19,	uint16_t	cnt;			\
 											uint8_t		batVoltage;		\
 											uint8_t		soc;)			\
@@ -165,6 +169,30 @@ static struct {
 #endif
 };
 
+static bool _sendRespRaw(CMD_CONTEXT* i_pContext, void* i_pBuf, uint16_t size)
+{
+	bool	ret;
+	if (!i_pContext) {
+		ERROR("invalid context\n");
+		return false;
+	}
+
+	if (!i_pContext->p_cbSend) {
+		ERROR("p_cbSend is NULL\n");
+		return false;
+	}
+
+	xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
+	
+	TRACE_BUF("_sendRespRaw",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+
+	ret = i_pContext->p_cbSend(i_pContext->pArg, i_pBuf, size);
+
+	xSemaphoreGive(g_cmd.semaphore);
+
+	return ret;
+}
+
 static bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint16_t size)
 {
 	bool	ret;
@@ -178,21 +206,9 @@ static bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint1
 		pContext = &g_cmd.streamContext;
 	}
 
-	if (!pContext) {
-		ERROR("invalid context\n");
-		return false;
-	}
-
-	if (!pContext->p_cbSend) {
-		ERROR("p_cbSend is NULL\n");
-		return false;
-	}
-
 	if (size > sizeof(buf) + 3) {
 		return false;
 	}
-
-	xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
 
 	*(uint16_t*)pBuf	= size;
 	pBuf += 2;
@@ -202,12 +218,19 @@ static bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint1
 	memcpy(pBuf, i_pBuf, size);
 	pBuf += size;
 
-	TRACE_BUF("_sendResp",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, pBuf-buf);
+	ret = _sendRespRaw(pContext, buf, pBuf-buf);
 
-	ret = pContext->p_cbSend(pContext->pArg, buf, pBuf-buf);
+	return ret;
+}
 
-	xSemaphoreGive(g_cmd.semaphore);
+static bool _sendRespStr(CMD_CONTEXT* i_pContext, char *pStr)
+{
+	bool ret;
+	uint32_t	len = strlen(pStr);
 
+	INFO("_sendRespStr <%s>\n", pStr);
+
+	ret = _sendRespRaw(i_pContext, pStr, len);
 	return ret;
 }
 
@@ -259,7 +282,7 @@ static void _taskStreamer(void* arg)
 		}
 		ret = _sendResp(&g_cmd.streamContext, CMD_RSP_EVT_STREAM, &rsp, sizeof(rsp));
 		if (!ret) {
-			ERROR("failed to send. stopping streaming\n");
+			WARN("failed to send. stopping streaming\n");
 			_streamPeriod(0);
 		}
 
@@ -324,7 +347,6 @@ static bool _init(void)
 		return false;
 	}
 #endif
-
 	return true;
 }
 
@@ -365,7 +387,7 @@ static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq,
 	uint16_t	soc;
 	uint16_t	voltage;
 
-	INFO("KA_CNT %d\n", i_pReq->cnt);
+	INFO("KA_CNT %d %d\n", i_pReq->cnt, i_pReq->timeout);
 
 	// TODO: use real values
 	rsp.cnt			= i_pReq->cnt;
@@ -382,6 +404,10 @@ static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq,
 	}
 
 	_sendResp(i_pContext, CMD_RSP_KA_CNT, &rsp, sizeof(rsp));
+
+	if (i_pContext->p_cbKa) {
+		i_pContext->p_cbKa(i_pReq->timeout);
+	}
 
 	return true;
 }
@@ -411,9 +437,12 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 
 static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq, uint16_t size)
 {
+	CMD_RSPBUF_STATUS	rsp = {0};
+
+	INFO("STATUS\n");
+
 #if CONFIG_BUILD_TYPE_PNU
 
-	CMD_RSPBUF_STATUS	rsp;
 	bool	ret;
 	uint16_t	soc;
 	uint16_t	voltage;
@@ -421,8 +450,6 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 	bool	valves[5];
 	bool	pumps[4];
 	int		i;
-
-	INFO("STATUS\n");
 
 	CTRL_getPressure(press);
 	for (i = 0; i < 4; i++) {
@@ -453,9 +480,10 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 		rsp.voltage = 0;
 	}
 
-	_sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
 #endif
-	return true;
+
+	_sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
+return true;
 }
 
 static bool	_req_SET_PRESSURE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PRESSURE* i_pReq, uint16_t size)
@@ -724,7 +752,7 @@ bool CMD_processBuffer(CMD_CONTEXT* i_pContext, uint8_t* i_pBuf, uint16_t size)
 	uint8_t len = i_pBuf[0];
 	uint8_t type = i_pBuf[2];
 
-	INFO("CMD_processBuffer size:%d, len:%d, type\n", size, len, type);
+	TRACE("CMD_processBuffer size:%d, len:%d, type %02x\n", size, len, type);
 	_processMessage(i_pContext, type, i_pBuf+3, size-3);
 	return true;
 }
@@ -769,6 +797,184 @@ void CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data)
 	}
 }
 
+static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
+{
+	bool		ret;
+	char		str[256];
+	char*		pStr = str;
+	char		timeStr[64];
+	int64_t		t;
+	uint16_t	soc;
+	uint16_t	voltage;
+	int16_t		press[4];
+	bool		valves[5];
+	bool		pumps[4];
+	int			i;
+
+	INFO("STATUS\n");
+
+#if CONFIG_BUILD_TYPE_PNU
+	CTRL_getPressure(press);
+	CTRL_getValves(valves);
+	CTRL_getPump(pumps);
+	ret = fg_get_soc(&soc);
+	if (!ret) {
+		soc = 0;
+	}
+		
+	ret = fg_get_vbat(&voltage);
+	if (!ret) {
+		voltage = 0;
+	}
+	voltage /= 100;
+#endif
+
+	TIME_get64(&t);
+	t /= 1000000;
+	TIME_strftime(t, "%H:%M:%S.0", timeStr);
+
+	pStr += sprintf(pStr,
+		"{"
+		"\"message type\": \"Get Status response\","
+	);
+
+#if CONFIG_BUILD_TYPE_PNU
+	pStr += sprintf(pStr, "\"time\": \"%s\",", timeStr);
+	pStr += sprintf(pStr, "\"pressures\": [%d, %d, %d, %d],", press[0], press[1], press[2], press[3]);
+	pStr += sprintf(pStr, "\"valves\": [%d, %d, %d, %d],", valves[0], valves[1], valves[2], valves[3]);
+	pStr += sprintf(pStr, "\"pumps\": [%d, %d, %d, %d],", pumps[0], pumps[1], pumps[2], pumps[3]);
+	pStr += sprintf(pStr, "\"battery voltage\": %d,", voltage);
+	pStr += sprintf(pStr, "\"battery soc\": %d,", soc);
+	pStr += sprintf(pStr, "\"connected\": \"True\"");
+	pStr += sprintf(pStr, "}\n\n");
+#endif	
+	_sendRespStr(i_pContext, str);
+
+	return true;
+}
+
+static bool	_json_VERSION_func(CMD_CONTEXT* i_pContext, char* pContent)
+{
+	char*		ver;
+	uint32_t	numbers[3];
+	char*		sn;
+	char*		proj;
+	char		str[256];
+	char*		pStr = str;
+
+	MENDER_version(&proj, &ver, numbers);
+	FACTORY_factoryGetSn(&sn);
+
+	INFO("VERSION\n");
+
+	PRINT("sn: %s\n", sn);
+	PRINT("proj: %s\n", proj);
+	PRINT("sw ver: \"%s\" [%d.%d.%d]\n", ver, numbers[0], numbers[1], numbers[2]);
+
+	PRINT("hw:%d.%d.%d\n",
+	    HW_VERSION_MAJOR,
+	    HW_VERSION_MINOR,
+	    HW_VERSION_BUILD);
+	
+	pStr += sprintf(pStr,
+		"{"
+		"\"message type\": \"Get Version response\","
+	);
+
+	pStr += sprintf(pStr, "\"sw\": \"%d.%d.%d\",", numbers[0], numbers[1], numbers[2]);
+	pStr += sprintf(pStr, "\"hw\": \"%d.%d.%d\"", HW_VERSION_MAJOR, HW_VERSION_MINOR, HW_VERSION_BUILD);
+	pStr += sprintf(pStr, "}\n\n");
+	
+	_sendRespStr(i_pContext, str);
+
+	return true;
+}
+
+static bool	_json_INFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
+{
+	bool	ret;
+	cJSON* json = NULL;
+	const cJSON* object = NULL;
+	uint16_t	press[4];
+	uint8_t		i;
+
+	INFO("INFLATE_CHANNELS\n");
+
+	json = cJSON_ParseWithLength(pContent, strlen(pContent));
+	if (!json) {
+		WARN("json parse error\n");
+		goto error;
+	}
+
+	for (i=0; i<4; i++) {
+		char entity[32];
+		sprintf(entity, "p%d", i+1);
+		object = cJSON_GetObjectItemCaseSensitive(json, entity);
+		if (!cJSON_IsNumber(object)) {
+			goto error;
+		}
+		INFO("p%d: %d\n", i+1, object->valueint);
+		press[i] = (int)object->valueint;
+	}
+
+	ret = CTRL_setTarget(press);
+	if (!ret) {
+		goto error;
+	}
+
+	goto ok;
+error:
+	i_pContext->p_cbStatus(i_pContext->pArg, 400);
+
+ok:
+	_sendRespStr(i_pContext,
+		"{"
+		"\"message type\": \"Inflate Channels Response\""
+		"}\n\n"
+		);
+
+	return true;
+}
+
+static bool	_json_DEFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
+{
+	bool	ret;
+	cJSON* json = NULL;
+	const cJSON* object = NULL;
+	uint16_t	press[4] = {0};
+
+	INFO("DEFLATE_CHANNELS\n");
+
+	ret = CTRL_setTarget(press);
+	
+	_sendRespStr(i_pContext,
+		"{"
+		"\"message type\": \"Deflate Channels Response\""
+		"}\n\n"
+		);
+
+	return true;
+}
+
+bool CMD_processJson(CMD_CONTEXT* i_pContext, char* pCommand, char* pData)
+{
+	INFO("CMD_processJson <%s> <%s>\n", pCommand, pData);
+
+	if (!strcmp(pCommand, "status")) {
+		_json_STATUS_func(i_pContext, pData);
+
+	} else if (!strcmp(pCommand, "version")) {
+		_json_VERSION_func(i_pContext, pData);
+
+	} else if (!strcmp(pCommand, "inflate_channels")) {
+		_json_INFLATE_CHANNELS_func(i_pContext, pData);
+	} else if (!strcmp(pCommand, "deflate_channels")) {
+		_json_DEFLATE_CHANNELS_func(i_pContext, pData);
+	}
+
+	return true;
+}
+
 bool CMD_setStreamContext(CMD_CONTEXT* i_pContext)
 {
 	if (!i_pContext) {
@@ -780,6 +986,7 @@ bool CMD_setStreamContext(CMD_CONTEXT* i_pContext)
 	}
 
 	g_cmd.streamContext.p_cbSend	= i_pContext->p_cbSend;
+	g_cmd.streamContext.p_cbKa		= i_pContext->p_cbKa;
 	g_cmd.streamContext.pArg		= i_pContext->pArg;
 
 	return true;
@@ -829,7 +1036,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	PRINT("stream size       %d\n", g_cmd.streamSize);
 #endif
 
-	return true;
+return true;
 }
 
 // *INDENT-OFF*

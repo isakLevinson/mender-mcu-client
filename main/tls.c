@@ -24,6 +24,7 @@
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/esp_debug.h"
 #include "mbedtls/error.h"
+#include "mbedtls/oid.h"
 
 
 #if defined(MBEDTLS_SSL_CACHE_C)
@@ -44,6 +45,11 @@
 #define WEB_SERVER "192.168.1.100"
 #define WEB_PORT	"2000"
 
+typedef struct {
+	mbedtls_ssl_context *ssl;
+	mbedtls_net_context *fd;
+} cmd_ctx_arg_t;
+
 static struct {
     mbedtls_ssl_config conf;
     mbedtls_entropy_context entropy;
@@ -55,6 +61,11 @@ static struct {
 #endif
 
     SemaphoreHandle_t	mutex;
+
+	mbedtls_net_context fd_cmd;
+	mbedtls_net_context fd_stream;
+
+	TimerHandle_t		kaTimer;
 } g_ssl;
 
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
@@ -62,7 +73,23 @@ static void my_debug(void *ctx, int level, const char *file, int line, const cha
 	TRACE("SSLDBG: %s:%04d: %s", file, line, str);
 }
 
-static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mbedtls_net_context *client_fd)
+static bool _cmdKa(uint8_t timeout)
+{
+	int ret;
+	
+	if (!timeout) {
+		return false;
+	}
+
+	xTimerChangePeriod(g_ssl.kaTimer, timeout*100, 0);
+	ret = xTimerStart(g_ssl.kaTimer, 0);
+	if (pdPASS != ret) {
+		return false;
+	}
+	return true;
+}
+
+static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mbedtls_net_context *client_fd, bool startKaTimer)
 {
     int ret;
 
@@ -82,16 +109,44 @@ static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mb
     mbedtls_ssl_set_bio(ssl, client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
     INFO("accept ok\n");
 
-    INFO("Performing the SSL/TLS handshake...\n");
+	if (startKaTimer) {
+		_cmdKa(30);
+	}
 
     while ((ret = mbedtls_ssl_handshake(ssl)) != 0) {
         if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
             ERROR("mbedtls_ssl_handshake -%x\n", -ret);
+			xSemaphoreGive(g_ssl.mutex);
             goto reset;
         }
     }
 
-    xSemaphoreGive(g_ssl.mutex);
+	const mbedtls_x509_crt *client_cert = mbedtls_ssl_get_peer_cert(ssl);
+	char cn[256];
+	const mbedtls_x509_name *name = &client_cert->subject;
+#if 1
+	if (client_cert) {
+		while (name) {
+			if (MBEDTLS_OID_CMP(MBEDTLS_OID_AT_CN, &name->oid) == 0) {
+				memcpy(cn, name->val.p, name->val.len);
+				cn[name->val.len] = '\0';
+				INFO("Client CN: %s\n", cn);
+				break;
+			}
+			name = name->next;
+		}	
+	} else {
+		WARN("no client certificate received\n");
+	}
+#endif
+//	INFO("cert:%x\n", client_cert);
+	//INFO("len: %d\n", name->oid.len);
+//	while (name) {
+//		//INFO("len: %d\n", name->oid.len);
+//
+//		name = name->next;
+//	}
+	xSemaphoreGive(g_ssl.mutex);
 
     INFO("handshake ok\n");
     return true;
@@ -109,6 +164,7 @@ static bool _write(mbedtls_ssl_context *ssl, void *buf, int len)
 
         if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
             WARN("mbedtls_ssl_write returned %d\n", ret);
+			//mbedtls_print_error_msg(ret);
             return false;
         }
     }
@@ -119,11 +175,17 @@ static bool _write(mbedtls_ssl_context *ssl, void *buf, int len)
 static bool _cmdWrite(void* pArg, void* i_pBuf, uint16_t size)
 {
     bool ret;
-    mbedtls_ssl_context *ssl = (mbedtls_ssl_context *)pArg;
+
+	cmd_ctx_arg_t *ctxarg = (cmd_ctx_arg_t*)pArg;
 
     TRACE_BUF("_cmdWrite",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
-    ret = _write(ssl, i_pBuf, size);
+	if (ctxarg->fd->fd < 0) {
+		WARN("socket is closed\n");
+		return false;
+	}
+
+    ret = _write(ctxarg->ssl, i_pBuf, size);
     return ret;
 }
 
@@ -157,14 +219,19 @@ static void _taskCmd(void* arg)
 
     mbedtls_ssl_context ssl;
     mbedtls_net_context listen_fd;
-    mbedtls_net_context client_fd;
+
+	cmd_ctx_arg_t ctxarg = {
+		.ssl	= &ssl,
+		.fd		= &g_ssl.fd_cmd,
+	};
 
     CMD_CONTEXT context = {
         .p_cbSend   = _cmdWrite,
-        .pArg       = &ssl,
+		.p_cbKa		= _cmdKa,
+        .pArg       = &ctxarg,
     };
 
-	ret = _taskInit(&ssl, &listen_fd, &client_fd, TLS_CMD_PORT);
+	ret = _taskInit(&ssl, &listen_fd, &g_ssl.fd_cmd, TLS_CMD_PORT);
 	if (!ret) {
 		goto exit;
 	}
@@ -172,7 +239,7 @@ static void _taskCmd(void* arg)
     while (true) {
 		vTaskDelay(100);
 
-        ret = _accept(&ssl, &listen_fd, &client_fd);
+        ret = _accept(&ssl, &listen_fd, &g_ssl.fd_cmd, true);
 		if (!ret) {
 			continue;
 		}
@@ -183,10 +250,12 @@ static void _taskCmd(void* arg)
             len = sizeof(buf) - 1;
             memset(buf, 0, sizeof(buf));
             ret = mbedtls_ssl_read(&ssl, buf, len);
-    
+
             if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+				//TRACE("#1 %d\n", ret);
                 continue;
             }
+			//TRACE("#2 %d\n", ret);
     
             if (ret <= 0) {
                 switch (ret) {
@@ -202,12 +271,13 @@ static void _taskCmd(void* arg)
                         WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) -ret);
                         break;
                 }
-    
+				INFO("cmd disconnected\n");
+				ret = xTimerStop(g_ssl.kaTimer, 0);
                 break;
             }
     
             len = ret;
-            INFO_BUF("cmd",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, len);
+            TRACE_BUF("cmd",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, len);
     
             CMD_processBuffer(&context, buf, len);
         } while (1);
@@ -226,15 +296,19 @@ static void _taskStream(void* arg)
 
     mbedtls_ssl_context ssl;
     mbedtls_net_context listen_fd;
-    mbedtls_net_context client_fd;
 
-    CMD_CONTEXT context = {
-        .p_cbSend   = _cmdWrite,
-        .pArg       = &ssl,
+	cmd_ctx_arg_t ctxarg = {
+		.ssl	= &ssl,
+		.fd		= &g_ssl.fd_stream,
+	};
+
+	CMD_CONTEXT context = {
+        .p_cbSend	= _cmdWrite,
+        .pArg       = &ctxarg,
     };
     CMD_setStreamContext(&context);
 
-	ret = _taskInit(&ssl, &listen_fd, &client_fd, TLS_STREAM_PORT);
+	ret = _taskInit(&ssl, &listen_fd, &g_ssl.fd_stream, TLS_STREAM_PORT);
 	if (!ret) {
 		goto exit;
 	}
@@ -242,7 +316,7 @@ static void _taskStream(void* arg)
     while (true) {
 		vTaskDelay(100);
 
-        ret = _accept(&ssl, &listen_fd, &client_fd);
+        ret = _accept(&ssl, &listen_fd, &g_ssl.fd_stream, false);
 		if (!ret) {
 			continue;
 		}
@@ -272,7 +346,7 @@ static void _taskStream(void* arg)
                         WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) -ret);
                         break;
                 }
-    
+   				INFO("stream disconnected\n");
                 break;
             }
     
@@ -287,6 +361,14 @@ static void _taskStream(void* arg)
     exit:
     mbedtls_net_free(&listen_fd);
     vTaskDelete(NULL);
+}
+
+static void _kaTimerCb( TimerHandle_t pxTimer )
+{
+	INFO("_kaTimerCb\n");
+
+	mbedtls_net_free(&g_ssl.fd_cmd);
+	mbedtls_net_free(&g_ssl.fd_stream);
 }
 
 static bool _sslInit(void)
@@ -363,17 +445,15 @@ static bool _sslInit(void)
 
     INFO("ok\n");
 
-    INFO("Bind on https://localhost:4433/ ...\n");
-
-    INFO("Setting up the SSL data....\n");
-
     if ((ret = mbedtls_ssl_config_defaults(&g_ssl.conf,
                                            MBEDTLS_SSL_IS_SERVER,
                                            MBEDTLS_SSL_TRANSPORT_STREAM,
                                            MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
-        ERROR("failed\n  ! mbedtls_ssl_config_defaults returned %d\n", ret);
+        ERROR("mbedtls_ssl_config_defaults %d\n", ret);
         return false;
     }
+
+	//g_ssl.conf.private_read_timeout = 1000;
 
     mbedtls_ssl_conf_rng(&g_ssl.conf, mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
     mbedtls_ssl_conf_dbg(&g_ssl.conf, my_debug, stdout);
@@ -384,9 +464,11 @@ static bool _sslInit(void)
 
     mbedtls_ssl_conf_ca_chain(&g_ssl.conf, g_ssl.srvcert.next, NULL);
     if ((ret = mbedtls_ssl_conf_own_cert(&g_ssl.conf, &g_ssl.srvcert, &g_ssl.pkey)) != 0) {
-        ERROR("failed\n  ! mbedtls_ssl_conf_own_cert returned %d\n", ret);
+        ERROR("mbedtls_ssl_conf_own_cert returned %d\n", ret);
         return false;
     }
+
+	mbedtls_ssl_conf_authmode(&g_ssl.conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
 
     INFO("ok\n");
     return true;
@@ -400,6 +482,11 @@ static bool _init(void)
 
     g_ssl.mutex = xSemaphoreCreateMutex();
 
+	g_ssl.kaTimer = xTimerCreate("KA", 3000, pdFALSE, NULL, _kaTimerCb);
+	if (!g_ssl.kaTimer ) {
+		ERROR("xTimerCreate\n");
+	}
+
     ret = xTaskCreate(_taskCmd, "tls_cmd", 8192, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task failed\n");
@@ -411,7 +498,6 @@ static bool _init(void)
 		ERROR("create task failed\n");
 		return false;
 	}
-
 
     return true;
 }
@@ -464,8 +550,60 @@ static bool dbgConnect(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgTimer(uint8_t argc, char** argv)
+{
+	int ret;
+
+	if (argc >= 2) {
+		uint32_t period = strtol(argv[1], NULL, 10);
+		xTimerChangePeriod(g_ssl.kaTimer, period, 0);
+	}
+
+	ret = xTimerStart(g_ssl.kaTimer, 0);
+	PRINT("%d\n", ret);
+	return true;
+}
+
+static bool dbgClose(uint8_t argc, char** argv)
+{
+	bool	isCmd = false;
+	bool	isSteam = false;
+
+	if (argc < 2) {
+		isCmd	= true;
+		isSteam	= true;
+	} else {
+		if (argv[1][0]=='c') {
+			isCmd = true;
+		}
+		if (argv[1][0]=='s') {
+			isSteam = true;
+		}
+	}
+
+	if (isCmd) {
+	    mbedtls_net_free(&g_ssl.fd_cmd);
+	}
+	if (isSteam) {
+	    mbedtls_net_free(&g_ssl.fd_stream);
+	}
+	return true;
+}
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
+	PRINT("cmd    : %d\n", g_ssl.fd_cmd.fd);
+	PRINT("stresam: %d\n", g_ssl.fd_stream.fd);
+
+	BaseType_t timerState = xTimerIsTimerActive(g_ssl.kaTimer);
+	uint32_t expiration = xTimerGetExpiryTime(g_ssl.kaTimer);
+	int32_t	ticks = xTaskGetTickCount();
+	if (timerState) {
+		PRINT("timer active: %d %d %d\n", timerState, expiration, expiration-ticks);
+	} else {
+		PRINT("timer not active\n");
+	}
+
 	return true;
 }
 
@@ -474,6 +612,8 @@ DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("tls", NULL)
 		DEBUG_MENU_CMD("status",      NULL,	NULL, dbgStatus)
 		DEBUG_MENU_CMD("connect",     NULL,	NULL, dbgConnect)
+		DEBUG_MENU_CMD("close",  	  NULL,	NULL, dbgClose)
+		DEBUG_MENU_CMD("timer",  	  NULL,	NULL, dbgTimer)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

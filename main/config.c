@@ -16,7 +16,7 @@
 #include "nvs.h"
 #include "mdns.h"
 #include "wifi.h"
-#include "wss.h"
+#include "http.h"
 #include "max30001.h"
 
 bool CFG_parseWssCommand(char* pStr, size_t size)

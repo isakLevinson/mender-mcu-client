@@ -6,8 +6,8 @@ import ssl
 import binascii
 import time
 
-cert_path = "main/certs/servercert.pem"
-uri = "pnu_5.local"
+#cert_path = "main/certs/servercert.pem"
+uri = "pnu5.local"
 
 def ascii_hex_to_binary_array(ascii_hex_string):
     # Ensure the string length is even
@@ -31,17 +31,38 @@ def string_to_binary_array(input_string):
     binary_array = [f'0x{byte:02x}' for byte in byte_array]
     return binary_array
 
-async def cmd():
-    ssl_context = ssl.create_default_context()
+def ssl_create_context():
+    ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    ssl_context.load_cert_chain(certfile="../certs/client.crt", keyfile="../certs/client.key")
+    ssl_context.load_verify_locations(cafile="../certs/ca.crt")
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
+    return ssl_context
+
+async def cmd():
+    ssl_context = ssl_create_context()
 
     reader, writer = await asyncio.open_connection(uri, 1000, ssl=ssl_context, server_hostname='host')
+    sock = writer.get_extra_info('socket')
+    if sock is None:
+        raise RuntimeError("Could not access the underlying socket")
+
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    if hasattr(socket, 'TCP_KEEPIDLE'):
+        print('TCP_KEEPALIVE')
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 5)  # Idle time before keepalive (Linux)
+    if hasattr(socket, 'TCP_KEEPINTVL'):
+        print('TCP_KEEPINTVL')
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 2)  # Interval between probes (Linux)
+    if hasattr(socket, 'TCP_KEEPCNT'):
+        print('TCP_KEEPCNT')
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)     # Max failed probes (Linux)
 
     async def send():
-        count = 0
+        count = int(0)
+        timeout = int(10)
         while True:
-            message = "123418%02x00" % (count)
+            message = "123418%02x%02x%02x" % (count%256, count>>8, timeout)
 #            print("sending", message)
             count += 1
             if count>255:
@@ -63,15 +84,14 @@ async def cmd():
             print("rx", line.hex(' '))
         print("recv exited")
 
-    await asyncio.gather(send(), recv())
+#    await asyncio.gather(send(), recv())
+    await asyncio.gather(recv())
 
     writer.close()
     await writer.wait_closed()
 
 async def events():
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
+    ssl_context = ssl_create_context()
 
     reader, writer = await asyncio.open_connection(uri, 1001, ssl=ssl_context, server_hostname='host')
 

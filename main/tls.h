@@ -11,4 +11,5 @@ bool TLS_init(void);
 
 #else
 #define TLS_init()  true
+#define TLS_keepaliveRestart(period)
 #endif
