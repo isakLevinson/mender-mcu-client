@@ -502,6 +502,19 @@ static bool _init(void)
     return true;
 }
 
+bool	TLS_isConnected(void)
+{
+	if(g_ssl.fd_cmd.fd < 0) {
+		return false;
+	}
+
+	if(g_ssl.fd_stream.fd < 0) {
+		return false;
+	}
+
+	return true;
+}
+
 static bool dbgConnect(uint8_t argc, char** argv)
 {
 #if 0
