@@ -45,6 +45,11 @@
 #define WEB_SERVER "192.168.1.100"
 #define WEB_PORT	"2000"
 
+typedef struct {
+	mbedtls_ssl_context *ssl;
+	mbedtls_net_context *fd;
+} cmd_ctx_arg_t;
+
 static struct {
     mbedtls_ssl_config conf;
     mbedtls_entropy_context entropy;
@@ -63,15 +68,20 @@ static struct {
 	TimerHandle_t		kaTimer;
 } g_ssl;
 
-bool TLS_keepaliveRestart(uint16_t period)
+static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
+{   
+	TRACE("SSLDBG: %s:%04d: %s", file, line, str);
+}
+
+static bool _cmdKa(uint8_t timeout)
 {
 	int ret;
 	
-	if (!period) {
+	if (!timeout) {
 		return false;
 	}
 
-	xTimerChangePeriod(g_ssl.kaTimer, period/10, 0);
+	xTimerChangePeriod(g_ssl.kaTimer, timeout*100, 0);
 	ret = xTimerStart(g_ssl.kaTimer, 0);
 	if (pdPASS != ret) {
 		return false;
@@ -79,12 +89,7 @@ bool TLS_keepaliveRestart(uint16_t period)
 	return true;
 }
 
-static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
-{   
-	TRACE("SSLDBG: %s:%04d: %s", file, line, str);
-}
-
-static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mbedtls_net_context *client_fd)
+static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mbedtls_net_context *client_fd, bool startKaTimer)
 {
     int ret;
 
@@ -104,7 +109,9 @@ static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mb
     mbedtls_ssl_set_bio(ssl, client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
     INFO("accept ok\n");
 
-    INFO("Performing the SSL/TLS handshake...\n");
+	if (startKaTimer) {
+		_cmdKa(30);
+	}
 
     while ((ret = mbedtls_ssl_handshake(ssl)) != 0) {
         if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
@@ -157,6 +164,7 @@ static bool _write(mbedtls_ssl_context *ssl, void *buf, int len)
 
         if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
             WARN("mbedtls_ssl_write returned %d\n", ret);
+			//mbedtls_print_error_msg(ret);
             return false;
         }
     }
@@ -167,11 +175,17 @@ static bool _write(mbedtls_ssl_context *ssl, void *buf, int len)
 static bool _cmdWrite(void* pArg, void* i_pBuf, uint16_t size)
 {
     bool ret;
-    mbedtls_ssl_context *ssl = (mbedtls_ssl_context *)pArg;
+
+	cmd_ctx_arg_t *ctxarg = (cmd_ctx_arg_t*)pArg;
 
     TRACE_BUF("_cmdWrite",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
-    ret = _write(ssl, i_pBuf, size);
+	if (ctxarg->fd->fd < 0) {
+		WARN("socket is closed\n");
+		return false;
+	}
+
+    ret = _write(ctxarg->ssl, i_pBuf, size);
     return ret;
 }
 
@@ -206,9 +220,15 @@ static void _taskCmd(void* arg)
     mbedtls_ssl_context ssl;
     mbedtls_net_context listen_fd;
 
+	cmd_ctx_arg_t ctxarg = {
+		.ssl	= &ssl,
+		.fd		= &g_ssl.fd_cmd,
+	};
+
     CMD_CONTEXT context = {
         .p_cbSend   = _cmdWrite,
-        .pArg       = &ssl,
+		.p_cbKa		= _cmdKa,
+        .pArg       = &ctxarg,
     };
 
 	ret = _taskInit(&ssl, &listen_fd, &g_ssl.fd_cmd, TLS_CMD_PORT);
@@ -219,14 +239,12 @@ static void _taskCmd(void* arg)
     while (true) {
 		vTaskDelay(100);
 
-        ret = _accept(&ssl, &listen_fd, &g_ssl.fd_cmd);
+        ret = _accept(&ssl, &listen_fd, &g_ssl.fd_cmd, true);
 		if (!ret) {
 			continue;
 		}
 
 		INFO("cmd connected\n");
-
-		TLS_keepaliveRestart(30000);
 
         do {
             len = sizeof(buf) - 1;
@@ -259,7 +277,7 @@ static void _taskCmd(void* arg)
             }
     
             len = ret;
-            INFO_BUF("cmd",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, len);
+            TRACE_BUF("cmd",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, len);
     
             CMD_processBuffer(&context, buf, len);
         } while (1);
@@ -279,9 +297,14 @@ static void _taskStream(void* arg)
     mbedtls_ssl_context ssl;
     mbedtls_net_context listen_fd;
 
-    CMD_CONTEXT context = {
-        .p_cbSend   = _cmdWrite,
-        .pArg       = &ssl,
+	cmd_ctx_arg_t ctxarg = {
+		.ssl	= &ssl,
+		.fd		= &g_ssl.fd_stream,
+	};
+
+	CMD_CONTEXT context = {
+        .p_cbSend	= _cmdWrite,
+        .pArg       = &ctxarg,
     };
     CMD_setStreamContext(&context);
 
@@ -293,7 +316,7 @@ static void _taskStream(void* arg)
     while (true) {
 		vTaskDelay(100);
 
-        ret = _accept(&ssl, &listen_fd, &g_ssl.fd_stream);
+        ret = _accept(&ssl, &listen_fd, &g_ssl.fd_stream, false);
 		if (!ret) {
 			continue;
 		}

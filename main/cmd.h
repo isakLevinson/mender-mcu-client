@@ -8,10 +8,12 @@ extern "C" {
 
 typedef bool (*CMD_RESPONSE_CB)(void* pArg, void* i_pBuf, uint16_t size);
 typedef bool (*CMD_STATUS_CB)(void* pArg, uint32_t status);
+typedef bool (*CMD_KA_CB)(uint8_t timeout);
 
 typedef struct {
 	CMD_RESPONSE_CB	p_cbSend;
 	CMD_STATUS_CB	p_cbStatus;
+	CMD_KA_CB		p_cbKa;
 	void*			pArg;
 } CMD_CONTEXT;
 

@@ -8,7 +8,6 @@
 
 // Register WiFi functions
 bool TLS_init(void);
-bool TLS_keepaliveRestart(uint16_t period);
 
 #else
 #define TLS_init()  true

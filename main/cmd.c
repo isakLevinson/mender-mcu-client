@@ -282,7 +282,7 @@ static void _taskStreamer(void* arg)
 		}
 		ret = _sendResp(&g_cmd.streamContext, CMD_RSP_EVT_STREAM, &rsp, sizeof(rsp));
 		if (!ret) {
-			ERROR("failed to send. stopping streaming\n");
+			WARN("failed to send. stopping streaming\n");
 			_streamPeriod(0);
 		}
 
@@ -405,8 +405,9 @@ static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq,
 
 	_sendResp(i_pContext, CMD_RSP_KA_CNT, &rsp, sizeof(rsp));
 
-	// TODO: use callback instead
-	TLS_keepaliveRestart(i_pReq->timeout * 1000);
+	if (i_pContext->p_cbKa) {
+		i_pContext->p_cbKa(i_pReq->timeout);
+	}
 
 	return true;
 }
@@ -750,7 +751,7 @@ bool CMD_processBuffer(CMD_CONTEXT* i_pContext, uint8_t* i_pBuf, uint16_t size)
 	uint8_t len = i_pBuf[0];
 	uint8_t type = i_pBuf[2];
 
-	INFO("CMD_processBuffer size:%d, len:%d, type %02x\n", size, len, type);
+	TRACE("CMD_processBuffer size:%d, len:%d, type %02x\n", size, len, type);
 	_processMessage(i_pContext, type, i_pBuf+3, size-3);
 	return true;
 }
@@ -984,6 +985,7 @@ bool CMD_setStreamContext(CMD_CONTEXT* i_pContext)
 	}
 
 	g_cmd.streamContext.p_cbSend	= i_pContext->p_cbSend;
+	g_cmd.streamContext.p_cbKa		= i_pContext->p_cbKa;
 	g_cmd.streamContext.pArg		= i_pContext->pArg;
 
 	return true;

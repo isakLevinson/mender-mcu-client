@@ -84,8 +84,8 @@ async def cmd():
             print("rx", line.hex(' '))
         print("recv exited")
 
-    await asyncio.gather(send(), recv())
-#    await asyncio.gather(recv())
+#    await asyncio.gather(send(), recv())
+    await asyncio.gather(recv())
 
     writer.close()
     await writer.wait_closed()
