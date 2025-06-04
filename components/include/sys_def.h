@@ -10,7 +10,9 @@
 #include "memory.h"
 #include "sdkconfig.h"
 
-#if CONFIG_BUILD_TYPE_PNU
+#if CONFIG_BUILD_TYPE_ESP
+#define PROMPT     "esp"
+#elif CONFIG_BUILD_TYPE_PNU
 #define PROMPT     "pnu"
 #elif CONFIG_BUILD_TYPE_GSR
 #define PROMPT     "gsr"
@@ -20,7 +22,12 @@
 #error Build type not defined
 #endif
 
-#if CONFIG_BUILD_TYPE_PNU
+#if CONFIG_BUILD_TYPE_ESP
+#define USE_ADC		0
+#define USE_LED		1
+#define USE_STREAM	1
+
+#elif CONFIG_BUILD_TYPE_PNU
 #define USE_ADC		1
 #define USE_LED		1
 #define USE_STREAM	1
@@ -83,6 +90,10 @@
 #define GPIO_ADC1_CHAN1          ADC_CHANNEL_2   /* gpio 3*/
 #define GPIO_ADC1_CHAN2          ADC_CHANNEL_1   /* gpio 2*/
 #define GPIO_ADC1_CHAN3          ADC_CHANNEL_3   /* gpio 4*/
+
+#if CONFIG_BUILD_TYPE_ESP
+#define GPIO_LED        13
+#endif
 
 #if CONFIG_BUILD_TYPE_PNU
 #define GPIO_VALVE_0    9

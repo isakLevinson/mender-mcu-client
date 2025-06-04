@@ -22,6 +22,9 @@ menu "project type"
         prompt "project type"
         default BUILD_TYPE_PNU
 
+        config BUILD_TYPE_ESP
+            bool "ESP"
+
         config BUILD_TYPE_PNU
             bool "PNU"
 

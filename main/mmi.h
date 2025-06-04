@@ -1,6 +1,8 @@
 #pragma once
 
-#if CONFIG_BUILD_TYPE_PNU || CONFIG_BUILD_TYPE_GSR
+#include <sys_def.h>
+
+#if USE_LED
 
 bool MMI_init(void);
 

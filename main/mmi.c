@@ -61,6 +61,15 @@ static void  _handleBlink(int32_t time)
 	}
 }
 
+static void _updateRgb(uint8_t r, uint8_t g, uint8_t b, uint16_t interval, uint16_t ton)
+{
+	g_led.r = r;
+	g_led.g = g;
+	g_led.b = b;
+	g_led.interval	= interval;
+	g_led.onTime	= ton;
+}
+
 static void _task(void* arg)
 {
 	bool    ret;
@@ -69,10 +78,7 @@ static void _task(void* arg)
 	ret = FACTORY_factoryGetSn(NULL);
 	if (!ret) {
 		ERROR("no SN in factory storage. Halting on error\n");
-		g_led.r = 100;
-		g_led.g = 0;
-		g_led.b = 0;
-		g_led.interval = 0;
+		_updateRgb(100,0,0,0,0);
 		time = TIME_get32();
 		_handleBlink(time);
 		while (true) {
@@ -85,7 +91,6 @@ static void _task(void* arg)
 		time = TIME_get32();
 		_handleBlink(time);
 
-#if CONFIG_BUILD_TYPE_PNU
 		if (!g_led.isConfigurated) {
 			char    ssid[32];
 			char    passwd[32];
@@ -96,54 +101,38 @@ static void _task(void* arg)
 		}
 
 		if (!g_led.isConfigurated) {
-			g_led.r = 100;
-			g_led.g = 100;
-			g_led.b = 100;
-			g_led.interval = 0;
+			_updateRgb(100,100,100,0,0);
 		} else {
 			bool isConnected = WIFI_isConnected();
 			if (isConnected) {
 				bool     err = false;
 				uint16_t soc;
 
+#if CONFIG_BUILD_TYPE_PNU
 				ret = fg_get_soc(&soc);
 				if (!ret) {
 					soc = 0;
 					err = true;
 				}
-
+#else
+				err = false;
+				soc=100;
+#endif
 				if (err) {
-					g_led.r = 100;
-					g_led.g = 0;
-					g_led.b = 0;
+					_updateRgb(100,0,0,0,0);
 					g_led.interval  = 0;
 				} else if (soc < 15)  {
-					g_led.r = 100;
-					g_led.g = 0;
-					g_led.b = 0;
-					g_led.interval  = 500;
-					g_led.onTime    = 100;
+					_updateRgb(100,0,0,500,100);
 				} else if (soc < 30) {
-					g_led.r = 100;
-					g_led.g = 0;
-					g_led.b = 0;
-					g_led.interval  = 1000;
-					g_led.onTime    = 200;
+					_updateRgb(100,0,0,1000,200);
 				} else {
-					g_led.r = 0;
-					g_led.g = 100;
-					g_led.b = 0;
-					g_led.interval = 0;
+					_updateRgb(0,100,0,0,0);
 				}
 			} else {
-				g_led.r = 0;
-				g_led.g = 100;
-				g_led.b = 0;
-				g_led.interval  = 1000;
-				g_led.onTime    = 200;
+				_updateRgb(0,100,0,1000,200);
 			}
 		}
-#endif
+
 		// TODO: find better place
 		static int32_t  pressTime;
 		static bool     trig = false;

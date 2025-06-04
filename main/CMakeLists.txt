@@ -1,4 +1,8 @@
 
+if (CONFIG_BUILD_TYPE_ESP)
+	set(SPECIFIC_SRC "mmi.c")
+endif()
+
 if (CONFIG_BUILD_TYPE_PNU)
 	set(SPECIFIC_SRC "ctrl.c" "pump.c" "max17049.c" "adc.c" "mmi.c")
 endif()
