@@ -80,7 +80,8 @@
 	rsp(KA_CNT,						0x19,	uint16_t	cnt;			\
 											uint8_t		batVoltage;		\
 											uint8_t		soc;)			\
-										
+	rsp(VER_STR,					0x1a,	uint8_t		hw[3];			\
+											char		sw[0];)			\										
 
 // *INDENT-ON*
 
@@ -419,21 +420,18 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 {
 	INFO("VER\n");
 
-	CMD_RSPBUF_VER	rsp;
-	uint32_t		numbers[3];
+	CMD_DECLARE_RSP_BUF(VER_STR, 64);
 
-	MENDER_version(NULL, NULL, numbers);
+	char*	ver;
+	MENDER_version(NULL, &ver, NULL);
 
-	memset(rsp.hash, 0, sizeof(rsp.hash));
-	rsp.sw[0] = numbers[0];
-	rsp.sw[1] = numbers[1];
-	rsp.sw[2] = numbers[2];
+	pRsp->hw[0] = HW_VERSION_MAJOR;
+	pRsp->hw[1] = HW_VERSION_MINOR;
+	pRsp->hw[2] = HW_VERSION_BUILD;
 
-	rsp.hw[0] = HW_VERSION_MAJOR;
-	rsp.hw[1] = HW_VERSION_MINOR;
-	rsp.hw[2] = HW_VERSION_BUILD;
+	strncpy(pRsp->sw, ver, 64);
 
-	_sendResp(i_pContext, CMD_RSP_VER, &rsp, sizeof(rsp));
+	_sendResp(i_pContext, CMD_RSP_VER_STR, pRsp, sizeof(*pRsp) + strlen(pRsp->sw));
 
 	return true;
 }

@@ -451,11 +451,12 @@ static esp_err_t events_handler(httpd_req_t* req)
 static esp_err_t _config_handler(httpd_req_t* req)
 {
 	//esp_err_t ret;
-	bool    	ret;
-	char    	buf[256];
-	bool    	validSsid;
-	bool    	validPasswd;
-	const char* pResp = "OK\n";
+	bool    		ret;
+	PARSE_STATUS	status;
+	char    		buf[256];
+	bool    		validSsid;
+	bool    		validPasswd;
+	const char* 	pResp = "OK\n";
 
 	int fd = httpd_req_to_sockfd(req);
 
@@ -476,7 +477,16 @@ static esp_err_t _config_handler(httpd_req_t* req)
 
 	//INFO("POST: %.*s\n", ret, buf);
 	INFO_BUF("/config POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
-	ret = CFG_parseWssCommand(buf, req->content_len);
+	status = CFG_parseWssCommand(buf, req->content_len);
+	switch (status) {
+		case PARSE_STATUS_OK:					pResp = "OK";	break;
+		case PARSE_STATUS_SYNTAX_ERROR:			pResp = "SYNTAX_ERROR";	break;
+		case PARSE_STATUS_UNSUPPORTED_PARAM:	pResp = "UNSUPPORTED_PARAM";	break;
+		case PARSE_STATUS_MISSING_PARAM:		pResp = "MISSING_PARAM";		break;
+		case PARSE_STATUS_INVALID_CREDENTIAL:	pResp = "INVALID_CREDENTIAL";	break;
+		default:
+			pResp = "INTERNAL_ERROR";
+	}
 	if (!ret) {
 		pResp = "ERROR\n";
 	}

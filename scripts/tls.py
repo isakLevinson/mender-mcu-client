@@ -62,7 +62,8 @@ async def cmd():
         count = int(0)
         timeout = int(10)
         while True:
-            message = "123418%02x%02x%02x" % (count%256, count>>8, timeout)
+#            message = "123418%02x%02x%02x" % (count%256, count>>8, timeout)
+            message = "123403"
 #            print("sending", message)
             count += 1
             if count>255:
@@ -84,8 +85,8 @@ async def cmd():
             print("rx", line.hex(' '))
         print("recv exited")
 
-#    await asyncio.gather(send(), recv())
-    await asyncio.gather(recv())
+    await asyncio.gather(send(), recv())
+#    await asyncio.gather(recv())
 
     writer.close()
     await writer.wait_closed()
