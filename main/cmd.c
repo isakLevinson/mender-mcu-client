@@ -158,7 +158,7 @@ static struct {
 	int32_t				batteryCheckTime;
 	uint8_t				socNextThreshold;
 	uint32_t			counter;
-
+	int32_t				kaTime;
 	#if CONFIG_BUILD_TYPE_EEG
 	char		streamBuf[2000];
 	uint16_t	streamSize;
@@ -387,7 +387,10 @@ static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq,
 	uint16_t	soc;
 	uint16_t	voltage;
 
-	INFO("KA_CNT %d %d\n", i_pReq->cnt, i_pReq->timeout);
+	int32_t time = TIME_get32();
+
+	INFO("KA_CNT(%d) %d %d\n", time-g_cmd.kaTime, i_pReq->cnt, i_pReq->timeout);
+	g_cmd.kaTime = time;
 
 	// TODO: use real values
 	rsp.cnt			= i_pReq->cnt;

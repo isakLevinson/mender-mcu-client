@@ -13,13 +13,14 @@
 #include "driver/gpio.h"
 
 #include "cJSON.h"
+#include "config.h"
 #include "nvs.h"
 #include "mdns.h"
 #include "wifi.h"
 #include "http.h"
 #include "max30001.h"
 
-bool CFG_parseWssCommand(char* pStr, size_t size)
+PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 {
 	cJSON* json = NULL;
 	const cJSON* object = NULL;
@@ -29,7 +30,7 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 	json = cJSON_ParseWithLength(pStr, size);
 	if (!json) {
 		WARN("json parse error\n");
-		return false;
+		return PARSE_STATUS_SYNTAX_ERROR;
 	}
 
 	object = json;
@@ -43,7 +44,7 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 					INFO("name:%s %d\n", child->string, isValidName);
 					if (!isValidName) {
 						WARN("invalid name %s\n", child->string);
-						return false;
+						return PARSE_STATUS_UNSUPPORTED_PARAM;
 					}
 				}
 
@@ -125,7 +126,7 @@ bool CFG_parseWssCommand(char* pStr, size_t size)
 		}
 	}
 
-	return true;
+	return PARSE_STATUS_OK;
 }
 
 bool CFG_default(void)
