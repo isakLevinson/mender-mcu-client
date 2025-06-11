@@ -137,8 +137,6 @@ static void got_ip_handler(void* arg, esp_event_base_t event_base,
 	xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 
 	NVS_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
-	WIFI_stopAp();
-	wss_config_stop();
 	MENDER_execute();
 	ntp_restart();
 }
@@ -165,6 +163,9 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
 				break;
 			case WIFI_EVENT_HOME_CHANNEL_CHANGE:
 				strEvent = "WIFI_EVENT_HOME_CHANNEL_CHANGE";
+				break;
+			case WIFI_EVENT_AP_STOP:
+				strEvent = "WIFI_EVENT_AP_STOP";
 				break;
 			case WIFI_EVENT_STA_CONNECTED:
 				strEvent = "WIFI_EVENT_STA_CONNECTED";

@@ -491,6 +491,8 @@ static esp_err_t _config_handler(httpd_req_t* req)
 		pResp = "ERROR\n";
 	}
 
+	INFO("CFG_parseWssCommand <%s>\n", pResp);
+
 	/* Send response with body set as the
 	 * string passed in user context*/
 	//const char* resp_str = (const char*) req->user_ctx;
@@ -499,6 +501,8 @@ static esp_err_t _config_handler(httpd_req_t* req)
 
 	// End response
 	httpd_resp_send_chunk(req, NULL, 0);
+
+	INFO("#2\n");
 
 	return ESP_OK;
 }

@@ -19,9 +19,22 @@
 #include "wifi.h"
 #include "http.h"
 #include "max30001.h"
+#include "time.h"
+
+static struct {
+	TimerHandle_t		timer;
+} g_cfg;
+
+static void _timer( TimerHandle_t pxTimer )
+{
+	INFO("config _timer\n");
+	wss_config_stop();
+	WIFI_stopAp();
+}
 
 PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 {
+	int ret;
 	cJSON* json = NULL;
 	const cJSON* object = NULL;
 	const cJSON* objectSsid = NULL;
@@ -54,16 +67,6 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 		object = object->next;
 	}
 
-	objectSsid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
-	if (objectSsid) {
-		INFO("ssid: %s\n", objectSsid->valuestring);
-		objectPasswd = cJSON_GetObjectItemCaseSensitive(json, "passwd");
-		if (objectPasswd) {
-			INFO("passwd: %s\n", objectPasswd->valuestring);
-			INFO("setting ssid and passwd\n");
-			WIFI_sta_connect(objectSsid->valuestring, objectPasswd->valuestring);
-		}
-	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "cert");
 	if (object) {
@@ -126,6 +129,38 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 		}
 	}
 
+	objectSsid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
+	if (objectSsid) {
+		INFO("ssid: %s\n", objectSsid->valuestring);
+		objectPasswd = cJSON_GetObjectItemCaseSensitive(json, "passwd");
+		if (objectPasswd) {
+			bool connected = false;
+			int32_t t;
+			int32_t t0;
+			INFO("passwd: %s\n", objectPasswd->valuestring);
+			WIFI_sta_connect(objectSsid->valuestring, objectPasswd->valuestring);
+
+			t0 = TIME_get32();
+			do {
+				vTaskDelay(100);
+				t = TIME_get32();
+				if (t - t0 > WIFI_CONNECTION_TIMEOUT) {
+					return PARSE_STATUS_INVALID_CREDENTIAL;
+				}
+				connected = WIFI_isConnected();
+				TRACE("#1 %d %d\n", connected, t-t0);
+			} while (!connected);
+			INFO("CFG_parseWssCommand connected\n");
+		}
+	}
+
+	INFO("CFG_parseWssCommand: PARSE_STATUS_OK\n");
+
+	ret = xTimerStart(g_cfg.timer, 0);
+	if (pdPASS != ret) {
+		ERROR("failed to start timer\n");
+	}
+
 	return PARSE_STATUS_OK;
 }
 
@@ -134,7 +169,6 @@ bool CFG_default(void)
 	NVS_eraseAll();
 	WIFI_sta_disconnect();
 	WIFI_startAp();
-
 	wss_config_start();
 	return true;
 }
@@ -266,4 +300,6 @@ DEBUG_MENU_END
 void CFG_init(void)
 {
 	DBG_TREE_add("/",		g_menu);
+
+	g_cfg.timer = xTimerCreate("config", 1000, pdFALSE, NULL, _timer);
 }
