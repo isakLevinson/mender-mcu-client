@@ -16,6 +16,7 @@
 #include "led_strip.h"
 #include "max17049.h"
 #include "nvs.h"
+#include "tls.h"
 
 static struct {
 	led_strip_handle_t led_strip;
@@ -126,10 +127,15 @@ static void _task(void* arg)
 				} else if (soc < 30) {
 					_updateRgb(100,0,0,1000,200);
 				} else {
-					_updateRgb(0,100,0,0,0);
+					if (TLS_isConnected()) {
+						_updateRgb(0,100,0,0,0);
+					} else {
+						_updateRgb(0,100,0,1000,10);
+					}
+
 				}
 			} else {
-				_updateRgb(0,100,0,1000,200);
+				_updateRgb(0,100,0,200,50);
 			}
 		}
 
