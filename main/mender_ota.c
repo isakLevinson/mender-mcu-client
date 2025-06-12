@@ -573,7 +573,7 @@ shell_close_cb(void)
 #endif /* CONFIG_MENDER_CLIENT_TROUBLESHOOT_SHELL */
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT */
 
-bool MENDER_version(char** ppProjName, char** ppVer, uint32_t* pNumbers)
+bool MENDER_version(char** ppProjName, char** ppVer)
 {
 	const esp_partition_t* partition = esp_ota_get_running_partition();
 	ESP_ERROR_CHECK(esp_ota_get_partition_description(partition, &g_mender.running_app_info));
@@ -584,10 +584,6 @@ bool MENDER_version(char** ppProjName, char** ppVer, uint32_t* pNumbers)
 
 	if (ppVer) {
 		*ppVer = g_mender.running_app_info.version;
-	}
-
-	if (pNumbers) {
-		sscanf(g_mender.running_app_info.version, "%d.%d.%d", &pNumbers[0], &pNumbers[1], &pNumbers[2]);
 	}
 
 	return true;
@@ -640,7 +636,7 @@ static void _init(void)
 
 	char*	project_name;
 	char*	version;
-	MENDER_version(&project_name, &version, NULL);
+	MENDER_version(&project_name, &version);
 
 	/* Retrieve running version of the device */
 	INFO("Running project '%s' version '%s'\n", project_name, version);

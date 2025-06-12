@@ -425,7 +425,7 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 	char*		hw_ver;
 	char*		pVer = pRsp->sw_hw_str;
 
-	MENDER_version(NULL, &sw_ver, NULL);
+	MENDER_version(NULL, &sw_ver);
 	FACTORY_factoryGetHwRevision(&hw_ver);
 
 	pVer += sprintf(pVer, "%s\n", sw_ver); // include also the trailing '\0'
@@ -688,9 +688,8 @@ bool CMD_sendBatteryEvent(uint8_t soc, uint16_t voltage_mv)
 bool CMD_sendOtaStatusEvent(void)
 {
 	CMD_RSPBUF_EVT_OTA_STATUS	rsp;
-	uint32_t		numbers[3];
 
-	MENDER_version(NULL, NULL, numbers);
+	MENDER_version(NULL, NULL);
 
 	memset(rsp.hash, 0, sizeof(rsp.hash));
 	// TODO: replace with strings
