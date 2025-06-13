@@ -34,6 +34,7 @@
 #include "main.h"
 #include "nvs.h"
 #include "cmd.h"
+#include "factory.h"
 
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
 #ifdef CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER
@@ -626,17 +627,12 @@ static void _init(void)
 
 #endif /* CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER */
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT */
-
-	/* Read base MAC address of the device */
-	uint8_t mac[6];
-	char    mac_address[18];
-	ESP_ERROR_CHECK(esp_read_mac(mac, ESP_MAC_WIFI_STA));
-	sprintf(mac_address, "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-	INFO("MAC address of the device '%s'\n", mac_address);
-
 	char*	project_name;
 	char*	version;
+	char* sn;
+
 	MENDER_version(&project_name, &version);
+	FACTORY_factoryGetSn(&sn);
 
 	/* Retrieve running version of the device */
 	INFO("Running project '%s' version '%s'\n", project_name, version);
@@ -651,7 +647,7 @@ static void _init(void)
 	char* device_type = project_name;
 
 	/* Initialize mender-client */
-	mender_keystore_t  identity[]              = { { .name = "mac", .value = mac_address }, { .name = NULL, .value = NULL } };
+	mender_keystore_t  identity[]              = { { .name = "sn", .value = sn }, { .name = NULL, .value = NULL } };
 	mender_client_config_t    mender_client_config    = { .identity                     = identity,
 	                              .artifact_name                = artifact_name,
 	                              .device_type                  = device_type,
