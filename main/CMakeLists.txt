@@ -38,7 +38,6 @@ idf_component_register(
 
                 EMBED_TXTFILES	"${project_dir}/certs/server.crt"
 								"${project_dir}/certs/server.key"
-								"${project_dir}/certs/ca.crt"
 								"${project_dir}/ota_server_certs/ca_cert.pem"
 				)
 

@@ -73,9 +73,6 @@ extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
 extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
 extern const unsigned char prvtkey_pem_start[] asm("_binary_server_key_start");
 extern const unsigned char prvtkey_pem_end[]   asm("_binary_server_key_end");
-extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
-extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
-
 
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
 {   
@@ -424,8 +421,9 @@ static bool _sslInit(void)
 	const uint8_t* prvtkey_pem = prvtkey_pem_start;
 	int prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
 
-	const uint8_t* cacert_pem = ca_cert_start;
-	int cacert_len = ca_cert_end - ca_cert_start;
+    char* cacert_pem;
+    FACTORY_get(factory_id_ca_certificate, &cacert_pem);
+	int cacert_len = strlen(cacert_pem)+1;
 
     ret = mbedtls_x509_crt_parse(&g_ssl.srvcert, (const unsigned char *) servercert, servercert_len);
     if (ret != 0) {
@@ -640,10 +638,21 @@ static bool dbgStatus(uint8_t argc, char** argv)
     FACTORY_get(factory_id_ca_certificate, &caCert);
 
     if (caCert) {
-        ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)caCert, strlen(caCert));
+        uint32_t len = strlen(caCert)+1;
+
+        ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)caCert, len);
         if (ret < 0) {
             mbedtls_strerror(ret, errStr, sizeof(errStr));
             ERROR("Failed to parse CA cert: -0x%04x %s\n", -ret, errStr);
+
+            INFO("CA cert: %d\n", len);
+            for (int i=0; i<len; i++) {
+                if (caCert[i] < 0x20) {
+                    INFO("((%02x))", caCert[i]);
+                }
+                INFO("%c", caCert[i]);
+            }
+            INFO("\n###\n");
         } else {
             INFO("CA:\n");
             print_cert_dates(&ca_cert);
