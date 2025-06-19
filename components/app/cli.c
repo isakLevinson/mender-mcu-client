@@ -243,7 +243,7 @@ static bool dbgVer(uint8_t argc, char** argv)
 
 	PRINT("sn: %s\n", sn);
 	PRINT("proj: %s\n", proj);
-	PRINT("sw: \"%s\"\n", ver);
+	PRINT("sw: %s\n", ver);
 
 	if (hw_ver) {
 		PRINT("hw: %s\n", hw_ver);

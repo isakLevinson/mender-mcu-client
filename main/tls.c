@@ -68,6 +68,14 @@ static struct {
 	TimerHandle_t		kaTimer;
 } g_ssl;
 
+extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
+extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
+extern const unsigned char prvtkey_pem_start[] asm("_binary_server_key_start");
+extern const unsigned char prvtkey_pem_end[]   asm("_binary_server_key_end");
+extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
+extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
+
+
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
 {   
 	TRACE("SSLDBG: %s:%04d: %s", file, line, str);
@@ -404,42 +412,36 @@ static bool _sslInit(void)
     if ((ret = mbedtls_ctr_drbg_seed(&g_ssl.ctr_drbg, mbedtls_entropy_func, &g_ssl.entropy,
                                      (const unsigned char *) pers,
                                      strlen(pers))) != 0) {
-        ERROR("failed\n  ! mbedtls_ctr_drbg_seed returned %d\n", ret);
+        ERROR("mbedtls_ctr_drbg_seed returned %d\n", ret);
         return false;
     }
 
-    INFO("Loading the server cert. and key...\n");
-    extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
-	extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
+    INFO("Loading the server cert and key\n");
 	const uint8_t* servercert = server_cert_start;
 	int servercert_len = server_cert_end - server_cert_start;
 
-	extern const unsigned char prvtkey_pem_start[] asm("_binary_server_key_start");
-	extern const unsigned char prvtkey_pem_end[]   asm("_binary_server_key_end");
 	const uint8_t* prvtkey_pem = prvtkey_pem_start;
 	int prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
 
-	extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
-	extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
 	const uint8_t* cacert_pem = ca_cert_start;
 	int cacert_len = ca_cert_end - ca_cert_start;
 
     ret = mbedtls_x509_crt_parse(&g_ssl.srvcert, (const unsigned char *) servercert, servercert_len);
     if (ret != 0) {
-        ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
+        ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
         return false;
     }
 
    ret = mbedtls_x509_crt_parse(&g_ssl.srvcert, (const unsigned char *) cacert_pem, cacert_len);
     if (ret != 0) {
-        ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
+        ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
         return false;
     }
 
     ret =  mbedtls_pk_parse_key(&g_ssl.pkey, (const unsigned char *) prvtkey_pem, prvtkey_len, NULL, 0,
                                 mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
     if (ret != 0) {
-        ERROR("failed\n  !  mbedtls_pk_parse_key returned %d\n", ret);
+        ERROR("mbedtls_pk_parse_key returned %d\n", ret);
         return false;
     }
 
@@ -603,8 +605,18 @@ static bool dbgClose(uint8_t argc, char** argv)
 	return true;
 }
 
+void print_cert_dates(const mbedtls_x509_crt *cert)
+{
+    const mbedtls_x509_time *from = &cert->valid_from;
+    const mbedtls_x509_time *to   = &cert->valid_to;
+
+    INFO("From : %04d-%02d-%02d %02d:%02d:%02d\n", from->year, from->mon, from->day, from->hour, from->min, from->sec);
+    INFO("Until: %04d-%02d-%02d %02d:%02d:%02d\n", to->year, to->mon, to->day, to->hour, to->min, to->sec);
+}
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
+    char    errStr[256];
 	PRINT("cmd    : %d\n", g_ssl.fd_cmd.fd);
 	PRINT("stresam: %d\n", g_ssl.fd_stream.fd);
 
@@ -617,7 +629,58 @@ static bool dbgStatus(uint8_t argc, char** argv)
 		PRINT("timer not active\n");
 	}
 
+    mbedtls_x509_crt ca_cert;
+    mbedtls_x509_crt server_cert;
+
+    mbedtls_x509_crt_init(&ca_cert);
+    mbedtls_x509_crt_init(&server_cert);
+
+    int ret = mbedtls_x509_crt_parse(&ca_cert, ca_cert_start, ca_cert_end - ca_cert_start);
+    if (ret < 0) {
+        mbedtls_strerror(ret, errStr, sizeof(errStr));
+        ERROR("Failed to parse CA cert: -0x%04x %s\n", -ret, errStr);
+        return true;
+    }
+
+    ret = mbedtls_x509_crt_parse(&server_cert, server_cert_start, server_cert_end - server_cert_start);
+    if (ret < 0) {
+        mbedtls_strerror(ret, errStr, sizeof(errStr));
+        ERROR("Failed to parse server cert: -0x%04x %s\n", -ret, errStr);
+        return true;
+    }
+
+    print_cert_dates(&server_cert);
+    print_cert_dates(&ca_cert);
+
+    mbedtls_x509_crt_free(&server_cert);
+    mbedtls_x509_crt_free(&ca_cert);
+
+    uint32_t flags;
+    mbedtls_x509_crt_profile profile = mbedtls_x509_crt_profile_default;
+    ret = mbedtls_x509_crt_verify_with_profile(&server_cert, &ca_cert, NULL, &profile, NULL, &flags, NULL, NULL);
+
+    if (ret) {
+        char buf[256];
+        mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
+        INFO("Certificate verification failed: %s\n", buf);
+    } else {
+        INFO("Certificate verification SUCCESS.\n");
+    }
+
+
 	return true;
+}
+
+static bool dbgCreate(uint8_t argc, char** argv)
+{
+    mbedtls_pk_context pk;
+    mbedtls_pk_init(&pk);
+
+    // Generate ECDSA key (secp256r1)
+    mbedtls_pk_setup(&pk, mbedtls_pk_info_from_type(MBEDTLS_PK_ECKEY));
+    mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1, mbedtls_pk_ec(pk), mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
+
+    return true;
 }
 
 // *INDENT-OFF*
@@ -627,6 +690,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("connect",     NULL,	NULL, dbgConnect)
 		DEBUG_MENU_CMD("close",  	  NULL,	NULL, dbgClose)
 		DEBUG_MENU_CMD("timer",  	  NULL,	NULL, dbgTimer)
+		DEBUG_MENU_CMD("create",  	  NULL,	NULL, dbgCreate)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
