@@ -48,10 +48,7 @@
 #define USE_FLASH_LOG				1
 #define USE_FIFO_MEMORY_INTERFACE	1
 #define SIMULATION_MODE     true
-
-#define HW_VERSION_MAJOR		1
-#define HW_VERSION_MINOR		0
-#define HW_VERSION_BUILD		0
+#define WIFI_CONNECTION_TIMEOUT	10000
 
 #define USE_HTTP		1
 #define USE_TLS			1

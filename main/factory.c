@@ -80,7 +80,7 @@ static const cJSON* _getFactoryObjectStr(char* pObject, char** ppVal)
 	object = cJSON_GetObjectItemCaseSensitive(json, pObject);
 	if (!object) {
 		WARN("%s not found\n", pObject);
-		INFO_BUF(NULL, PRINT_BUF_STYLE_ASC_SIZE_NL, g_pBuf, partition->size);
+		TRACE_BUF(NULL, PRINT_BUF_STYLE_ASC_SIZE_NL, g_pBuf, partition->size);
 		goto error;
 	}
 
@@ -93,6 +93,9 @@ static const cJSON* _getFactoryObjectStr(char* pObject, char** ppVal)
 	return object;
 
 error:
+	if (ppVal) {
+		*ppVal = NULL;
+	}
 	return NULL;
 }
 
@@ -102,6 +105,7 @@ bool FACTORY_factoryGetPrivateKey(char** o_ppStr)
 
 	object = _getFactoryObjectStr("private_key", o_ppStr);
 	if (!object) {
+		*o_ppStr = NULL;
 		return false;
 	}
 

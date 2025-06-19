@@ -34,6 +34,7 @@
 #include "main.h"
 #include "nvs.h"
 #include "cmd.h"
+#include "factory.h"
 
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
 #ifdef CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER
@@ -573,7 +574,7 @@ shell_close_cb(void)
 #endif /* CONFIG_MENDER_CLIENT_TROUBLESHOOT_SHELL */
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT */
 
-bool MENDER_version(char** ppProjName, char** ppVer, uint32_t* pNumbers)
+bool MENDER_version(char** ppProjName, char** ppVer)
 {
 	const esp_partition_t* partition = esp_ota_get_running_partition();
 	ESP_ERROR_CHECK(esp_ota_get_partition_description(partition, &g_mender.running_app_info));
@@ -584,10 +585,6 @@ bool MENDER_version(char** ppProjName, char** ppVer, uint32_t* pNumbers)
 
 	if (ppVer) {
 		*ppVer = g_mender.running_app_info.version;
-	}
-
-	if (pNumbers) {
-		sscanf(g_mender.running_app_info.version, "%d.%d.%d", &pNumbers[0], &pNumbers[1], &pNumbers[2]);
 	}
 
 	return true;
@@ -630,17 +627,12 @@ static void _init(void)
 
 #endif /* CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER */
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT */
-
-	/* Read base MAC address of the device */
-	uint8_t mac[6];
-	char    mac_address[18];
-	ESP_ERROR_CHECK(esp_read_mac(mac, ESP_MAC_WIFI_STA));
-	sprintf(mac_address, "%02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-	INFO("MAC address of the device '%s'\n", mac_address);
-
 	char*	project_name;
 	char*	version;
-	MENDER_version(&project_name, &version, NULL);
+	char* sn;
+
+	MENDER_version(&project_name, &version);
+	FACTORY_factoryGetSn(&sn);
 
 	/* Retrieve running version of the device */
 	INFO("Running project '%s' version '%s'\n", project_name, version);
@@ -655,7 +647,7 @@ static void _init(void)
 	char* device_type = project_name;
 
 	/* Initialize mender-client */
-	mender_keystore_t  identity[]              = { { .name = "mac", .value = mac_address }, { .name = NULL, .value = NULL } };
+	mender_keystore_t  identity[]              = { { .name = "sn", .value = sn }, { .name = NULL, .value = NULL } };
 	mender_client_config_t    mender_client_config    = { .identity                     = identity,
 	                              .artifact_name                = artifact_name,
 	                              .device_type                  = device_type,

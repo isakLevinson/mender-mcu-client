@@ -80,7 +80,7 @@
 	rsp(KA_CNT,						0x19,	uint16_t	cnt;			\
 											uint8_t		batVoltage;		\
 											uint8_t		soc;)			\
-										
+	rsp(VER_STR,					0x1a,	char		sw_hw_str[0];)	\
 
 // *INDENT-ON*
 
@@ -419,21 +419,23 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 {
 	INFO("VER\n");
 
-	CMD_RSPBUF_VER	rsp;
-	uint32_t		numbers[3];
+	CMD_DECLARE_RSP_BUF(VER_STR, 128);
 
-	MENDER_version(NULL, NULL, numbers);
+	char*		sw_ver;
+	char*		hw_ver;
+	char*		pVer = pRsp->sw_hw_str;
 
-	memset(rsp.hash, 0, sizeof(rsp.hash));
-	rsp.sw[0] = numbers[0];
-	rsp.sw[1] = numbers[1];
-	rsp.sw[2] = numbers[2];
+	MENDER_version(NULL, &sw_ver);
+	FACTORY_factoryGetHwRevision(&hw_ver);
 
-	rsp.hw[0] = HW_VERSION_MAJOR;
-	rsp.hw[1] = HW_VERSION_MINOR;
-	rsp.hw[2] = HW_VERSION_BUILD;
+	pVer += sprintf(pVer, "%s\n", sw_ver); // include also the trailing '\0'
+	if (hw_ver) {
+		pVer += sprintf(pVer, "%s", hw_ver);
+	} else {
+		pVer += sprintf(pVer, "UNDEFINED");
+	}
 
-	_sendResp(i_pContext, CMD_RSP_VER, &rsp, sizeof(rsp));
+	_sendResp(i_pContext, CMD_RSP_VER_STR, pRsp, sizeof(*pRsp) + pVer - pRsp->sw_hw_str);
 
 	return true;
 }
@@ -686,11 +688,12 @@ bool CMD_sendBatteryEvent(uint8_t soc, uint16_t voltage_mv)
 bool CMD_sendOtaStatusEvent(void)
 {
 	CMD_RSPBUF_EVT_OTA_STATUS	rsp;
-	uint32_t		numbers[3];
 
-	MENDER_version(NULL, NULL, numbers);
+	MENDER_version(NULL, NULL);
 
 	memset(rsp.hash, 0, sizeof(rsp.hash));
+	// TODO: replace with strings
+#if 0
 	rsp.sw[0] = numbers[0];
 	rsp.sw[1] = numbers[1];
 	rsp.sw[2] = numbers[2];
@@ -698,7 +701,7 @@ bool CMD_sendOtaStatusEvent(void)
 	rsp.hw[0] = HW_VERSION_MAJOR;
 	rsp.hw[1] = HW_VERSION_MINOR;
 	rsp.hw[2] = HW_VERSION_BUILD;
-
+#endif
 	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_OTA_STATUS, &rsp, sizeof(rsp));
 
 	return true;
@@ -864,7 +867,7 @@ static bool	_json_VERSION_func(CMD_CONTEXT* i_pContext, char* pContent)
 	char*		proj;
 	char		str[256];
 	char*		pStr = str;
-
+#if 0
 	MENDER_version(&proj, &ver, numbers);
 	FACTORY_factoryGetSn(&sn);
 
@@ -889,7 +892,7 @@ static bool	_json_VERSION_func(CMD_CONTEXT* i_pContext, char* pContent)
 	pStr += sprintf(pStr, "}\n\n");
 	
 	_sendRespStr(i_pContext, str);
-
+#endif
 	return true;
 }
 

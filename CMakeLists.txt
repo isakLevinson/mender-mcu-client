@@ -6,10 +6,6 @@ cmake_minimum_required(VERSION 3.16)
 
 set(EXTRA_COMPONENT_DIRS $ENV{IDF_PATH}/examples/system/console/advanced/components	)
 
-# Read VERSION
-file(STRINGS ${CMAKE_SOURCE_DIR}/version.txt PROJECT_VER LIMIT_COUNT 1)
-set_property(DIRECTORY . APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/version.txt)
-
 # Extra components
 set(EXTRA_COMPONENT_DIRS $ENV{IDF_PATH}/examples/common_components/protocol_examples_common)
 

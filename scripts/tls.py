@@ -60,13 +60,12 @@ async def cmd():
 
     async def send():
         count = int(0)
-        timeout = int(10)
+        timeout = int(6)
         while True:
-            message = "123418%02x%02x%02x" % (count%256, count>>8, timeout)
+#            message = "123418%02x%02x%02x" % (count%256, count>>8, timeout)
+            message = "123403"
 #            print("sending", message)
             count += 1
-            if count>255:
-                count = 0
 
             bin_data = bytes.fromhex(message)
 
@@ -84,8 +83,8 @@ async def cmd():
             print("rx", line.hex(' '))
         print("recv exited")
 
-#    await asyncio.gather(send(), recv())
-    await asyncio.gather(recv())
+    await asyncio.gather(send(), recv())
+#    await asyncio.gather(recv())
 
     writer.close()
     await writer.wait_closed()
