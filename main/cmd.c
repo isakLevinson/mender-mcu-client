@@ -426,7 +426,7 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 	char*		pVer = pRsp->sw_hw_str;
 
 	MENDER_version(NULL, &sw_ver);
-	FACTORY_get(factory_id_hw_rev, &hw_ver);
+	FACTORY_get(factory_id_hw_revision, &hw_ver);
 
 	pVer += sprintf(pVer, "%s\n", sw_ver); // include also the trailing '\0'
 	if (hw_ver) {

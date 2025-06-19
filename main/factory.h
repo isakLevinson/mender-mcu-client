@@ -8,7 +8,7 @@
 	cmd(public_key)	\
 	cmd(manufacturing_date)	\
 	cmd(sn)	\
-	cmd(hw_rev)	\
+	cmd(hw_revision)	\
 	cmd(model)	\
 	cmd(ca_certificate)	\
 // *INDENT-ON*

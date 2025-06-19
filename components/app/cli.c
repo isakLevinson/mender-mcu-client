@@ -239,7 +239,7 @@ static bool dbgVer(uint8_t argc, char** argv)
 
 	MENDER_version(&proj, &ver);
 	FACTORY_get(factory_id_sn, &sn);
-	FACTORY_get(factory_id_hw_rev, &hw_ver);
+	FACTORY_get(factory_id_hw_revision, &hw_ver);
 
 	PRINT("sn: %s\n", sn);
 	PRINT("proj: %s\n", proj);

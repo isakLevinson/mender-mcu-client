@@ -26,6 +26,7 @@
 #include "mbedtls/error.h"
 #include "mbedtls/oid.h"
 
+#include "factory.h"
 
 #if defined(MBEDTLS_SSL_CACHE_C)
 #include "mbedtls/ssl_cache.h"
@@ -614,7 +615,10 @@ void print_cert_dates(const mbedtls_x509_crt *cert)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
+    int     ret;
     char    errStr[256];
+    char*   caCert;
+
 	PRINT("cmd    : %d\n", g_ssl.fd_cmd.fd);
 	PRINT("stresam: %d\n", g_ssl.fd_stream.fd);
 
@@ -633,22 +637,27 @@ static bool dbgStatus(uint8_t argc, char** argv)
     mbedtls_x509_crt_init(&ca_cert);
     mbedtls_x509_crt_init(&server_cert);
 
-    int ret = mbedtls_x509_crt_parse(&ca_cert, ca_cert_start, ca_cert_end - ca_cert_start);
-    if (ret < 0) {
-        mbedtls_strerror(ret, errStr, sizeof(errStr));
-        ERROR("Failed to parse CA cert: -0x%04x %s\n", -ret, errStr);
-        return true;
+    FACTORY_get(factory_id_ca_certificate, &caCert);
+
+    if (caCert) {
+        ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)caCert, strlen(caCert));
+        if (ret < 0) {
+            mbedtls_strerror(ret, errStr, sizeof(errStr));
+            ERROR("Failed to parse CA cert: -0x%04x %s\n", -ret, errStr);
+        } else {
+            INFO("CA:\n");
+            print_cert_dates(&ca_cert);
+        }
     }
 
     ret = mbedtls_x509_crt_parse(&server_cert, server_cert_start, server_cert_end - server_cert_start);
     if (ret < 0) {
         mbedtls_strerror(ret, errStr, sizeof(errStr));
         ERROR("Failed to parse server cert: -0x%04x %s\n", -ret, errStr);
-        return true;
     }
 
+    INFO("server:\n");
     print_cert_dates(&server_cert);
-    print_cert_dates(&ca_cert);
 
     mbedtls_x509_crt_free(&server_cert);
     mbedtls_x509_crt_free(&ca_cert);
