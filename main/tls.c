@@ -438,8 +438,7 @@ static bool _sslInit(void)
         return false;
     }
 
-    ret =  mbedtls_pk_parse_key(&g_ssl.pkey, (const unsigned char *) prvtkey_pem, prvtkey_len, NULL, 0,
-                                mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
+    ret =  mbedtls_pk_parse_key(&g_ssl.pkey, (const unsigned char *) prvtkey_pem, prvtkey_len, NULL, 0, mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
     if (ret != 0) {
         ERROR("mbedtls_pk_parse_key returned %d\n", ret);
         return false;
@@ -472,7 +471,6 @@ static bool _sslInit(void)
 
 	mbedtls_ssl_conf_authmode(&g_ssl.conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
 
-    INFO("ok\n");
     return true;
 }
 

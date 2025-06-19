@@ -11,12 +11,19 @@
 #include "esp_efuse_chip.h"
 #include "esp_efuse.h"
 #include "driver/gpio.h"
+#include "factory.h"
 
 #include "cJSON.h"
 #include "nvs.h"
 
 static const esp_partition_t* g_partition = NULL;
 static char*    g_pBuf;
+
+#define FACTORY_STR(id)	[factory_id_ ## id] = #id,
+
+char* g_str[] = {
+	FACTORY_LIST(FACTORY_STR)
+};
 
 static const esp_partition_t* find_partition(esp_partition_type_t type, esp_partition_subtype_t subtype, const char* name)
 {
@@ -79,12 +86,12 @@ static const cJSON* _getFactoryObjectStr(char* pObject, char** ppVal)
 
 	object = cJSON_GetObjectItemCaseSensitive(json, pObject);
 	if (!object) {
-		WARN("%s not found\n", pObject);
+		TRACE("%s not found\n", pObject);
 		TRACE_BUF(NULL, PRINT_BUF_STYLE_ASC_SIZE_NL, g_pBuf, partition->size);
 		goto error;
 	}
 
-	INFO("%s: %s\n", pObject, object->valuestring);
+	TRACE("%s: %s\n", pObject, object->valuestring);
 
 	if (ppVal) {
 		*ppVal = object->valuestring;
@@ -99,85 +106,41 @@ error:
 	return NULL;
 }
 
-bool FACTORY_factoryGetPrivateKey(char** o_ppStr)
+bool FACTORY_get(factory_id id, char** o_ppStr)
 {
 	const cJSON*  object;
 
-	object = _getFactoryObjectStr("private_key", o_ppStr);
+	if (id >= factory_id_last) {
+		return false;
+	}
+
+	object = _getFactoryObjectStr(g_str[id], o_ppStr);
+	if (!object) {
+		return false;
+	}
+
+	return true;
+}
+
+bool FACTORY_getByStr(char* idStr, char** o_ppStr)
+{
+	const cJSON*  object;
+	factory_id id = 0;
+
+	while (id < factory_id_last) {
+		if (!strcmp(idStr, g_str[id])) {
+			break;
+		}
+		id ++;
+	}
+
+	if (id >= factory_id_last) {
+		return false;
+	}
+
+	object = _getFactoryObjectStr(g_str[id], o_ppStr);
 	if (!object) {
 		*o_ppStr = NULL;
-		return false;
-	}
-
-	return true;
-}
-
-bool FACTORY_factoryGetPublicKey(char** o_ppStr)
-{
-	const cJSON*  object;
-
-	object = _getFactoryObjectStr("public_key", o_ppStr);
-	if (!object) {
-		return false;
-	}
-
-	return true;
-}
-
-bool FACTORY_factoryGetCertificate(char** o_ppStr)
-{
-	const cJSON*  object;
-
-	object = _getFactoryObjectStr("certificate", o_ppStr);
-	if (!object) {
-		return false;
-	}
-
-	return true;
-}
-
-bool FACTORY_factoryGetManufacturingDate(char** o_ppStr)
-{
-	const cJSON*  object;
-
-	object = _getFactoryObjectStr("manufacturing_date", o_ppStr);
-	if (!object) {
-		return false;
-	}
-
-	return true;
-}
-
-bool FACTORY_factoryGetSn(char** o_ppStr)
-{
-	const cJSON*  object;
-
-	object = _getFactoryObjectStr("sn", o_ppStr);
-	if (!object) {
-		return false;
-	}
-
-	return true;
-}
-
-bool FACTORY_factoryGetHwRevision(char** o_ppStr)
-{
-	const cJSON*  object;
-
-	object = _getFactoryObjectStr("hw_revision", o_ppStr);
-	if (!object) {
-		return false;
-	}
-
-	return true;
-}
-
-bool FACTORY_factoryGetModel(char** o_ppStr)
-{
-	const cJSON*  object;
-
-	object = _getFactoryObjectStr("model", o_ppStr);
-	if (!object) {
 		return false;
 	}
 
@@ -258,28 +221,14 @@ static bool dbgRead(uint8_t argc, char** argv)
 static bool dbgGetObject(uint8_t argc, char** argv)
 {
 	bool    ret;
-	const cJSON* object;
-	bool    isAll			= false;
-	bool    isPrivate		= false;
-	bool    isPublic		= false;
-	bool    isCertificate	= false;
-	bool    isDate			= false;
-	bool    isSn			= false;
-	bool    isRevision		= false;
-	bool    isModel			= false;
-	char*   pStr = NULL;
+	bool    isAll	= false;
+	char*   pStr	= NULL;
+	char*	pIdStr	= NULL;
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
-		ARGS_ENTRY("a",			ARGS_TYPE_SWITCH,		0,	"",				    &isAll)
-		ARGS_ENTRY("priv",		ARGS_TYPE_SWITCH,		0,	"",				    &isPrivate)
-		ARGS_ENTRY("pub",		ARGS_TYPE_SWITCH,		0,	"",				    &isPublic)
-		ARGS_ENTRY("cert",		ARGS_TYPE_SWITCH,		0,	"",				    &isCertificate)
-		ARGS_ENTRY("date",		ARGS_TYPE_SWITCH,		0,	"",				    &isDate)
-		ARGS_ENTRY("sn",		ARGS_TYPE_SWITCH,		0,	"",				    &isSn)
-		ARGS_ENTRY("rev",		ARGS_TYPE_SWITCH,		0,	"",				    &isRevision)
-		ARGS_ENTRY("model",		ARGS_TYPE_SWITCH,		0,	"",				    &isModel)
-		ARGS_ENTRY(NULL,	    ARGS_TYPE_STRING,		0,	"generic object",   &pStr)
+		ARGS_ENTRY("a",			ARGS_TYPE_SWITCH,		0,	"all",	    &isAll)
+		ARGS_ENTRY(NULL,	    ARGS_TYPE_STRING,		0,	"object",   &pIdStr)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
@@ -289,44 +238,25 @@ static bool dbgGetObject(uint8_t argc, char** argv)
 	}
 
 	if (isAll) {
-		isPrivate		 = true;
-		isPublic		= true;
-		isCertificate	= true;
-		isDate			= true;
-		isSn			= true;
-		isRevision		= true;
-		isModel			= true;
-	}
+		factory_id id;
 
-	if (isPrivate) {
-		FACTORY_factoryGetPrivateKey(NULL);
-	}
-	if (isPublic) {
-		FACTORY_factoryGetPublicKey(NULL);
-	}
-	if (isCertificate) {
-		FACTORY_factoryGetCertificate(NULL);
-	}
-	if (isDate) {
-		FACTORY_factoryGetManufacturingDate(NULL);
-	}
-	if (isSn) {
-		FACTORY_factoryGetSn(NULL);
-	}
-	if (isRevision) {
-		FACTORY_factoryGetHwRevision(NULL);
-	}
-	if (isModel) {
-		FACTORY_factoryGetModel(NULL);
-	}
-	if (pStr) {
-		object = _getFactoryObjectStr(argv[1], NULL);
-		if (!object) {
-			PRINT("failed to get object\n");
-			return true;
+		for (id=0; id<factory_id_last; id++) {
+			ret = FACTORY_get(id, &pStr);
+			if (ret) {
+				PRINT("%s: %s\n", g_str[id], pStr);
+			} else {
+				PRINT("%s: NULL\n", g_str[id]);
+			}
 		}
 
-		PRINT("%s\n", object->valuestring);
+		return true;
+	}
+
+	if (pIdStr) {
+		ret = FACTORY_getByStr(pIdStr, &pStr);
+		if (ret) {
+			PRINT("%s: %s\n", pIdStr, pStr);
+		}
 	}
 
 	return true;
@@ -379,7 +309,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("status",    	NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("findPart",  	NULL,		NULL, dbgFindPart)
 		DEBUG_MENU_CMD("rd",	    	NULL,		NULL, dbgRead)
-		DEBUG_MENU_CMD("getObject", 	NULL,		NULL, dbgGetObject)
+		DEBUG_MENU_CMD("get", 			NULL,		NULL, dbgGetObject)
 		DEBUG_MENU_CMD("freeObject",	NULL,		NULL, dbgFreeObject)
 		DEBUG_MENU_CMD("gpio",			NULL,		NULL, dbgGpio)
 	DEBUG_MENU_DIR_END

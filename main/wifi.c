@@ -80,7 +80,7 @@ static bool _mdnsInit(void)
 		return false;
 	}
 
-	ret = FACTORY_factoryGetSn(&sn);
+	ret = FACTORY_get(factory_id_sn, &sn);
 	if (ret) {
 		INFO("setting MDNS to SN %s\n", sn);
 		err = mdns_hostname_set(sn);
@@ -387,7 +387,7 @@ static bool _startAp(void)
 	g_server.netif_ap  = esp_netif_create_default_wifi_ap();
 	assert(g_server.netif_ap);
 
-	ret = FACTORY_factoryGetSn(&sn);
+	ret = FACTORY_get(factory_id_sn, &sn);
 	if (ret) {
 		sprintf((char*)wifi_ap_config.ap.ssid, "%s", sn);
 		wifi_ap_config.ap.ssid_len = strlen((char*)wifi_ap_config.ap.ssid);
@@ -462,7 +462,7 @@ static void _init(void)
 		WIFI_sta_connect(ssid, passwd);
 	} else {
 		INFO("WSS and PASSWD not set\n");
-		ret = FACTORY_factoryGetSn(NULL);
+		ret = FACTORY_get(factory_id_sn, NULL);
 		if (ret) {
 			INFO("Starting AP and configuration server\n");
 			// start AP and configuration server only if SN has not been set yet
