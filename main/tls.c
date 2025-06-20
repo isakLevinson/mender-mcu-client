@@ -22,6 +22,7 @@
 #include "mbedtls/ssl.h"
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
+#include "mbedtls/x509_csr.h"
 #include "mbedtls/esp_debug.h"
 #include "mbedtls/error.h"
 #include "mbedtls/oid.h"
@@ -512,6 +513,36 @@ bool	TLS_isConnected(void)
 	return true;
 }
 
+void create_csr()
+{
+    int ret;
+    mbedtls_x509write_csr csr;
+    unsigned char csr_buf[2048];
+    char    errStr[256];
+
+    const char *subject = "CN=PNU";
+
+    mbedtls_x509write_csr_init(&csr);
+
+    // Setup CSR
+    mbedtls_x509write_csr_set_md_alg(&csr, MBEDTLS_MD_SHA256);
+    mbedtls_x509write_csr_set_key(&csr, &g_ssl.pkey);
+    mbedtls_x509write_csr_set_subject_name(&csr, subject);
+
+    memset(csr_buf, 0, sizeof(csr_buf));
+    ret = mbedtls_x509write_csr_pem(&csr, csr_buf, sizeof(csr_buf), mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
+
+    if (ret < 0) {
+        mbedtls_strerror(ret, errStr, sizeof(errStr));
+        ERROR("Failed to write CSR: -0x%04X %s\n", -ret, errStr);
+    } else {
+        INFO("CSR generated:\n%s\n", csr_buf);
+    }
+
+    mbedtls_x509write_csr_free(&csr);
+}
+
+
 static bool dbgConnect(uint8_t argc, char** argv)
 {
 #if 0
@@ -689,14 +720,9 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgCreate(uint8_t argc, char** argv)
+static bool dbgCreateCsr(uint8_t argc, char** argv)
 {
-    mbedtls_pk_context pk;
-    mbedtls_pk_init(&pk);
-
-    // Generate ECDSA key (secp256r1)
-    mbedtls_pk_setup(&pk, mbedtls_pk_info_from_type(MBEDTLS_PK_ECKEY));
-    mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256R1, mbedtls_pk_ec(pk), mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
+    create_csr();
 
     return true;
 }
@@ -704,11 +730,11 @@ static bool dbgCreate(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("tls", NULL)
-		DEBUG_MENU_CMD("status",      NULL,	NULL, dbgStatus)
-		DEBUG_MENU_CMD("connect",     NULL,	NULL, dbgConnect)
-		DEBUG_MENU_CMD("close",  	  NULL,	NULL, dbgClose)
-		DEBUG_MENU_CMD("timer",  	  NULL,	NULL, dbgTimer)
-		DEBUG_MENU_CMD("create",  	  NULL,	NULL, dbgCreate)
+		DEBUG_MENU_CMD("status",    NULL,	NULL, dbgStatus)
+		DEBUG_MENU_CMD("connect",   NULL,	NULL, dbgConnect)
+		DEBUG_MENU_CMD("close",  	NULL,	NULL, dbgClose)
+		DEBUG_MENU_CMD("timer",     NULL,	NULL, dbgTimer)
+		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

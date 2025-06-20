@@ -12,7 +12,6 @@
 #include "nvs.h"
 
 #define	NVS_NAMESPACE      "cfg"
-#define WIFI_MAX_NVS_LENGTH    128
 
 static struct {
 	nvs_handle_t nvsHandle;
@@ -28,18 +27,18 @@ static bool _get(char* key,  char* val)
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
-	size_t length = WIFI_MAX_NVS_LENGTH;
+	size_t length = NVS_MAX_LENGTH;
 
 	err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
 	if (err != ESP_OK) {
-		ERROR("nvs_open <%s> failed\n",  NVS_NAMESPACE);
+		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE, err);
 		ESP_printErr(err);
 		return false;
 	}
 
 	err =  nvs_get_str(handle, key, val, &length);
 	if (err != ESP_OK) {
-		//ERROR("nvs_get_str <%s> failed\n", key);
+		TRACE("nvs_get_str <%s> failed 0x%X\n", key, err);
 		ret = false;
 		goto exit;
 	}
@@ -57,7 +56,7 @@ static bool _set(char* key,  char* val)
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
-	char    str[WIFI_MAX_NVS_LENGTH];
+	char    str[NVS_MAX_LENGTH];
 	size_t  length;
 
 	err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
@@ -69,7 +68,7 @@ static bool _set(char* key,  char* val)
 	length = sizeof(str);
 	err =  nvs_get_str(handle, key, str, &length);
 	if (err != ESP_OK) {
-		WARN("nvs_get_str <%s> failed\n", key);
+		TRACE("nvs_get_str <%s> failed\n", key);
 		goto    store;
 	}
 	str[length] = '\0';
@@ -82,11 +81,11 @@ static bool _set(char* key,  char* val)
 	goto exit;
 
 store:
+	INFO("storing %s\n", key);
 	err = nvs_set_str(handle, key, val);
 	if (err != ESP_OK) {
-		printf("nvs_set_str ssid failed %x\n", err);
+		ERROR("nvs_set_str ssid failed %x\n", err);
 		ret = false;
-		goto exit;
 	}
 
 exit:
@@ -114,6 +113,7 @@ bool NVS_get(nvs_id_t id,  char* val)
 
 	ret = _get(g_id[id].pId, val);
 	if (!ret) {
+		TRACE("get failed id %d. using default value\n", id);
 		if (g_id[id].pDefault) {
 			strcpy(val, g_id[id].pDefault);
 			return true;
@@ -234,7 +234,7 @@ static bool dbgCommit(uint8_t argc, char** argv)
 static bool dbgGet(uint8_t argc, char** argv)
 {
 	esp_err_t   err = ESP_OK;
-	char str[32];
+	char str[2048];
 	size_t length = sizeof(str);
 
 	if (argc < 2) {
@@ -319,6 +319,32 @@ static bool dbgList(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgId(uint8_t argc, char** argv)
+{
+	bool	ret;
+	char	buf[2048];
+	uint8_t	id;
+
+	if (argc < 2) {
+		for (id=1; id<nvs_id_last; id++) {
+			ret = NVS_get(id,  buf);
+			PRINT("%d %s: %s\n", id, g_id[id].pId, buf);
+		}
+		return false;
+	}
+
+	id = strtol(argv[1], NULL, 10);
+	if (argc < 3) {
+		ret = NVS_get(id,  buf);
+		PRINT("%s\n", buf);
+		return true;
+	}
+
+	ret = NVS_set(id,  argv[2]);
+
+	return true;
+}
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
 	bool		ret;
@@ -335,28 +361,20 @@ static bool dbgStatus(uint8_t argc, char** argv)
 		PRINT("namespace_count: %d\n", nvs_stats.namespace_count);
 	}
 
-	for (i = nvs_id_invalid + 1; i < nvs_id_last; i++) {
-		ret = NVS_get(i, val);
-		if (ret) {
-			PRINT("%2d %-12s: %s\n", i, g_id[i].pId, val);
-		} else {
-			PRINT("%2d %-12s: NULL\n", i, g_id[i].pId);
-		}
-	}
-
 	return true;
 }
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("nvs", NULL)
+		DEBUG_MENU_CMD("status",    NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("open",	    NULL,		NULL, dbgOpen)
 		DEBUG_MENU_CMD("close",	    NULL,		NULL, dbgClose)
 		DEBUG_MENU_CMD("commit",    NULL,		NULL, dbgCommit)
 		DEBUG_MENU_CMD("get",       NULL,		NULL, dbgGet)
 		DEBUG_MENU_CMD("set",       NULL,		NULL, dbgSet)
 		DEBUG_MENU_CMD("list",      NULL,		NULL, dbgList)
-		DEBUG_MENU_CMD("status",    NULL,		NULL, dbgStatus)
+		DEBUG_MENU_CMD("id",	    NULL,		NULL, dbgId)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

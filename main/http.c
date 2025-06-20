@@ -453,7 +453,7 @@ static esp_err_t _config_handler(httpd_req_t* req)
 	//esp_err_t ret;
 	bool    		ret;
 	PARSE_STATUS	status;
-	char    		buf[256];
+	char    		buf[2048];
 	bool    		validSsid;
 	bool    		validPasswd;
 	const char* 	pResp = "OK\n";
@@ -465,8 +465,12 @@ static esp_err_t _config_handler(httpd_req_t* req)
 	if (req->method != HTTP_POST) {
 		WARN("unsupported method %s. must be POST\n", req->method);
 		_socketSetType(fd, "CFG");
-
 		return ESP_OK;
+	}
+
+	if (req->content_len > sizeof(buf)) {
+		ERROR("size too large %d\n", req->content_len);
+		return ESP_ERR_NO_MEM;
 	}
 
 	ret = httpd_req_recv(req, buf, req->content_len);
