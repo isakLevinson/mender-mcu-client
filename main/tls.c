@@ -25,6 +25,7 @@
 #include "mbedtls/esp_debug.h"
 #include "mbedtls/error.h"
 #include "mbedtls/oid.h"
+#include "nvs.h"
 
 #include "factory.h"
 
@@ -68,11 +69,6 @@ static struct {
 
 	TimerHandle_t		kaTimer;
 } g_ssl;
-
-extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
-extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
-extern const unsigned char prvtkey_pem_start[] asm("_binary_server_key_start");
-extern const unsigned char prvtkey_pem_end[]   asm("_binary_server_key_end");
 
 static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
 {   
@@ -381,6 +377,8 @@ static bool _sslInit(void)
 {
     int ret;
     const char *pers = "ssl_server";
+    static char certificate[2048];
+    static char key[2048];
 
     mbedtls_ssl_config_init(&g_ssl.conf);
 #if defined(MBEDTLS_SSL_CACHE_C)
@@ -415,17 +413,17 @@ static bool _sslInit(void)
     }
 
     INFO("Loading the server cert and key\n");
-	const uint8_t* servercert = server_cert_start;
-	int servercert_len = server_cert_end - server_cert_start;
+    NVS_get(nvs_id_certificate,  certificate);
+    uint32_t    cert_len = strlen(certificate)+1;
 
-	const uint8_t* prvtkey_pem = prvtkey_pem_start;
-	int prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
+    NVS_get(nvs_id_key,  key);
+    uint32_t    key_len = strlen(key)+1;
 
     char* cacert_pem;
     FACTORY_get(factory_id_ca_certificate, &cacert_pem);
 	int cacert_len = strlen(cacert_pem)+1;
 
-    ret = mbedtls_x509_crt_parse(&g_ssl.srvcert, (const unsigned char *) servercert, servercert_len);
+    ret = mbedtls_x509_crt_parse(&g_ssl.srvcert, (unsigned char*)certificate, cert_len);
     if (ret != 0) {
         ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
         return false;
@@ -437,7 +435,7 @@ static bool _sslInit(void)
         return false;
     }
 
-    ret =  mbedtls_pk_parse_key(&g_ssl.pkey, (const unsigned char *) prvtkey_pem, prvtkey_len, NULL, 0, mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
+    ret =  mbedtls_pk_parse_key(&g_ssl.pkey, (unsigned char*)key, key_len, NULL, 0, mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
     if (ret != 0) {
         ERROR("mbedtls_pk_parse_key returned %d\n", ret);
         return false;
@@ -616,6 +614,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
     int     ret;
     char    errStr[256];
     char*   caCert;
+    char    certificate[2048];
 
 	PRINT("cmd    : %d\n", g_ssl.fd_cmd.fd);
 	PRINT("stresam: %d\n", g_ssl.fd_stream.fd);
@@ -648,7 +647,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
             INFO("CA cert: %d\n", len);
             for (int i=0; i<len; i++) {
                 if (caCert[i] < 0x20) {
-                    INFO("((%02x))", caCert[i]);
+                    INFO("(%02x)", caCert[i]);
                 }
                 INFO("%c", caCert[i]);
             }
@@ -659,7 +658,10 @@ static bool dbgStatus(uint8_t argc, char** argv)
         }
     }
 
-    ret = mbedtls_x509_crt_parse(&server_cert, server_cert_start, server_cert_end - server_cert_start);
+    NVS_get(nvs_id_certificate,  certificate);
+    uint32_t    cert_len = strlen(certificate)+1;
+
+    ret = mbedtls_x509_crt_parse(&server_cert, (unsigned char*)certificate, cert_len);
     if (ret < 0) {
         mbedtls_strerror(ret, errStr, sizeof(errStr));
         ERROR("Failed to parse server cert: -0x%04x %s\n", -ret, errStr);

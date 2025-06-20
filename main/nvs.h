@@ -2,6 +2,11 @@
 
 #include <sys_def.h>
 
+extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
+extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
+extern const unsigned char prvtkey_start[] asm("_binary_server_key_start");
+extern const unsigned char prvtkey_end[]   asm("_binary_server_key_end");
+
 // *INDENT-OFF*
 #define NVS_LIST(cmd)	\
 	cmd(ssid,		NULL)	\
@@ -12,6 +17,8 @@
 	cmd(mdns,		NULL)	\
 	cmd(ota_url,	CONFIG_MENDER_SERVER_HOST)	\
 	cmd(ota_token,	CONFIG_MENDER_SERVER_TENANT_TOKEN)	\
+	cmd(certificate,	server_cert_start)	\
+	cmd(key,			prvtkey_start)	\
 	cmd(ota_updated,"0")\
 
 // *INDENT-ON*
@@ -27,6 +34,7 @@ typedef struct {
 typedef enum {
 	nvs_id_invalid,
 	NVS_LIST(NVS_ENUM)
+	nvs_id_last,
 } nvs_id_t;
 
 #define NVS_KEY_OTA_UPDATED "ota_updated"

@@ -325,7 +325,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	esp_err_t   err = ESP_OK;
 	nvs_stats_t nvs_stats;
 	uint8_t		i;
-	char		val[128];
+	char		val[2048];
 
 	err =  nvs_get_stats(NULL, &nvs_stats);
 	if (err == ESP_OK) {
@@ -335,7 +335,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 		PRINT("namespace_count: %d\n", nvs_stats.namespace_count);
 	}
 
-	for (i = nvs_id_invalid + 1; i < sizeof(g_id) / sizeof(g_id[0]); i++) {
+	for (i = nvs_id_invalid + 1; i < nvs_id_last; i++) {
 		ret = NVS_get(i, val);
 		if (ret) {
 			PRINT("%2d %-12s: %s\n", i, g_id[i].pId, val);
