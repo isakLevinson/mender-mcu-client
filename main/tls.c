@@ -374,7 +374,7 @@ static void _kaTimerCb( TimerHandle_t pxTimer )
 	mbedtls_net_free(&g_ssl.fd_stream);
 }
 
-static bool _sslInit(void)
+static bool _tlsInit(void)
 {
     int ret;
     const char *pers = "ssl_server";
@@ -475,8 +475,6 @@ static bool _sslInit(void)
 static bool _init(void)
 {
     int ret;
-
-    _sslInit();
 
     g_ssl.mutex = xSemaphoreCreateMutex();
 
@@ -631,13 +629,13 @@ static bool dbgClose(uint8_t argc, char** argv)
 	return true;
 }
 
-void print_cert_dates(const mbedtls_x509_crt *cert)
+static void _print_cert_dates(const mbedtls_x509_crt *cert)
 {
     const mbedtls_x509_time *from = &cert->valid_from;
     const mbedtls_x509_time *to   = &cert->valid_to;
 
-    INFO("From : %04d-%02d-%02d %02d:%02d:%02d\n", from->year, from->mon, from->day, from->hour, from->min, from->sec);
-    INFO("Until: %04d-%02d-%02d %02d:%02d:%02d\n", to->year, to->mon, to->day, to->hour, to->min, to->sec);
+    INFO("%04d-%02d-%02d %02d:%02d:%02d - ", from->year, from->mon, from->day, from->hour, from->min, from->sec);
+    INFO("%04d-%02d-%02d %02d:%02d:%02d\n", to->year, to->mon, to->day, to->hour, to->min, to->sec);
 }
 
 static bool dbgStatus(uint8_t argc, char** argv)
@@ -660,10 +658,8 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	}
 
     mbedtls_x509_crt ca_cert;
-    mbedtls_x509_crt server_cert;
 
     mbedtls_x509_crt_init(&ca_cert);
-    mbedtls_x509_crt_init(&server_cert);
 
     FACTORY_get(factory_id_ca_certificate, &caCert);
 
@@ -684,29 +680,18 @@ static bool dbgStatus(uint8_t argc, char** argv)
             }
             INFO("\n###\n");
         } else {
-            INFO("CA:\n");
-            print_cert_dates(&ca_cert);
+            INFO("CA  : ");
+            _print_cert_dates(&ca_cert);
         }
     }
 
-    NVS_get(nvs_id_certificate,  certificate, sizeof(certificate));
-    uint32_t    cert_len = strlen(certificate)+1;
-
-    ret = mbedtls_x509_crt_parse(&server_cert, (unsigned char*)certificate, cert_len);
-    if (ret < 0) {
-        mbedtls_strerror(ret, errStr, sizeof(errStr));
-        ERROR("Failed to parse server cert: -0x%04x %s\n", -ret, errStr);
-    }
-
-    INFO("server:\n");
-    print_cert_dates(&server_cert);
-
-    mbedtls_x509_crt_free(&server_cert);
-    mbedtls_x509_crt_free(&ca_cert);
+    INFO("cert: ");
+    _print_cert_dates(&g_ssl.srvcert);
 
     uint32_t flags;
     mbedtls_x509_crt_profile profile = mbedtls_x509_crt_profile_default;
-    ret = mbedtls_x509_crt_verify_with_profile(&server_cert, &ca_cert, NULL, &profile, NULL, &flags, NULL, NULL);
+    //ret = mbedtls_x509_crt_verify_with_profile(&g_ssl.srvcert, &ca_cert, NULL, &profile, NULL, &flags, NULL, NULL);
+    ret = mbedtls_x509_crt_verify(&g_ssl.srvcert, &ca_cert, NULL, NULL, &flags, NULL, NULL);
 
     if (ret) {
         char buf[256];
@@ -716,6 +701,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
         INFO("Certificate verification SUCCESS.\n");
     }
 
+    mbedtls_x509_crt_free(&ca_cert);
 
 	return true;
 }
@@ -727,10 +713,17 @@ static bool dbgCreateCsr(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgInit(uint8_t argc, char** argv)
+{
+    _tlsInit();
+    return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("tls", NULL)
 		DEBUG_MENU_CMD("status",    NULL,	NULL, dbgStatus)
+		DEBUG_MENU_CMD("init",      NULL,	NULL, dbgInit)
 		DEBUG_MENU_CMD("connect",   NULL,	NULL, dbgConnect)
 		DEBUG_MENU_CMD("close",  	NULL,	NULL, dbgClose)
 		DEBUG_MENU_CMD("timer",     NULL,	NULL, dbgTimer)
@@ -744,6 +737,7 @@ bool TLS_init(void)
     DBG_TREE_add("/", g_menu);
 
 	_init();
+    _tlsInit();
 	
     return true;
 }
