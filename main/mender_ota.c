@@ -664,8 +664,8 @@ static void _init(void)
 	                              .restart                = restart_cb
 	                          };
 
-	NVS_get(nvs_id_ota_url, g_mender.url);
-	NVS_get(nvs_id_ota_token, g_mender.token);
+	NVS_get(nvs_id_ota_url, g_mender.url, sizeof(g_mender.url));
+	NVS_get(nvs_id_ota_token, g_mender.token, sizeof(g_mender.token));
 	mender_client_config.host 			= g_mender.url;
 	mender_client_config.tenant_token	= g_mender.token;
 

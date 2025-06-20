@@ -2,8 +2,6 @@
 
 #include <sys_def.h>
 
-#define NVS_MAX_LENGTH    256
-
 extern const unsigned char _server_cert_start[] asm("_binary_server_crt_start");
 extern const unsigned char _server_cert_end[]   asm("_binary_server_crt_end");
 extern const unsigned char _prvtkey_start[] asm("_binary_server_key_start");
@@ -45,6 +43,6 @@ void NVS_init(void);
 bool NVS_eraseAll(void);
 bool NVS_isValidName(char* pName);
 bool NVS_set(nvs_id_t id,  char* val);
-bool NVS_get(nvs_id_t id,  char* val);
-bool NVS_get_ssid(char* ssid, char* passwd);
+bool NVS_get(nvs_id_t id,  char* val, size_t maxSize);
+bool NVS_get_ssid(char* ssid, char* passwd, size_t maxSize);
 bool NVS_set_ssid(char* ssid, char* passwd);

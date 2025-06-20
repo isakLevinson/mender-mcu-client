@@ -95,7 +95,7 @@ static void _task(void* arg)
 		if (!g_led.isConfigurated) {
 			char    ssid[32];
 			char    passwd[32];
-			ret = NVS_get_ssid(ssid, passwd);
+			ret = NVS_get_ssid(ssid, passwd, 32);
 			if (ret) {
 				g_led.isConfigurated = true;
 			}

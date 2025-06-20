@@ -414,10 +414,10 @@ static bool _sslInit(void)
     }
 
     INFO("Loading the server cert and key\n");
-    NVS_get(nvs_id_certificate,  certificate);
+    NVS_get(nvs_id_certificate,  certificate, sizeof(certificate));
     uint32_t    cert_len = strlen(certificate)+1;
 
-    NVS_get(nvs_id_key,  key);
+    NVS_get(nvs_id_key,  key, sizeof(key));
     uint32_t    key_len = strlen(key)+1;
 
     char* cacert_pem;
@@ -689,7 +689,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
         }
     }
 
-    NVS_get(nvs_id_certificate,  certificate);
+    NVS_get(nvs_id_certificate,  certificate, sizeof(certificate));
     uint32_t    cert_len = strlen(certificate)+1;
 
     ret = mbedtls_x509_crt_parse(&server_cert, (unsigned char*)certificate, cert_len);

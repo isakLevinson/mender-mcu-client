@@ -12,6 +12,7 @@
 #include "nvs.h"
 
 #define	NVS_NAMESPACE      "cfg"
+#define NVS_MAX_LENGTH    256
 
 static struct {
 	nvs_handle_t nvsHandle;
@@ -22,12 +23,12 @@ nvs_arr_t g_id[] = {
 	{.pId = NULL, .pDefault = NULL}
 };
 
-static bool _get(char* key,  char* val)
+static bool _get(char* key,  char* val, size_t maxSize)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
-	size_t length = NVS_MAX_LENGTH;
+	size_t length = maxSize;
 
 	err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
 	if (err != ESP_OK) {
@@ -107,11 +108,11 @@ bool NVS_isValidName(char* pName)
 	return false;
 }
 
-bool NVS_get(nvs_id_t id,  char* val)
+bool NVS_get(nvs_id_t id,  char* val, size_t maxSize)
 {
 	bool	ret;
 
-	ret = _get(g_id[id].pId, val);
+	ret = _get(g_id[id].pId, val, maxSize);
 	if (!ret) {
 		TRACE("get failed id %d. using default value\n", id);
 		if (g_id[id].pDefault) {
@@ -134,11 +135,11 @@ bool NVS_set(nvs_id_t id,  char* val)
 	return ret;
 }
 
-bool NVS_get_ssid(char* ssid, char* passwd)
+bool NVS_get_ssid(char* ssid, char* passwd, size_t maxSize)
 {
 	bool    ret = true;
 
-	ret = NVS_get(nvs_id_ssid, ssid);
+	ret = NVS_get(nvs_id_ssid, ssid, maxSize);
 	if (!ret)  {
 		ERROR("get ssid failed\n");
 		return false;
@@ -148,7 +149,7 @@ bool NVS_get_ssid(char* ssid, char* passwd)
 		return false;
 	}
 
-	ret = NVS_get(nvs_id_passwd, passwd);
+	ret = NVS_get(nvs_id_passwd, passwd, maxSize);
 	if (!ret)  {
 		ERROR("get passwd failed\n");
 		return false;
@@ -327,7 +328,7 @@ static bool dbgId(uint8_t argc, char** argv)
 
 	if (argc < 2) {
 		for (id=1; id<nvs_id_last; id++) {
-			ret = NVS_get(id,  buf);
+			ret = NVS_get(id,  buf, sizeof(buf));
 			PRINT("%d %s: %s\n", id, g_id[id].pId, buf);
 		}
 		return false;
@@ -335,7 +336,7 @@ static bool dbgId(uint8_t argc, char** argv)
 
 	id = strtol(argv[1], NULL, 10);
 	if (argc < 3) {
-		ret = NVS_get(id,  buf);
+		ret = NVS_get(id,  buf, sizeof(buf));
 		PRINT("%s\n", buf);
 		return true;
 	}

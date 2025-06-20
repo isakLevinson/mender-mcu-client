@@ -454,7 +454,7 @@ static void _init(void)
 	wss_init();
 	_startServer();
 
-	ret = NVS_get_ssid(ssid, passwd);
+	ret = NVS_get_ssid(ssid, passwd, 32);
 	if (ret) {
 		INFO("ssid  : %s\n", ssid);
 		INFO("passwd: %s\n", passwd);

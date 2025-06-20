@@ -710,7 +710,7 @@ bool wss_init(void)
 	// Start the httpd server
 	INFO("Starting server");
 
-	ret = NVS_get(nvs_id_ota_updated,  buf);
+	ret = NVS_get(nvs_id_ota_updated,  buf, sizeof(buf));
 	if (ret) {
 		if (!strcmp(buf, "1")) {
 			g_server.ota_new_restart = true;
