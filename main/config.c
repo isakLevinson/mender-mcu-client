@@ -98,6 +98,18 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 		NVS_set(nvs_id_ota_token, object->valuestring);
 	}
 
+	object = cJSON_GetObjectItemCaseSensitive(json, "certificate");
+	if (object) {
+		INFO("certificate: %s\n", object->valuestring);
+		NVS_set(nvs_id_certificate, object->valuestring);
+	}
+
+	object = cJSON_GetObjectItemCaseSensitive(json, "key");
+	if (object) {
+		INFO("key: %s\n", object->valuestring);
+		NVS_set(nvs_id_key, object->valuestring);
+	}
+
 	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");
 	if (object) {
 		if (cJSON_IsArray(object)) {
