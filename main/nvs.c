@@ -14,6 +14,8 @@
 #define	NVS_NAMESPACE      "cfg"
 #define NVS_MAX_LENGTH    256
 
+#define NVS_ARR(id, def)	[nvs_id_ ## id] = {.pId = #id, .pDefault = def},
+
 static struct {
 	nvs_handle_t nvsHandle;
 } g_nvs;
@@ -47,7 +49,6 @@ static bool _get(char* key,  char* val, size_t maxSize)
 
 exit:
 	nvs_close(handle);
-	//ESP_printErr(err);
 
 	return ret;
 }
@@ -114,11 +115,13 @@ bool NVS_get(nvs_id_t id,  char* val, size_t maxSize)
 
 	ret = _get(g_id[id].pId, val, maxSize);
 	if (!ret) {
-		TRACE("get failed id %d. using default value\n", id);
+		TRACE("get failed id %d\n", id);
 		if (g_id[id].pDefault) {
+			TRACE("using default value\n");
 			strcpy(val, g_id[id].pDefault);
 			return true;
 		} else {
+			TRACE("no default value\n");
 			return false;
 		}
 	}
@@ -329,15 +332,23 @@ static bool dbgId(uint8_t argc, char** argv)
 	if (argc < 2) {
 		for (id=1; id<nvs_id_last; id++) {
 			ret = NVS_get(id,  buf, sizeof(buf));
-			PRINT("%d %s: %s\n", id, g_id[id].pId, buf);
+			if (ret) {
+				PRINT("%d %s: %s\n", id, g_id[id].pId, buf);
+			} else {
+				PRINT("%d %s: NULL\n", id, g_id[id].pId);
+			}
 		}
-		return false;
+		return true;
 	}
 
 	id = strtol(argv[1], NULL, 10);
 	if (argc < 3) {
 		ret = NVS_get(id,  buf, sizeof(buf));
-		PRINT("%s\n", buf);
+		if (ret) {
+			PRINT("%s\n", buf);
+		} else {
+			PRINT("NULL\n");
+		}
 		return true;
 	}
 

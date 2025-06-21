@@ -18,7 +18,7 @@ extern const unsigned char _prvtkey_end[]   asm("_binary_server_key_end");
 	cmd(ota_url,	CONFIG_MENDER_SERVER_HOST)	\
 	cmd(ota_token,	CONFIG_MENDER_SERVER_TENANT_TOKEN)	\
 	cmd(certificate,	_server_cert_start)	\
-	cmd(key,			_prvtkey_start)	\
+	cmd(key,			NULL)	\
 	cmd(ota_updated,"0")\
 
 // *INDENT-ON*
