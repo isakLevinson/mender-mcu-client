@@ -374,33 +374,84 @@ static void _kaTimerCb( TimerHandle_t pxTimer )
 	mbedtls_net_free(&g_tls.fd_stream);
 }
 
-static void _create_csr(mbedtls_pk_context* pKey)
+static uint8_t _createSanExt(char* cn_list[], uint8_t size, uint8_t* buf)
+{
+    uint8_t     i;
+    uint8_t*    pBuf = buf + 2;
+    uint8_t     len;
+
+    for (i=0; i<size; i++) {
+        len = strlen(cn_list[i]);
+        *pBuf++ = 0x82;
+        *pBuf++ = len;
+        memcpy(pBuf, cn_list[i], len);
+        pBuf += len;
+    }
+
+    buf[0] = 0x30;
+    buf[1] = pBuf-buf-2;
+
+    return pBuf-buf;
+}
+
+static bool _create_csr(mbedtls_pk_context* pKey)
 {
     int ret;
     mbedtls_x509write_csr csr;
     unsigned char csr_buf[2048];
     char    errStr[256];
+    char    subject[64];
+    char*   sn;
+    unsigned char san_ext[256];
+    uint8_t san_length;
+    char    sn_local[64];
+    
+    ret = FACTORY_get(factory_id_sn, &sn);
+    if (!ret) {
+        ERROR("SN not set\n");
+        return false;
+    }
+    sprintf(subject, "CN=%s", sn);
+    sprintf(sn_local, "%s.local", sn);
 
-    const char *subject = "CN=PNU";
+    char* dns_list[] = {
+        sn,
+        sn_local,
+    };
+
+    san_length = _createSanExt(dns_list, 2, san_ext);
+    INFO_BUF("san_ext",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, san_ext, san_length);
 
     mbedtls_x509write_csr_init(&csr);
 
     // Setup CSR
     mbedtls_x509write_csr_set_md_alg(&csr, MBEDTLS_MD_SHA256);
     mbedtls_x509write_csr_set_key(&csr, &g_tls.pkey);
+
     mbedtls_x509write_csr_set_subject_name(&csr, subject);
+    ret = mbedtls_x509write_csr_set_extension(&csr, MBEDTLS_OID_SUBJECT_ALT_NAME, MBEDTLS_OID_SIZE(MBEDTLS_OID_SUBJECT_ALT_NAME), 1, san_ext, san_length);
+    if (ret != 0) {
+        mbedtls_strerror(ret, errStr, sizeof(errStr));
+        ERROR("mbedtls_x509write_csr_set_extension: -0x%04X %s\n", -ret, errStr);
+        return false;
+    } else {
+        INFO("CSR generated:\n%s\n", csr_buf);
+    }
+
 
     memset(csr_buf, 0, sizeof(csr_buf));
     ret = mbedtls_x509write_csr_pem(&csr, csr_buf, sizeof(csr_buf), mbedtls_ctr_drbg_random, &g_tls.ctr_drbg);
-
     if (ret < 0) {
         mbedtls_strerror(ret, errStr, sizeof(errStr));
-        ERROR("Failed to write CSR: -0x%04X %s\n", -ret, errStr);
+        ERROR("mbedtls_x509write_csr_pem: -0x%04X %s\n", -ret, errStr);
+        return false;
     } else {
         INFO("CSR generated:\n%s\n", csr_buf);
     }
 
     mbedtls_x509write_csr_free(&csr);
+
+    return true;
 }
 
 static bool _genPrivateKey(void)
