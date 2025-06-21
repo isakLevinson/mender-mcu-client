@@ -374,6 +374,61 @@ static void _kaTimerCb( TimerHandle_t pxTimer )
 	mbedtls_net_free(&g_ssl.fd_stream);
 }
 
+static void _create_csr(mbedtls_pk_context* pKey)
+{
+    int ret;
+    mbedtls_x509write_csr csr;
+    unsigned char csr_buf[2048];
+    char    errStr[256];
+
+    const char *subject = "CN=PNU";
+
+    mbedtls_x509write_csr_init(&csr);
+
+    // Setup CSR
+    mbedtls_x509write_csr_set_md_alg(&csr, MBEDTLS_MD_SHA256);
+    mbedtls_x509write_csr_set_key(&csr, &g_ssl.pkey);
+    mbedtls_x509write_csr_set_subject_name(&csr, subject);
+
+    memset(csr_buf, 0, sizeof(csr_buf));
+    ret = mbedtls_x509write_csr_pem(&csr, csr_buf, sizeof(csr_buf), mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
+
+    if (ret < 0) {
+        mbedtls_strerror(ret, errStr, sizeof(errStr));
+        ERROR("Failed to write CSR: -0x%04X %s\n", -ret, errStr);
+    } else {
+        INFO("CSR generated:\n%s\n", csr_buf);
+    }
+
+    mbedtls_x509write_csr_free(&csr);
+}
+
+static bool _genPrivateKey(void)
+{
+    int     ret;
+    char    errStr[256];
+
+    memset(&g_ssl.pkey, 0, sizeof(g_ssl.pkey));
+
+    ret = mbedtls_pk_setup(&g_ssl.pkey, mbedtls_pk_info_from_type(MBEDTLS_PK_RSA));
+    if (ret != 0) {
+        mbedtls_strerror(ret, errStr, sizeof(errStr));
+        ERROR("mbedtls_pk_setup -0x%04x %s", -ret, errStr);
+        return false;
+    }
+    INFO("mbedtls_pk_setup ok\n");
+
+    ret = mbedtls_rsa_gen_key(mbedtls_pk_rsa(g_ssl.pkey), mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg, 2048, 65537);
+    if (ret != 0) {
+        mbedtls_strerror(ret, errStr, sizeof(errStr));
+        ERROR("mbedtls_rsa_gen_key -0x%04x %s", -ret, errStr);
+        return false;
+    }
+    INFO("mbedtls_rsa_gen_key ok\n");
+  
+    return true;
+}
+
 static bool _tlsInit(void)
 {
     int ret;
@@ -510,36 +565,6 @@ bool	TLS_isConnected(void)
 
 	return true;
 }
-
-void create_csr()
-{
-    int ret;
-    mbedtls_x509write_csr csr;
-    unsigned char csr_buf[2048];
-    char    errStr[256];
-
-    const char *subject = "CN=PNU";
-
-    mbedtls_x509write_csr_init(&csr);
-
-    // Setup CSR
-    mbedtls_x509write_csr_set_md_alg(&csr, MBEDTLS_MD_SHA256);
-    mbedtls_x509write_csr_set_key(&csr, &g_ssl.pkey);
-    mbedtls_x509write_csr_set_subject_name(&csr, subject);
-
-    memset(csr_buf, 0, sizeof(csr_buf));
-    ret = mbedtls_x509write_csr_pem(&csr, csr_buf, sizeof(csr_buf), mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
-
-    if (ret < 0) {
-        mbedtls_strerror(ret, errStr, sizeof(errStr));
-        ERROR("Failed to write CSR: -0x%04X %s\n", -ret, errStr);
-    } else {
-        INFO("CSR generated:\n%s\n", csr_buf);
-    }
-
-    mbedtls_x509write_csr_free(&csr);
-}
-
 
 static bool dbgConnect(uint8_t argc, char** argv)
 {
@@ -706,9 +731,22 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgGenKey(uint8_t argc, char** argv)
+{
+    int ret;
+
+    ret = _genPrivateKey();
+    if (!ret) {
+        PRINT("genkey failed\n");
+        return false;
+    }
+
+    return true;
+}
+
 static bool dbgCreateCsr(uint8_t argc, char** argv)
 {
-    create_csr();
+    _create_csr(&g_ssl.pkey);
 
     return true;
 }
@@ -727,6 +765,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("connect",   NULL,	NULL, dbgConnect)
 		DEBUG_MENU_CMD("close",  	NULL,	NULL, dbgClose)
 		DEBUG_MENU_CMD("timer",     NULL,	NULL, dbgTimer)
+        DEBUG_MENU_CMD("genKey",    NULL,	NULL, dbgGenKey)
 		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
