@@ -22,8 +22,12 @@ fi
 # --- ESCAPE CSR CONTENT ---
 ENCODED_CSR=$(sed ':a;N;$!ba;s/\n/\\n/g' "$CSR_FILE" | sed 's/"/\\"/g')
 
+echo "ENCODED = $ENCODED_CSR"
+
 # --- JSON PAYLOAD ---
 JSON_PAYLOAD="{\"csr\":\"$ENCODED_CSR\",\"ttl\":\"$TTL\"}"
+
+echo "json = $JSON_PAYLOAD"
 
 # --- HTTP REQUEST TO VAULT ---
 RESPONSE=$(curl -sS \

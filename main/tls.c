@@ -394,11 +394,10 @@ static uint8_t _createSanExt(char* cn_list[], uint8_t size, uint8_t* buf)
 	return pBuf - buf;
 }
 
-static bool _create_csr(mbedtls_pk_context* pKey)
+static bool _create_csr(mbedtls_pk_context* pKey, unsigned char* csr_buf, size_t size)
 {
 	int ret;
 	mbedtls_x509write_csr csr;
-	unsigned char csr_buf[2048];
 	char    errStr[256];
 	char    subject[64];
 	char*   sn;
@@ -437,18 +436,41 @@ static bool _create_csr(mbedtls_pk_context* pKey)
 	}
 
 
-	memset(csr_buf, 0, sizeof(csr_buf));
-	ret = mbedtls_x509write_csr_pem(&csr, csr_buf, sizeof(csr_buf), mbedtls_ctr_drbg_random, &g_tls.ctr_drbg);
+	memset(csr_buf, 0, size);
+	ret = mbedtls_x509write_csr_pem(&csr, csr_buf, size, mbedtls_ctr_drbg_random, &g_tls.ctr_drbg);
 	if (ret < 0) {
 		mbedtls_strerror(ret, errStr, sizeof(errStr));
 		ERROR("mbedtls_x509write_csr_pem: -0x%04X %s\n", -ret, errStr);
 		return false;
 	}
-	INFO("CSR generated:\n%s\n", csr_buf);
 
 	mbedtls_x509write_csr_free(&csr);
 
 	return true;
+}
+
+static bool _voultCreateCsrJson(char* csr, char* ttl, char* json)
+{
+    char* pJson = json;
+
+    pJson += sprintf(pJson, "{\"csr\":\"");
+
+    while ('\0' != *csr) {
+        switch (*csr) {
+            case '\n':
+                *pJson++ = '\\';
+                *pJson++ = 'n';
+                break;
+
+            default:
+                *pJson++ = *csr;
+        }
+        csr++;
+    }
+
+    pJson += sprintf(pJson, "\",\"ttl\":\"%s\"}", ttl);
+
+    return true;
 }
 
 static bool _genPrivateKey(void)
@@ -830,7 +852,20 @@ static bool dbgStoreKey(uint8_t argc, char** argv)
 
 static bool dbgCreateCsr(uint8_t argc, char** argv)
 {
-	_create_csr(&g_tls.pkey);
+    bool    ret;
+    char csr_buf[2048];
+     char json[2048];
+	ret = _create_csr(&g_tls.pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
+    if (!ret) {
+        ERROR("_create_csr failed\n");
+        return true;
+    }
+
+	PRINT("csr:\n%s\n", csr_buf);
+
+    _voultCreateCsrJson(csr_buf, "720h", json);
+
+	PRINT("json:\n%s\n", json);
 
 	return true;
 }
