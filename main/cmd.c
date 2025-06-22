@@ -159,10 +159,10 @@ static struct {
 	uint8_t				socNextThreshold;
 	uint32_t			counter;
 	int32_t				kaTime;
-	#if CONFIG_BUILD_TYPE_EEG
+#if CONFIG_BUILD_TYPE_EEG
 	char		streamBuf[2000];
 	uint16_t	streamSize;
-	#endif
+#endif
 } g_cmd = {
 #if CONFIG_BUILD_TYPE_EEG
 	.streamSize = 1500,
@@ -183,7 +183,7 @@ static bool _sendRespRaw(CMD_CONTEXT* i_pContext, void* i_pBuf, uint16_t size)
 	}
 
 	xSemaphoreTake(g_cmd.semaphore, portMAX_DELAY);
-	
+
 	TRACE_BUF("_sendRespRaw",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
 	ret = i_pContext->p_cbSend(i_pContext->pArg, i_pBuf, size);
@@ -218,12 +218,12 @@ static bool _sendResp(CMD_CONTEXT* i_pContext, uint8_t type, void* i_pBuf, uint1
 	memcpy(pBuf, i_pBuf, size);
 	pBuf += size;
 
-	ret = _sendRespRaw(pContext, buf, pBuf-buf);
+	ret = _sendRespRaw(pContext, buf, pBuf - buf);
 
 	return ret;
 }
 
-static bool _sendRespStr(CMD_CONTEXT* i_pContext, char *pStr)
+static bool _sendRespStr(CMD_CONTEXT* i_pContext, char* pStr)
 {
 	bool ret;
 	uint32_t	len = strlen(pStr);
@@ -267,7 +267,7 @@ static void _taskStreamer(void* arg)
 		TRACE1("dt:%d\n", t - g_cmd.streamSentTime);
 
 		if (t - g_cmd.streamSentTime < g_cmd.streamPeriod) {
-			vTaskDelay(g_cmd.streamPeriod/2);
+			vTaskDelay(g_cmd.streamPeriod / 2);
 			continue;
 		}
 		g_cmd.streamSentTime += g_cmd.streamPeriod;
@@ -308,7 +308,7 @@ static void _taskStreamer(void* arg)
 						g_cmd.socNextThreshold = BATTERY_THRESHOLD_EMPTY;
 						break;
 					case BATTERY_THRESHOLD_EMPTY:
-					break;
+						break;
 
 					default:
 						WARN("unexpected voltage threshold %d\n", g_cmd.socNextThreshold);
@@ -321,7 +321,7 @@ static void _taskStreamer(void* arg)
 		int64_t t64;
 		TIME_get64(&t64);
 
-		sprintf(g_cmd.streamBuf, "## %d.%03d: i:%d dt:%d   ##\n", (uint32_t)(t64/1000000), (uint32_t)((t64/1000) % 1000), g_cmd.counter++, t - g_cmd.streamSentTime);
+		sprintf(g_cmd.streamBuf, "## %d.%03d: i:%d dt:%d   ##\n", (uint32_t)(t64 / 1000000), (uint32_t)((t64 / 1000) % 1000), g_cmd.counter++, t - g_cmd.streamSentTime);
 		TRACE("trace counter: %d\n", g_cmd.counter);
 		ret = _sendResp(&g_cmd.streamContext, CMD_RSP_EVT_STREAM, &g_cmd.streamBuf, g_cmd.streamSize);
 		if (!ret) {
@@ -389,7 +389,7 @@ static bool	_req_KA_CNT_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_KA_CNT* i_pReq,
 
 	int32_t time = TIME_get32();
 
-	INFO("KA_CNT(%d) %d %d\n", time-g_cmd.kaTime, i_pReq->cnt, i_pReq->timeout);
+	INFO("KA_CNT(%d) %d %d\n", time - g_cmd.kaTime, i_pReq->cnt, i_pReq->timeout);
 	g_cmd.kaTime = time;
 
 	// TODO: use real values
@@ -488,7 +488,7 @@ static bool	_req_STATUS_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_STATUS* i_pReq,
 #endif
 
 	_sendResp(i_pContext, CMD_RSP_STATUS, &rsp, sizeof(rsp));
-return true;
+	return true;
 }
 
 static bool	_req_SET_PRESSURE_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_SET_PRESSURE* i_pReq, uint16_t size)
@@ -679,7 +679,7 @@ bool CMD_sendBatteryEvent(uint8_t soc, uint16_t voltage_mv)
 	INFO("CMD_sendBatteryEvent soc:%d v:%d\n", soc, voltage_mv);
 
 	rsp.soc		= soc;
-	rsp.voltage	= voltage_mv /100;
+	rsp.voltage	= voltage_mv / 100;
 	_sendResp(&g_cmd.streamContext, CMD_RSP_EVT_BATTERY_STATUS, &rsp, sizeof(rsp));
 
 	return true;
@@ -759,7 +759,7 @@ bool CMD_processBuffer(CMD_CONTEXT* i_pContext, uint8_t* i_pBuf, uint16_t size)
 	uint8_t type = i_pBuf[2];
 
 	TRACE("CMD_processBuffer size:%d, len:%d, type %02x\n", size, len, type);
-	_processMessage(i_pContext, type, i_pBuf+3, size-3);
+	_processMessage(i_pContext, type, i_pBuf + 3, size - 3);
 	return true;
 }
 
@@ -827,7 +827,7 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 	if (!ret) {
 		soc = 0;
 	}
-		
+
 	ret = fg_get_vbat(&voltage);
 	if (!ret) {
 		voltage = 0;
@@ -840,9 +840,9 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 	TIME_strftime(t, "%H:%M:%S.0", timeStr);
 
 	pStr += sprintf(pStr,
-		"{"
-		"\"message type\": \"Get Status response\","
-	);
+	        "{"
+	        "\"message type\": \"Get Status response\","
+	    );
 
 #if CONFIG_BUILD_TYPE_PNU
 	pStr += sprintf(pStr, "\"time\": \"%s\",", timeStr);
@@ -853,7 +853,7 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 	pStr += sprintf(pStr, "\"battery soc\": %d,", soc);
 	pStr += sprintf(pStr, "\"connected\": \"True\"");
 	pStr += sprintf(pStr, "}\n\n");
-#endif	
+#endif
 	_sendRespStr(i_pContext, str);
 
 	return true;
@@ -881,16 +881,16 @@ static bool	_json_VERSION_func(CMD_CONTEXT* i_pContext, char* pContent)
 	    HW_VERSION_MAJOR,
 	    HW_VERSION_MINOR,
 	    HW_VERSION_BUILD);
-	
+
 	pStr += sprintf(pStr,
-		"{"
-		"\"message type\": \"Get Version response\","
-	);
+	        "{"
+	        "\"message type\": \"Get Version response\","
+	    );
 
 	pStr += sprintf(pStr, "\"sw\": \"%d.%d.%d\",", numbers[0], numbers[1], numbers[2]);
 	pStr += sprintf(pStr, "\"hw\": \"%d.%d.%d\"", HW_VERSION_MAJOR, HW_VERSION_MINOR, HW_VERSION_BUILD);
 	pStr += sprintf(pStr, "}\n\n");
-	
+
 	_sendRespStr(i_pContext, str);
 #endif
 	return true;
@@ -912,14 +912,14 @@ static bool	_json_INFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
 		goto error;
 	}
 
-	for (i=0; i<4; i++) {
+	for (i = 0; i < 4; i++) {
 		char entity[32];
-		sprintf(entity, "p%d", i+1);
+		sprintf(entity, "p%d", i + 1);
 		object = cJSON_GetObjectItemCaseSensitive(json, entity);
 		if (!cJSON_IsNumber(object)) {
 			goto error;
 		}
-		INFO("p%d: %d\n", i+1, object->valueint);
+		INFO("p%d: %d\n", i + 1, object->valueint);
 		press[i] = (int)object->valueint;
 	}
 
@@ -934,10 +934,10 @@ error:
 
 ok:
 	_sendRespStr(i_pContext,
-		"{"
-		"\"message type\": \"Inflate Channels Response\""
-		"}\n\n"
-		);
+	    "{"
+	    "\"message type\": \"Inflate Channels Response\""
+	    "}\n\n"
+	);
 
 	return true;
 }
@@ -952,12 +952,12 @@ static bool	_json_DEFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
 	INFO("DEFLATE_CHANNELS\n");
 
 	ret = CTRL_setTarget(press);
-	
+
 	_sendRespStr(i_pContext,
-		"{"
-		"\"message type\": \"Deflate Channels Response\""
-		"}\n\n"
-		);
+	    "{"
+	    "\"message type\": \"Deflate Channels Response\""
+	    "}\n\n"
+	);
 
 	return true;
 }
@@ -1016,7 +1016,7 @@ static bool dbgStream(uint8_t argc, char** argv)
 	period = strtoul(argv[1], NULL, 10);
 
 #if CONFIG_BUILD_TYPE_EEG
-	if ( argc >= 3) {
+	if (argc >= 3) {
 		g_cmd.streamSize = MIN(strtoul(argv[2], NULL, 10), sizeof(g_cmd.streamBuf));
 		memset(g_cmd.streamBuf, 0, g_cmd.streamSize);
 	}
@@ -1042,7 +1042,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	PRINT("stream size       %d\n", g_cmd.streamSize);
 #endif
 
-return true;
+	return true;
 }
 
 // *INDENT-OFF*

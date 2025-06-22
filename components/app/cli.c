@@ -503,7 +503,7 @@ static bool dbgTime(uint8_t argc, char** argv)
 	PRINT("time from start: %dmS\n", t32);
 	PRINT("%d.%06d\n", (int32_t)t, us);
 	PRINT("%s\n", str);
-	
+
 	return true;
 }
 

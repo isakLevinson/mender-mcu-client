@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+
 # Check for required parameters
 if [ "$#" -ne 1 ]; then
   echo "Usage: $0 <device_name>"
@@ -10,7 +11,12 @@ export VAULT_ADDR=http://127.0.0.1:8200
 #set roleid and secretid as env variables from the previous step
 export VAULT_USER="admin"
 export VAULT_PASSWORD="secret"
-vault secrets enable -path=pki_int pki
+
+echo '#0'
+
+#vault secrets enable -path=pki_int pki
+
+echo '#1'
 
 vault login -format=json -method=userpass \
     username=${VAULT_USER} \
@@ -18,10 +24,12 @@ vault login -format=json -method=userpass \
 
 #store the token as env variable, now this token can be used to authenticate against Vault
 export VAULT_TOKEN=`cat user.token`
-
-vault secrets enable -path=pki pki
+echo '#2'
+#vault secrets enable -path=pki pki
+echo '#3'
 vault secrets tune -max-lease-ttl=87600h pki
 
+echo '#4'
 
 #Use the new token to generate a new certificate and store it in a file
 vault write -format=json pki_int/issue/brain-space \

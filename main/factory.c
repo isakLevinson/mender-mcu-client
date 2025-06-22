@@ -240,7 +240,7 @@ static bool dbgGetObject(uint8_t argc, char** argv)
 	if (isAll) {
 		factory_id id;
 
-		for (id=0; id<factory_id_last; id++) {
+		for (id = 0; id < factory_id_last; id++) {
 			ret = FACTORY_get(id, &pStr);
 			if (ret) {
 				PRINT("%s: %s\n", g_str[id], pStr);
