@@ -30,6 +30,15 @@ JSON_PAYLOAD="{\"csr\":\"$ENCODED_CSR\",\"ttl\":\"$TTL\"}"
 echo "json = $JSON_PAYLOAD"
 
 # --- HTTP REQUEST TO VAULT ---
+echo "####"
+echo "curl -sS \
+  --header X-Vault-Token: $VAULT_TOKEN \
+  --request PUT \
+  --data $JSON_PAYLOAD \
+  $VAULT_ADDR/v1/pki_int/issue/$ROLE_NAME"
+
+
+
 RESPONSE=$(curl -sS \
   --header "X-Vault-Token: $VAULT_TOKEN" \
   --request PUT \

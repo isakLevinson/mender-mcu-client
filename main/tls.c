@@ -12,6 +12,7 @@
 #include <nvs_flash.h>
 #include <sys/param.h>
 #include "esp_netif.h"
+#include "esp_http_client.h"
 
 #include "freertos/FreeRTOS.h"
 #include "lwip/sockets.h"
@@ -27,7 +28,6 @@
 #include "mbedtls/error.h"
 #include "mbedtls/oid.h"
 #include "nvs.h"
-
 #include "factory.h"
 
 #if defined(MBEDTLS_SSL_CACHE_C)
@@ -853,8 +853,8 @@ static bool dbgStoreKey(uint8_t argc, char** argv)
 static bool dbgCreateCsr(uint8_t argc, char** argv)
 {
     bool    ret;
-    char csr_buf[2048];
-     char json[2048];
+    char    csr_buf[2048];
+    char    json[2048];
 	ret = _create_csr(&g_tls.pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
     if (!ret) {
         ERROR("_create_csr failed\n");
@@ -868,6 +868,108 @@ static bool dbgCreateCsr(uint8_t argc, char** argv)
 	PRINT("json:\n%s\n", json);
 
 	return true;
+}
+
+static bool _vaultRenew(char* url, char* token)
+{
+    bool    ret;
+    esp_err_t err;
+    char    csr_buf[2048];
+    char    json[2048];
+    int     read_len;
+
+    ret = _create_csr(&g_tls.pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
+    if (!ret) {
+        ERROR("_create_csr failed\n");
+        return true;
+    }
+
+    _voultCreateCsrJson(csr_buf, "720h", json);
+
+    esp_http_client_config_t config = {
+        .url = url,
+    };
+
+	INFO("token: %s\n", token);
+	INFO("json:\n%s\n", json);
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    err = esp_http_client_set_method(client, HTTP_METHOD_POST);
+    if (err != ESP_OK) {
+        ERROR("esp_http_client_set_method %x\n", err);
+    }
+
+    esp_http_client_set_header(client, "X-Vault-Token", token);
+    if (err != ESP_OK) {
+        ERROR("esp_http_client_set_header %x\n", err);
+    }
+
+    //esp_http_client_set_header(client, "Accept", "application/json");
+    err = esp_http_client_set_post_field(client, json, strlen(json));
+    if (err != ESP_OK) {
+        ERROR("esp_http_client_set_post_field %x\n", err);
+    }
+
+    err = esp_http_client_perform(client);
+    if (err != ESP_OK) {
+        ERROR("esp_http_client_perform %x\n", err);
+    }
+
+    if (err == ESP_OK) {
+        int content_len = esp_http_client_get_content_length(client);
+        int chunk_len;
+        esp_http_client_get_chunk_length(client, &chunk_len);
+
+        INFO("Status = %d, content_len=%d chunk_len=%d\n", esp_http_client_get_status_code(client), content_len, chunk_len);
+
+        memset(json, 0, sizeof(json));
+
+        if (content_len > 0) {
+            read_len = esp_http_client_read_response(client, json, sizeof(json) - 1);
+        }
+
+        if (content_len < 0) {
+            int totalRead = 0;
+            int iteration = 0;
+            bool complete;
+
+            do {
+                complete = esp_http_client_is_complete_data_received(client);
+                read_len = esp_http_client_read_response(client, json, sizeof(json) - 1);
+                //read_len =  esp_http_client_read(client, json, sizeof(json));
+                totalRead += read_len;
+                INFO("%d %d %d\n", complete, read_len, totalRead);
+            	INFO("json:\n%s\n", json);
+                iteration++;
+                if (iteration > 10) {
+                    break;
+                }
+            } while (!totalRead || read_len);
+        }
+    } else {
+        INFO("HTTP request failed: %s\n", esp_err_to_name(err));
+    }
+
+    esp_http_client_cleanup(client);
+
+    return true;
+}
+
+static bool dbgVaultRenew(uint8_t argc, char** argv)
+{
+    char* token = "root";
+
+    if (argc < 2) {
+        return false;
+    }
+
+    if (argc >= 3) {
+        token = argv[2];
+    }
+
+    _vaultRenew(argv[1], token);
+
+    return true;
 }
 
 static bool dbgInit(uint8_t argc, char** argv)
@@ -887,6 +989,7 @@ DEBUG_MENU_START(g_menu)
         DEBUG_MENU_CMD("genKey",    NULL,	NULL, dbgGenKey)
         DEBUG_MENU_CMD("storeKey",  NULL,	NULL, dbgStoreKey)
 		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
+		DEBUG_MENU_CMD("vaultRenew",NULL,	NULL, dbgVaultRenew)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
