@@ -20,65 +20,72 @@
 #include "mender-flash.h"
 
 __attribute__((weak)) mender_err_t
-mender_flash_open(char *name, size_t size, void **handle) {
+mender_flash_open(char* name, size_t size, void** handle)
+{
 
-    (void)name;
-    (void)size;
-    (void)handle;
+	(void)name;
+	(void)size;
+	(void)handle;
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }
 
 __attribute__((weak)) mender_err_t
-mender_flash_write(void *handle, void *data, size_t index, size_t length) {
+mender_flash_write(void* handle, void* data, size_t index, size_t length)
+{
 
-    (void)handle;
-    (void)data;
-    (void)index;
-    (void)length;
+	(void)handle;
+	(void)data;
+	(void)index;
+	(void)length;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_flash_close(void *handle) {
+mender_flash_close(void* handle)
+{
 
-    (void)handle;
+	(void)handle;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_flash_set_pending_image(void *handle) {
+mender_flash_set_pending_image(void* handle)
+{
 
-    (void)handle;
+	(void)handle;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_flash_abort_deployment(void *handle) {
+mender_flash_abort_deployment(void* handle)
+{
 
-    (void)handle;
+	(void)handle;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_flash_confirm_image(void) {
+mender_flash_confirm_image(void)
+{
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) bool
-mender_flash_is_image_confirmed(void) {
+mender_flash_is_image_confirmed(void)
+{
 
-    /* Nothing to do */
-    return false;
+	/* Nothing to do */
+	return false;
 }

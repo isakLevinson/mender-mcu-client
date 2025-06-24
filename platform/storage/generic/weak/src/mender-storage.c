@@ -21,102 +21,113 @@
 #include "mender-storage.h"
 
 __attribute__((weak)) mender_err_t
-mender_storage_init(void) {
+mender_storage_init(void)
+{
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }
 
 __attribute__((weak)) mender_err_t
-mender_storage_set_authentication_keys(unsigned char *private_key, size_t private_key_length, unsigned char *public_key, size_t public_key_length) {
+mender_storage_set_authentication_keys(unsigned char* private_key, size_t private_key_length, unsigned char* public_key, size_t public_key_length)
+{
 
-    (void)private_key;
-    (void)private_key_length;
-    (void)public_key;
-    (void)public_key_length;
+	(void)private_key;
+	(void)private_key_length;
+	(void)public_key;
+	(void)public_key_length;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_storage_get_authentication_keys(unsigned char **private_key, size_t *private_key_length, unsigned char **public_key, size_t *public_key_length) {
+mender_storage_get_authentication_keys(unsigned char** private_key, size_t* private_key_length, unsigned char** public_key, size_t* public_key_length)
+{
 
-    (void)private_key;
-    (void)private_key_length;
-    (void)public_key;
-    (void)public_key_length;
+	(void)private_key;
+	(void)private_key_length;
+	(void)public_key;
+	(void)public_key_length;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_storage_delete_authentication_keys(void) {
+mender_storage_delete_authentication_keys(void)
+{
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_storage_set_deployment_data(char *deployment_data) {
+mender_storage_set_deployment_data(char* deployment_data)
+{
 
-    (void)deployment_data;
+	(void)deployment_data;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_storage_get_deployment_data(char **deployment_data) {
+mender_storage_get_deployment_data(char** deployment_data)
+{
 
-    (void)deployment_data;
+	(void)deployment_data;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_storage_delete_deployment_data(void) {
+mender_storage_delete_deployment_data(void)
+{
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_CONFIGURE
 #ifdef CONFIG_MENDER_CLIENT_CONFIGURE_STORAGE
 
 __attribute__((weak)) mender_err_t
-mender_storage_set_device_config(char *device_config) {
+mender_storage_set_device_config(char* device_config)
+{
 
-    (void)device_config;
+	(void)device_config;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_storage_get_device_config(char **device_config) {
+mender_storage_get_device_config(char** device_config)
+{
 
-    (void)device_config;
+	(void)device_config;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_storage_delete_device_config(void) {
+mender_storage_delete_device_config(void)
+{
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 #endif /* CONFIG_MENDER_CLIENT_CONFIGURE_STORAGE */
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_CONFIGURE */
 
 __attribute__((weak)) mender_err_t
-mender_storage_exit(void) {
+mender_storage_exit(void)
+{
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }

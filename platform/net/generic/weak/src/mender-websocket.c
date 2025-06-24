@@ -20,51 +20,56 @@
 #include "mender-websocket.h"
 
 __attribute__((weak)) mender_err_t
-mender_websocket_init(mender_websocket_config_t *config) {
+mender_websocket_init(mender_websocket_config_t* config)
+{
 
-    (void)config;
+	(void)config;
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }
 
 __attribute__((weak)) mender_err_t
 mender_websocket_connect(
-    char *jwt, char *path, mender_err_t (*callback)(mender_websocket_client_event_t, void *, size_t, void *), void *params, void **handle) {
+    char* jwt, char* path, mender_err_t (*callback)(mender_websocket_client_event_t, void*, size_t, void*), void* params, void** handle)
+{
 
-    (void)jwt;
-    (void)path;
-    (void)callback;
-    (void)params;
-    (void)handle;
+	(void)jwt;
+	(void)path;
+	(void)callback;
+	(void)params;
+	(void)handle;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_websocket_send(void *handle, void *payload, size_t length) {
+mender_websocket_send(void* handle, void* payload, size_t length)
+{
 
-    (void)handle;
-    (void)payload;
-    (void)length;
+	(void)handle;
+	(void)payload;
+	(void)length;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_websocket_disconnect(void *handle) {
+mender_websocket_disconnect(void* handle)
+{
 
-    (void)handle;
+	(void)handle;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_websocket_exit(void) {
+mender_websocket_exit(void)
+{
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }

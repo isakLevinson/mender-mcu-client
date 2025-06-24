@@ -82,14 +82,14 @@
  * @brief Websocket handle
  */
 typedef struct {
-    esp_websocket_client_handle_t client;   /**< Websocket client handle */
-    void                         *data;     /**< Websocket data received from the server */
-    size_t                        data_len; /**< Websocket data length received from the server */
-    mender_err_t (*callback)(mender_websocket_client_event_t,
-                             void *,
-                             size_t,
-                             void *); /**< Callback function to be invoked to perform the treatment of the events and data from the websocket */
-    void *params;                     /**< Callback function parameters */
+	esp_websocket_client_handle_t client;   /**< Websocket client handle */
+	void*                         data;     /**< Websocket data received from the server */
+	size_t                        data_len; /**< Websocket data length received from the server */
+	mender_err_t (*callback)(mender_websocket_client_event_t,
+	    void*,
+	    size_t,
+	    void*);  /**< Callback function to be invoked to perform the treatment of the events and data from the websocket */
+	void* params;                     /**< Callback function parameters */
 } mender_websocket_handle_t;
 
 /**
@@ -99,288 +99,295 @@ static mender_websocket_config_t mender_websocket_config;
 
 /**
  * @brief Websocket event callback
- * @param handler_args 
+ * @param handler_args
  * @param base Event base
  * @param event_id Event ID
  * @param event_data Websocket event data
  */
-static void mender_websocket_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
+static void mender_websocket_event_handler(void* handler_args, esp_event_base_t base, int32_t event_id, void* event_data);
 
 mender_err_t
-mender_websocket_init(mender_websocket_config_t *config) {
+mender_websocket_init(mender_websocket_config_t* config)
+{
 
-    assert(NULL != config);
-    assert(NULL != config->host);
+	assert(NULL != config);
+	assert(NULL != config->host);
 
-    /* Save configuration */
-    memcpy(&mender_websocket_config, config, sizeof(mender_websocket_config_t));
+	/* Save configuration */
+	memcpy(&mender_websocket_config, config, sizeof(mender_websocket_config_t));
 
-    return MENDER_OK;
+	return MENDER_OK;
 }
 
 mender_err_t
 mender_websocket_connect(
-    char *jwt, char *path, mender_err_t (*callback)(mender_websocket_client_event_t, void *, size_t, void *), void *params, void **handle) {
+    char* jwt, char* path, mender_err_t (*callback)(mender_websocket_client_event_t, void*, size_t, void*), void* params, void** handle)
+{
 
-    assert(NULL != path);
-    assert(NULL != callback);
-    assert(NULL != handle);
-    esp_err_t    err;
-    mender_err_t ret    = MENDER_OK;
-    char        *url    = NULL;
-    char        *bearer = NULL;
+	assert(NULL != path);
+	assert(NULL != callback);
+	assert(NULL != handle);
+	esp_err_t    err;
+	mender_err_t ret    = MENDER_OK;
+	char*        url    = NULL;
+	char*        bearer = NULL;
 
-    /* Allocate a new handle */
-    if (NULL == (*handle = malloc(sizeof(mender_websocket_handle_t)))) {
-        mender_log_error("Unable to allocate memory");
-        ret = MENDER_FAIL;
-        goto FAIL;
-    }
-    memset(*handle, 0, sizeof(mender_websocket_handle_t));
+	/* Allocate a new handle */
+	if (NULL == (*handle = malloc(sizeof(mender_websocket_handle_t)))) {
+		mender_log_error("Unable to allocate memory");
+		ret = MENDER_FAIL;
+		goto FAIL;
+	}
+	memset(*handle, 0, sizeof(mender_websocket_handle_t));
 
-    /* Save callback and params */
-    ((mender_websocket_handle_t *)*handle)->callback = callback;
-    ((mender_websocket_handle_t *)*handle)->params   = params;
+	/* Save callback and params */
+	((mender_websocket_handle_t*)*handle)->callback = callback;
+	((mender_websocket_handle_t*)*handle)->params   = params;
 
-    /* Compute URL if required */
-    if ((false == mender_utils_strbeginwith(path, "ws://")) && (false == mender_utils_strbeginwith(path, "wss://"))) {
-        if ((true == mender_utils_strbeginwith(path, "http://")) || (true == mender_utils_strbeginwith(mender_websocket_config.host, "http://"))) {
-            size_t str_length = strlen(mender_websocket_config.host) - strlen("http://") + strlen("ws://") + strlen(path) + 1;
-            if (NULL == (url = (char *)malloc(str_length))) {
-                mender_log_error("Unable to allocate memory");
-                ret = MENDER_FAIL;
-                goto FAIL;
-            }
-            snprintf(url, str_length, "ws://%s%s", mender_websocket_config.host + strlen("http://"), path);
-        } else if ((true == mender_utils_strbeginwith(path, "https://")) || (true == mender_utils_strbeginwith(mender_websocket_config.host, "https://"))) {
-            size_t str_length = strlen(mender_websocket_config.host) - strlen("https://") + strlen("wss://") + strlen(path) + 1;
-            if (NULL == (url = (char *)malloc(str_length))) {
-                mender_log_error("Unable to allocate memory");
-                ret = MENDER_FAIL;
-                goto FAIL;
-            }
-            snprintf(url, str_length, "wss://%s%s", mender_websocket_config.host + strlen("https://"), path);
-        } else {
-            size_t str_length = strlen(mender_websocket_config.host) + strlen(path) + 1;
-            if (NULL == (url = (char *)malloc(str_length))) {
-                mender_log_error("Unable to allocate memory");
-                ret = MENDER_FAIL;
-                goto FAIL;
-            }
-            snprintf(url, str_length, "%s%s", mender_websocket_config.host, path);
-        }
-    }
+	/* Compute URL if required */
+	if ((false == mender_utils_strbeginwith(path, "ws://")) && (false == mender_utils_strbeginwith(path, "wss://"))) {
+		if ((true == mender_utils_strbeginwith(path, "http://")) || (true == mender_utils_strbeginwith(mender_websocket_config.host, "http://"))) {
+			size_t str_length = strlen(mender_websocket_config.host) - strlen("http://") + strlen("ws://") + strlen(path) + 1;
+			if (NULL == (url = (char*)malloc(str_length))) {
+				mender_log_error("Unable to allocate memory");
+				ret = MENDER_FAIL;
+				goto FAIL;
+			}
+			snprintf(url, str_length, "ws://%s%s", mender_websocket_config.host + strlen("http://"), path);
+		} else if ((true == mender_utils_strbeginwith(path, "https://")) || (true == mender_utils_strbeginwith(mender_websocket_config.host, "https://"))) {
+			size_t str_length = strlen(mender_websocket_config.host) - strlen("https://") + strlen("wss://") + strlen(path) + 1;
+			if (NULL == (url = (char*)malloc(str_length))) {
+				mender_log_error("Unable to allocate memory");
+				ret = MENDER_FAIL;
+				goto FAIL;
+			}
+			snprintf(url, str_length, "wss://%s%s", mender_websocket_config.host + strlen("https://"), path);
+		} else {
+			size_t str_length = strlen(mender_websocket_config.host) + strlen(path) + 1;
+			if (NULL == (url = (char*)malloc(str_length))) {
+				mender_log_error("Unable to allocate memory");
+				ret = MENDER_FAIL;
+				goto FAIL;
+			}
+			snprintf(url, str_length, "%s%s", mender_websocket_config.host, path);
+		}
+	}
 
-    /* Configuration of the client */
-    esp_websocket_client_config_t config = { .uri                  = (NULL != url) ? url : path,
-                                             .task_stack           = CONFIG_MENDER_WEBSOCKET_THREAD_STACK_SIZE * 1024,
-                                             .task_prio            = CONFIG_MENDER_WEBSOCKET_THREAD_PRIORITY,
-                                             .buffer_size          = CONFIG_MENDER_WEBSOCKET_BUFFER_SIZE * 1024,
-                                             .user_agent           = MENDER_WEBSOCKET_USER_AGENT,
-                                             .crt_bundle_attach    = esp_crt_bundle_attach,
-                                             .reconnect_timeout_ms = CONFIG_MENDER_WEBSOCKET_RECONNECT_TIMEOUT,
-                                             .network_timeout_ms   = CONFIG_MENDER_WEBSOCKET_NETWORK_TIMEOUT,
-                                             .ping_interval_sec    = CONFIG_MENDER_WEBSOCKET_PING_INTERVAL };
-    if (true == mender_utils_strbeginwith(config.uri, "ws://")) {
-        config.transport = WEBSOCKET_TRANSPORT_OVER_TCP;
-    } else if (true == mender_utils_strbeginwith(config.uri, "wss://")) {
-        config.transport = WEBSOCKET_TRANSPORT_OVER_SSL;
-    } else {
-        config.transport = WEBSOCKET_TRANSPORT_UNKNOWN;
-    }
-    if (NULL != jwt) {
-        size_t str_length = strlen("Authorization: Bearer ") + strlen(jwt) + strlen("\r\n") + 1;
-        if (NULL == (bearer = (char *)malloc(str_length))) {
-            mender_log_error("Unable to allocate memory");
-            ret = MENDER_FAIL;
-            goto END;
-        }
-        snprintf(bearer, str_length, "Authorization: Bearer %s\r\n", jwt);
-    }
-    config.headers = bearer;
+	/* Configuration of the client */
+	esp_websocket_client_config_t config = { .uri                  = (NULL != url) ? url : path,
+	                                  .task_stack           = CONFIG_MENDER_WEBSOCKET_THREAD_STACK_SIZE * 1024,
+	                                  .task_prio            = CONFIG_MENDER_WEBSOCKET_THREAD_PRIORITY,
+	                                  .buffer_size          = CONFIG_MENDER_WEBSOCKET_BUFFER_SIZE * 1024,
+	                                  .user_agent           = MENDER_WEBSOCKET_USER_AGENT,
+	                                  .crt_bundle_attach    = esp_crt_bundle_attach,
+	                                  .reconnect_timeout_ms = CONFIG_MENDER_WEBSOCKET_RECONNECT_TIMEOUT,
+	                                  .network_timeout_ms   = CONFIG_MENDER_WEBSOCKET_NETWORK_TIMEOUT,
+	                                  .ping_interval_sec    = CONFIG_MENDER_WEBSOCKET_PING_INTERVAL
+	                              };
+	if (true == mender_utils_strbeginwith(config.uri, "ws://")) {
+		config.transport = WEBSOCKET_TRANSPORT_OVER_TCP;
+	} else if (true == mender_utils_strbeginwith(config.uri, "wss://")) {
+		config.transport = WEBSOCKET_TRANSPORT_OVER_SSL;
+	} else {
+		config.transport = WEBSOCKET_TRANSPORT_UNKNOWN;
+	}
+	if (NULL != jwt) {
+		size_t str_length = strlen("Authorization: Bearer ") + strlen(jwt) + strlen("\r\n") + 1;
+		if (NULL == (bearer = (char*)malloc(str_length))) {
+			mender_log_error("Unable to allocate memory");
+			ret = MENDER_FAIL;
+			goto END;
+		}
+		snprintf(bearer, str_length, "Authorization: Bearer %s\r\n", jwt);
+	}
+	config.headers = bearer;
 
-    /* Initialization of the client */
-    if (NULL == (((mender_websocket_handle_t *)*handle)->client = esp_websocket_client_init(&config))) {
-        mender_log_error("Unable to allocate memory");
-        ret = MENDER_FAIL;
-        goto END;
-    }
-    if (ESP_OK
-        != (err
-            = esp_websocket_register_events(((mender_websocket_handle_t *)*handle)->client, WEBSOCKET_EVENT_ANY, mender_websocket_event_handler, *handle))) {
-        mender_log_error("Unable to register websocket callback event handler: %s", esp_err_to_name(err));
-        ret = MENDER_FAIL;
-        goto END;
-    }
+	/* Initialization of the client */
+	if (NULL == (((mender_websocket_handle_t*)*handle)->client = esp_websocket_client_init(&config))) {
+		mender_log_error("Unable to allocate memory");
+		ret = MENDER_FAIL;
+		goto END;
+	}
+	if (ESP_OK
+	    != (err
+	        = esp_websocket_register_events(((mender_websocket_handle_t*)*handle)->client, WEBSOCKET_EVENT_ANY, mender_websocket_event_handler, *handle))) {
+		mender_log_error("Unable to register websocket callback event handler: %s", esp_err_to_name(err));
+		ret = MENDER_FAIL;
+		goto END;
+	}
 
-    /* Open websocket client connection */
-    if (ESP_OK != (err = esp_websocket_client_start(((mender_websocket_handle_t *)*handle)->client))) {
-        mender_log_error("Unable to open websocket client connection: %s", esp_err_to_name(err));
-        ret = MENDER_FAIL;
-        goto FAIL;
-    }
+	/* Open websocket client connection */
+	if (ESP_OK != (err = esp_websocket_client_start(((mender_websocket_handle_t*)*handle)->client))) {
+		mender_log_error("Unable to open websocket client connection: %s", esp_err_to_name(err));
+		ret = MENDER_FAIL;
+		goto FAIL;
+	}
 
-    goto END;
+	goto END;
 
 FAIL:
 
-    /* Release memory */
-    if (NULL != *handle) {
-        if (NULL != ((mender_websocket_handle_t *)*handle)->client) {
-            esp_websocket_client_destroy(((mender_websocket_handle_t *)*handle)->client);
-        }
-        free(*handle);
-        *handle = NULL;
-    }
+	/* Release memory */
+	if (NULL != *handle) {
+		if (NULL != ((mender_websocket_handle_t*)*handle)->client) {
+			esp_websocket_client_destroy(((mender_websocket_handle_t*)*handle)->client);
+		}
+		free(*handle);
+		*handle = NULL;
+	}
 
 END:
 
-    /* Release memory */
-    if (NULL != bearer) {
-        free(bearer);
-    }
-    if (NULL != url) {
-        free(url);
-    }
+	/* Release memory */
+	if (NULL != bearer) {
+		free(bearer);
+	}
+	if (NULL != url) {
+		free(url);
+	}
 
-    return ret;
+	return ret;
 }
 
 mender_err_t
-mender_websocket_send(void *handle, void *payload, size_t length) {
+mender_websocket_send(void* handle, void* payload, size_t length)
+{
 
-    assert(NULL != handle);
-    assert(NULL != payload);
+	assert(NULL != handle);
+	assert(NULL != payload);
 
-    /* Send binary payload */
-    if (length
-        != esp_websocket_client_send_bin(
-            ((mender_websocket_handle_t *)handle)->client, payload, (int)length, pdMS_TO_TICKS(CONFIG_MENDER_WEBSOCKET_REQUEST_TIMEOUT))) {
-        mender_log_error("Unable to send data over websocket connection");
-        return MENDER_FAIL;
-    }
+	/* Send binary payload */
+	if (length
+	    != esp_websocket_client_send_bin(
+	        ((mender_websocket_handle_t*)handle)->client, payload, (int)length, pdMS_TO_TICKS(CONFIG_MENDER_WEBSOCKET_REQUEST_TIMEOUT))) {
+		mender_log_error("Unable to send data over websocket connection");
+		return MENDER_FAIL;
+	}
 
-    return MENDER_OK;
+	return MENDER_OK;
 }
 
 mender_err_t
-mender_websocket_disconnect(void *handle) {
+mender_websocket_disconnect(void* handle)
+{
 
-    assert(NULL != handle);
-    esp_err_t err;
+	assert(NULL != handle);
+	esp_err_t err;
 
-    /* Close websocket connection */
-    if (ESP_OK != (err = esp_websocket_client_close(((mender_websocket_handle_t *)handle)->client, pdMS_TO_TICKS(CONFIG_MENDER_WEBSOCKET_REQUEST_TIMEOUT)))) {
-        mender_log_error("Unable to close websocket connection: %s", esp_err_to_name(err));
-        return MENDER_FAIL;
-    }
+	/* Close websocket connection */
+	if (ESP_OK != (err = esp_websocket_client_close(((mender_websocket_handle_t*)handle)->client, pdMS_TO_TICKS(CONFIG_MENDER_WEBSOCKET_REQUEST_TIMEOUT)))) {
+		mender_log_error("Unable to close websocket connection: %s", esp_err_to_name(err));
+		return MENDER_FAIL;
+	}
 
-    /* Release memory */
-    esp_websocket_client_destroy(((mender_websocket_handle_t *)handle)->client);
-    if (NULL != ((mender_websocket_handle_t *)handle)->data) {
-        free(((mender_websocket_handle_t *)handle)->data);
-    }
-    free(handle);
+	/* Release memory */
+	esp_websocket_client_destroy(((mender_websocket_handle_t*)handle)->client);
+	if (NULL != ((mender_websocket_handle_t*)handle)->data) {
+		free(((mender_websocket_handle_t*)handle)->data);
+	}
+	free(handle);
 
-    return MENDER_OK;
+	return MENDER_OK;
 }
 
 mender_err_t
-mender_websocket_exit(void) {
+mender_websocket_exit(void)
+{
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }
 
 static void
-mender_websocket_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
+mender_websocket_event_handler(void* handler_args, esp_event_base_t base, int32_t event_id, void* event_data)
+{
 
-    assert(NULL != handler_args);
-    (void)base;
-    assert(NULL != event_data);
-    mender_websocket_handle_t  *handle = (mender_websocket_handle_t *)handler_args;
-    esp_websocket_event_data_t *data   = (esp_websocket_event_data_t *)event_data;
+	assert(NULL != handler_args);
+	(void)base;
+	assert(NULL != event_data);
+	mender_websocket_handle_t*  handle = (mender_websocket_handle_t*)handler_args;
+	esp_websocket_event_data_t* data   = (esp_websocket_event_data_t*)event_data;
 
-    /* Treatment depending of the event */
-    switch (event_id) {
-        case WEBSOCKET_EVENT_BEFORE_CONNECT:
-            /* Nothing to do */
-            break;
-        case WEBSOCKET_EVENT_CONNECTED:
-            /* Connection has been established */
-            if (MENDER_OK != handle->callback(MENDER_WEBSOCKET_EVENT_CONNECTED, NULL, 0, handle->params)) {
-                mender_log_error("An error occurred");
-            }
-            break;
-        case WEBSOCKET_EVENT_DATA:
-            /* Treatment of data received depending of the opcode */
-            if (WS_TRANSPORT_OPCODES_PING == data->op_code) {
+	/* Treatment depending of the event */
+	switch (event_id) {
+		case WEBSOCKET_EVENT_BEFORE_CONNECT:
+			/* Nothing to do */
+			break;
+		case WEBSOCKET_EVENT_CONNECTED:
+			/* Connection has been established */
+			if (MENDER_OK != handle->callback(MENDER_WEBSOCKET_EVENT_CONNECTED, NULL, 0, handle->params)) {
+				mender_log_error("An error occurred");
+			}
+			break;
+		case WEBSOCKET_EVENT_DATA:
+			/* Treatment of data received depending of the opcode */
+			if (WS_TRANSPORT_OPCODES_PING == data->op_code) {
 
-                /* Send pong message with the same payload */
-                esp_websocket_client_send_with_opcode(handle->client,
-                                                      WS_TRANSPORT_OPCODES_PONG,
-                                                      (const uint8_t *)data->data_ptr,
-                                                      data->data_len,
-                                                      pdMS_TO_TICKS(CONFIG_MENDER_WEBSOCKET_REQUEST_TIMEOUT));
+				/* Send pong message with the same payload */
+				esp_websocket_client_send_with_opcode(handle->client,
+				    WS_TRANSPORT_OPCODES_PONG,
+				    (const uint8_t*)data->data_ptr,
+				    data->data_len,
+				    pdMS_TO_TICKS(CONFIG_MENDER_WEBSOCKET_REQUEST_TIMEOUT));
 
-            } else if (WS_TRANSPORT_OPCODES_BINARY == data->op_code) {
+			} else if (WS_TRANSPORT_OPCODES_BINARY == data->op_code) {
 
-                /* Check if the whole packet is received once */
-                if ((NULL == handle->data) && (data->data_len >= data->payload_len)) {
+				/* Check if the whole packet is received once */
+				if ((NULL == handle->data) && (data->data_len >= data->payload_len)) {
 
-                    /* Invoke callback */
-                    if (MENDER_OK != handle->callback(MENDER_WEBSOCKET_EVENT_DATA_RECEIVED, (void *)data->data_ptr, data->data_len, handle->params)) {
-                        mender_log_error("An error occurred");
-                    }
+					/* Invoke callback */
+					if (MENDER_OK != handle->callback(MENDER_WEBSOCKET_EVENT_DATA_RECEIVED, (void*)data->data_ptr, data->data_len, handle->params)) {
+						mender_log_error("An error occurred");
+					}
 
-                } else {
+				} else {
 
-                    /* Concatenate data */
-                    void *tmp = realloc(handle->data, handle->data_len + data->data_len);
-                    if (NULL == tmp) {
-                        mender_log_error("Unable to allocate memory");
-                        if (NULL != handle->data) {
-                            free(handle->data);
-                            handle->data     = NULL;
-                            handle->data_len = 0;
-                        }
-                        break;
-                    }
-                    handle->data = tmp;
-                    memcpy(handle->data + handle->data_len, data->data_ptr, data->data_len);
-                    handle->data_len += data->data_len;
+					/* Concatenate data */
+					void* tmp = realloc(handle->data, handle->data_len + data->data_len);
+					if (NULL == tmp) {
+						mender_log_error("Unable to allocate memory");
+						if (NULL != handle->data) {
+							free(handle->data);
+							handle->data     = NULL;
+							handle->data_len = 0;
+						}
+						break;
+					}
+					handle->data = tmp;
+					memcpy(handle->data + handle->data_len, data->data_ptr, data->data_len);
+					handle->data_len += data->data_len;
 
-                    /* Check if the whole packet has been received */
-                    if (handle->data_len >= data->payload_len) {
+					/* Check if the whole packet has been received */
+					if (handle->data_len >= data->payload_len) {
 
-                        /* Invoke callback */
-                        if (MENDER_OK != handle->callback(MENDER_WEBSOCKET_EVENT_DATA_RECEIVED, handle->data, handle->data_len, handle->params)) {
-                            mender_log_error("An error occurred");
-                        }
+						/* Invoke callback */
+						if (MENDER_OK != handle->callback(MENDER_WEBSOCKET_EVENT_DATA_RECEIVED, handle->data, handle->data_len, handle->params)) {
+							mender_log_error("An error occurred");
+						}
 
-                        /* Release memory */
-                        free(handle->data);
-                        handle->data     = NULL;
-                        handle->data_len = 0;
-                    }
-                }
-            }
-            break;
-        case WEBSOCKET_EVENT_DISCONNECTED:
-        case WEBSOCKET_EVENT_CLOSED:
-            /* Connection has been closed */
-            if (MENDER_OK != handle->callback(MENDER_WEBSOCKET_EVENT_DISCONNECTED, NULL, 0, handle->params)) {
-                mender_log_error("An error occurred");
-            }
-            break;
-        case WEBSOCKET_EVENT_ERROR:
-            /* Connection failed */
-            mender_log_error("An error occurred");
-            handle->callback(MENDER_WEBSOCKET_EVENT_ERROR, NULL, 0, handle->params);
-            break;
-        default:
-            /* Should not occur */
-            mender_log_error("Unknown event occurred (event_id=%d)", event_id);
-            break;
-    }
+						/* Release memory */
+						free(handle->data);
+						handle->data     = NULL;
+						handle->data_len = 0;
+					}
+				}
+			}
+			break;
+		case WEBSOCKET_EVENT_DISCONNECTED:
+		case WEBSOCKET_EVENT_CLOSED:
+			/* Connection has been closed */
+			if (MENDER_OK != handle->callback(MENDER_WEBSOCKET_EVENT_DISCONNECTED, NULL, 0, handle->params)) {
+				mender_log_error("An error occurred");
+			}
+			break;
+		case WEBSOCKET_EVENT_ERROR:
+			/* Connection failed */
+			mender_log_error("An error occurred");
+			handle->callback(MENDER_WEBSOCKET_EVENT_ERROR, NULL, 0, handle->params);
+			break;
+		default:
+			/* Should not occur */
+			mender_log_error("Unknown event occurred (event_id=%d)", event_id);
+			break;
+	}
 }

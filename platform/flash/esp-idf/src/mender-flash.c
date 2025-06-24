@@ -25,159 +25,166 @@
  * @brief Flash handle
  */
 typedef struct {
-    const esp_partition_t *partition;  /**< Update partition to which the firmware is flashed */
-    esp_ota_handle_t       ota_handle; /**< OTA handle used to flash the firmware */
+	const esp_partition_t* partition;  /**< Update partition to which the firmware is flashed */
+	esp_ota_handle_t       ota_handle; /**< OTA handle used to flash the firmware */
 } mender_flash_handle_t;
 
 mender_err_t
-mender_flash_open(char *name, size_t size, void **handle) {
+mender_flash_open(char* name, size_t size, void** handle)
+{
 
-    assert(NULL != name);
-    assert(NULL != handle);
-    esp_err_t err;
+	assert(NULL != name);
+	assert(NULL != handle);
+	esp_err_t err;
 
-    /* Print current file name and size */
-    mender_log_info("Start flashing artifact '%s' with size %d", name, size);
+	/* Print current file name and size */
+	mender_log_info("Start flashing artifact '%s' with size %d", name, size);
 
-    /* Allocate memory to store the flash handle */
-    if (NULL == (*handle = malloc(sizeof(mender_flash_handle_t)))) {
-        mender_log_error("Unable to allocate memory");
-        return MENDER_FAIL;
-    }
+	/* Allocate memory to store the flash handle */
+	if (NULL == (*handle = malloc(sizeof(mender_flash_handle_t)))) {
+		mender_log_error("Unable to allocate memory");
+		return MENDER_FAIL;
+	}
 
-    /* Check for the next update partition */
-    if (NULL == (((mender_flash_handle_t *)(*handle))->partition = esp_ota_get_next_update_partition(NULL))) {
-        mender_log_error("Unable to find next update partition");
-        return MENDER_FAIL;
-    }
-    mender_log_info("Next update partition is '%s', subtype %d at offset 0x%x and with size %d",
-                    ((mender_flash_handle_t *)(*handle))->partition->label,
-                    ((mender_flash_handle_t *)(*handle))->partition->subtype,
-                    ((mender_flash_handle_t *)(*handle))->partition->address,
-                    ((mender_flash_handle_t *)(*handle))->partition->size);
+	/* Check for the next update partition */
+	if (NULL == (((mender_flash_handle_t*)(*handle))->partition = esp_ota_get_next_update_partition(NULL))) {
+		mender_log_error("Unable to find next update partition");
+		return MENDER_FAIL;
+	}
+	mender_log_info("Next update partition is '%s', subtype %d at offset 0x%x and with size %d",
+	    ((mender_flash_handle_t*)(*handle))->partition->label,
+	    ((mender_flash_handle_t*)(*handle))->partition->subtype,
+	    ((mender_flash_handle_t*)(*handle))->partition->address,
+	    ((mender_flash_handle_t*)(*handle))->partition->size);
 
-    /* Begin OTA with sequential writes */
-    if (ESP_OK
-        != (err
-            = esp_ota_begin(((mender_flash_handle_t *)(*handle))->partition, OTA_WITH_SEQUENTIAL_WRITES, &((mender_flash_handle_t *)(*handle))->ota_handle))) {
-        mender_log_error("esp_ota_begin failed (%s)", esp_err_to_name(err));
-        return MENDER_FAIL;
-    }
+	/* Begin OTA with sequential writes */
+	if (ESP_OK
+	    != (err
+	        = esp_ota_begin(((mender_flash_handle_t*)(*handle))->partition, OTA_WITH_SEQUENTIAL_WRITES, &((mender_flash_handle_t*)(*handle))->ota_handle))) {
+		mender_log_error("esp_ota_begin failed (%s)", esp_err_to_name(err));
+		return MENDER_FAIL;
+	}
 
-    return MENDER_OK;
+	return MENDER_OK;
 }
 
 mender_err_t
-mender_flash_write(void *handle, void *data, size_t index, size_t length) {
+mender_flash_write(void* handle, void* data, size_t index, size_t length)
+{
 
-    (void)index;
-    esp_err_t err;
+	(void)index;
+	esp_err_t err;
 
-    /* Check flash handle */
-    if (NULL == handle) {
-        mender_log_error("Invalid flash handle");
-        return MENDER_FAIL;
-    }
+	/* Check flash handle */
+	if (NULL == handle) {
+		mender_log_error("Invalid flash handle");
+		return MENDER_FAIL;
+	}
 
-    /* Write data received to the update partition */
-    if (ESP_OK != (err = esp_ota_write(((mender_flash_handle_t *)handle)->ota_handle, data, length))) {
-        mender_log_error("esp_ota_write failed (%s)", esp_err_to_name(err));
-        return MENDER_FAIL;
-    }
+	/* Write data received to the update partition */
+	if (ESP_OK != (err = esp_ota_write(((mender_flash_handle_t*)handle)->ota_handle, data, length))) {
+		mender_log_error("esp_ota_write failed (%s)", esp_err_to_name(err));
+		return MENDER_FAIL;
+	}
 
-    return MENDER_OK;
+	return MENDER_OK;
 }
 
 mender_err_t
-mender_flash_abort_deployment(void *handle) {
+mender_flash_abort_deployment(void* handle)
+{
 
-    /* Check flash handle */
-    if (NULL != handle) {
+	/* Check flash handle */
+	if (NULL != handle) {
 
-        /* Abort current deployment */
-        esp_ota_abort(((mender_flash_handle_t *)handle)->ota_handle);
+		/* Abort current deployment */
+		esp_ota_abort(((mender_flash_handle_t*)handle)->ota_handle);
 
-        /* Release memory */
-        free(handle);
-    }
+		/* Release memory */
+		free(handle);
+	}
 
-    return MENDER_OK;
+	return MENDER_OK;
 }
 
 mender_err_t
-mender_flash_close(void *handle) {
+mender_flash_close(void* handle)
+{
 
-    esp_err_t err;
+	esp_err_t err;
 
-    /* Check flash handle */
-    if (NULL == handle) {
-        mender_log_error("Invalid flash handle");
-        return MENDER_FAIL;
-    }
+	/* Check flash handle */
+	if (NULL == handle) {
+		mender_log_error("Invalid flash handle");
+		return MENDER_FAIL;
+	}
 
-    /* Ending current deployment */
-    if (ESP_OK != (err = esp_ota_end(((mender_flash_handle_t *)handle)->ota_handle))) {
-        if (ESP_ERR_OTA_VALIDATE_FAILED == err) {
-            mender_log_error("Image validation failed, image is corrupted");
-        } else {
-            mender_log_error("esp_ota_end failed (%s)!", esp_err_to_name(err));
-        }
-        return MENDER_FAIL;
-    }
+	/* Ending current deployment */
+	if (ESP_OK != (err = esp_ota_end(((mender_flash_handle_t*)handle)->ota_handle))) {
+		if (ESP_ERR_OTA_VALIDATE_FAILED == err) {
+			mender_log_error("Image validation failed, image is corrupted");
+		} else {
+			mender_log_error("esp_ota_end failed (%s)!", esp_err_to_name(err));
+		}
+		return MENDER_FAIL;
+	}
 
-    return MENDER_OK;
+	return MENDER_OK;
 }
 
 mender_err_t
-mender_flash_set_pending_image(void *handle) {
+mender_flash_set_pending_image(void* handle)
+{
 
-    esp_err_t err;
+	esp_err_t err;
 
-    /* Check flash handle */
-    if (NULL != handle) {
+	/* Check flash handle */
+	if (NULL != handle) {
 
-        /* Set new boot partition */
-        if (ESP_OK != (err = esp_ota_set_boot_partition(((mender_flash_handle_t *)handle)->partition))) {
-            mender_log_error("esp_ota_set_boot_partition failed (%s)!", esp_err_to_name(err));
-            return MENDER_FAIL;
-        }
+		/* Set new boot partition */
+		if (ESP_OK != (err = esp_ota_set_boot_partition(((mender_flash_handle_t*)handle)->partition))) {
+			mender_log_error("esp_ota_set_boot_partition failed (%s)!", esp_err_to_name(err));
+			return MENDER_FAIL;
+		}
 
-        /* Release memory */
-        free(handle);
-    }
+		/* Release memory */
+		free(handle);
+	}
 
-    return MENDER_OK;
+	return MENDER_OK;
 }
 
 mender_err_t
-mender_flash_confirm_image(void) {
+mender_flash_confirm_image(void)
+{
 
-    mender_err_t ret = MENDER_OK;
+	mender_err_t ret = MENDER_OK;
 
-    /* Validate the image if it is still pending */
-    if (false == mender_flash_is_image_confirmed()) {
-        if (ESP_OK != esp_ota_mark_app_valid_cancel_rollback()) {
-            mender_log_error("Unable to mark application valid, application will rollback");
-            ret = MENDER_FAIL;
-        } else {
-            mender_log_info("Application has been mark valid and rollback canceled");
-        }
-    }
+	/* Validate the image if it is still pending */
+	if (false == mender_flash_is_image_confirmed()) {
+		if (ESP_OK != esp_ota_mark_app_valid_cancel_rollback()) {
+			mender_log_error("Unable to mark application valid, application will rollback");
+			ret = MENDER_FAIL;
+		} else {
+			mender_log_info("Application has been mark valid and rollback canceled");
+		}
+	}
 
-    return ret;
+	return ret;
 }
 
 bool
-mender_flash_is_image_confirmed(void) {
+mender_flash_is_image_confirmed(void)
+{
 
-    /* Retrieve running version state of the ESP32 */
-    esp_ota_img_states_t   img_state;
-    const esp_partition_t *partition = esp_ota_get_running_partition();
-    if (ESP_OK != esp_ota_get_state_partition(partition, &img_state)) {
-        mender_log_error("Unable to get running version state");
-        return false;
-    }
+	/* Retrieve running version state of the ESP32 */
+	esp_ota_img_states_t   img_state;
+	const esp_partition_t* partition = esp_ota_get_running_partition();
+	if (ESP_OK != esp_ota_get_state_partition(partition, &img_state)) {
+		mender_log_error("Unable to get running version state");
+		return false;
+	}
 
-    /* Check if the image is still pending */
-    return (ESP_OTA_IMG_VALID == img_state);
+	/* Check if the image is still pending */
+	return (ESP_OTA_IMG_VALID == img_state);
 }

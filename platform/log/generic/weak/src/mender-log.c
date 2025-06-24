@@ -20,28 +20,31 @@
 #include "mender-log.h"
 
 __attribute__((weak)) mender_err_t
-mender_log_init(void) {
+mender_log_init(void)
+{
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }
 
 __attribute__((weak)) mender_err_t
-mender_log_print(uint8_t level, const char *filename, const char *function, int line, char *format, ...) {
+mender_log_print(uint8_t level, const char* filename, const char* function, int line, char* format, ...)
+{
 
-    (void)level;
-    (void)filename;
-    (void)function;
-    (void)line;
-    (void)format;
+	(void)level;
+	(void)filename;
+	(void)function;
+	(void)line;
+	(void)format;
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }
 
 __attribute__((weak)) mender_err_t
-mender_log_exit(void) {
+mender_log_exit(void)
+{
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }
