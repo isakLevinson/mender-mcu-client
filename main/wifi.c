@@ -34,7 +34,7 @@
 #include "wifi.h"
 #include "cmd.h"
 #include "time.h"
-#include "http.h"
+#include "httpd.h"
 #include "factory.h"
 #include "config.h"
 #include "mender_ota.h"

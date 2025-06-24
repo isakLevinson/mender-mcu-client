@@ -17,7 +17,7 @@
 #include "nvs.h"
 #include "mdns.h"
 #include "wifi.h"
-#include "http.h"
+#include "httpd.h"
 #include "max30001.h"
 #include "time.h"
 
@@ -66,7 +66,6 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 
 		object = object->next;
 	}
-
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "cert");
 	if (object) {

@@ -17,7 +17,7 @@
 #include "lwip/sockets.h"
 #include <esp_https_server.h>
 #include "http_keepalive.h"
-#include "http.h"
+#include "httpd.h"
 #include "cmd.h"
 #include "wifi.h"
 #include "nvs.h"

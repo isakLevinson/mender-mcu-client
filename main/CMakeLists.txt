@@ -26,7 +26,7 @@ idf_component_register(
 				"ntp.c"
 				"time.c"
 				"tls.c"
-				"http.c"
+				"httpd.c"
 				"http_keepalive.c"
 				"nvs.c"
 				"config.c"

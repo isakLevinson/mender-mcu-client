@@ -870,13 +870,131 @@ static bool dbgCreateCsr(uint8_t argc, char** argv)
 	return true;
 }
 
+static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
+{
+	static int read_pos = 0;
+
+	TRACE("_http_event_handler: ");
+
+	switch (evt->event_id) {
+		case HTTP_EVENT_ERROR:
+			TRACE("HTTP_EVENT_ERROR");
+			break;
+		case HTTP_EVENT_ON_CONNECTED:
+			TRACE("HTTP_EVENT_ON_CONNECTED");
+			read_pos = 0;
+			break;
+		case HTTP_EVENT_HEADER_SENT:
+			TRACE("HTTP_EVENT_HEADER_SENT");
+			break;
+		case HTTP_EVENT_ON_HEADER:
+			TRACE("HTTP_EVENT_ON_HEADER");
+			TRACE_BUF("key", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_key, 10);
+			TRACE_BUF("val", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_value, 10);
+			break;
+		case HTTP_EVENT_ON_DATA:
+			INFO_BUF("HTTP_EVENT_ON_DATA",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, evt->data, evt->data_len);
+
+            if (!esp_http_client_is_chunked_response(evt->client)) {
+                // If user_data buffer is configured, copy the response into the buffer
+                if (evt->user_data) {
+                    // The last byte in evt->user_data is kept for the NULL character in case of out-of-bound access.
+                    if (evt->data_len) {
+                        memcpy(evt->user_data + read_pos, evt->data, evt->data_len);
+                    }
+	                read_pos += evt->data_len;
+                }
+            }
+			break;
+
+		case HTTP_EVENT_ON_FINISH:
+			TRACE("HTTP_EVENT_ON_FINISH");
+			break;
+
+		case HTTP_EVENT_DISCONNECTED:
+			TRACE("HTTP_EVENT_DISCONNECTED");
+			break;
+
+		case HTTP_EVENT_REDIRECT:
+			TRACE("HTTP_EVENT_REDIRECT");
+			break;
+		default:
+			TRACE("%d", evt->event_id);
+	}
+
+	TRACE("\n");
+
+	return ESP_OK;
+}
+
+
+static int _curl(char* url, esp_http_client_method_t method, char* content, size_t contentSize, char* result, size_t resultSize)
+{
+	int		ret = true;
+    esp_err_t err;
+    int     read_len;
+
+	char* token = "root";
+
+    esp_http_client_config_t config = {
+        .url = url,
+		.method = method,
+		.event_handler = _http_event_handler,
+		.user_data = result,
+		//.buffer_size = resultSize,
+	};
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+	if (!client) {
+		ERROR("esp_http_client_init failed\n");
+		return -1;
+	}
+
+    err = esp_http_client_set_header(client, "X-Vault-Token", token);
+    if (err != ESP_OK) {
+        ERROR("esp_http_client_set_header %x\n", err);
+		ret = -1;
+		goto end;
+    }
+
+	if (HTTP_METHOD_POST == method) {
+		//esp_http_client_set_header(client, "Accept", "application/json");
+		err = esp_http_client_set_post_field(client, content, contentSize);
+		if (err != ESP_OK) {
+			ERROR("esp_http_client_set_post_field %x\n", err);
+			ret = -1;
+			goto end;
+		}
+	}
+
+    err = esp_http_client_perform(client);
+    if (err != ESP_OK) {
+        ERROR("esp_http_client_perform %x\n", err);
+		ret = -1;
+		goto end;
+    }
+
+	int content_len = esp_http_client_get_content_length(client);
+	int chunk_len;
+	esp_http_client_get_chunk_length(client, &chunk_len);
+
+	INFO("Status = %d, content_len=%d chunk_len=%d\n", esp_http_client_get_status_code(client), content_len, chunk_len);
+	result[content_len] = '\0';
+	INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, result, content_len);
+	INFO("response:\n%s\n", result);
+
+	end:
+    esp_http_client_cleanup(client);
+
+	return ret;
+}
+
 static bool _vaultRenew(char* url, char* token)
 {
     bool    ret;
     esp_err_t err;
     char    csr_buf[2048];
     char    json[2048];
-    int     read_len;
 
     ret = _create_csr(&g_tls.pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
     if (!ret) {
@@ -886,71 +1004,9 @@ static bool _vaultRenew(char* url, char* token)
 
     _voultCreateCsrJson(csr_buf, "720h", json);
 
-    esp_http_client_config_t config = {
-        .url = url,
-    };
-
 	INFO("token: %s\n", token);
 	INFO("json:\n%s\n", json);
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    err = esp_http_client_set_method(client, HTTP_METHOD_POST);
-    if (err != ESP_OK) {
-        ERROR("esp_http_client_set_method %x\n", err);
-    }
-
-    esp_http_client_set_header(client, "X-Vault-Token", token);
-    if (err != ESP_OK) {
-        ERROR("esp_http_client_set_header %x\n", err);
-    }
-
-    //esp_http_client_set_header(client, "Accept", "application/json");
-    err = esp_http_client_set_post_field(client, json, strlen(json));
-    if (err != ESP_OK) {
-        ERROR("esp_http_client_set_post_field %x\n", err);
-    }
-
-    err = esp_http_client_perform(client);
-    if (err != ESP_OK) {
-        ERROR("esp_http_client_perform %x\n", err);
-    }
-
-    if (err == ESP_OK) {
-        int content_len = esp_http_client_get_content_length(client);
-        int chunk_len;
-        esp_http_client_get_chunk_length(client, &chunk_len);
-
-        INFO("Status = %d, content_len=%d chunk_len=%d\n", esp_http_client_get_status_code(client), content_len, chunk_len);
-
-        memset(json, 0, sizeof(json));
-
-        if (content_len > 0) {
-            read_len = esp_http_client_read_response(client, json, sizeof(json) - 1);
-        }
-
-        if (content_len < 0) {
-            int totalRead = 0;
-            int iteration = 0;
-            bool complete;
-
-            do {
-                complete = esp_http_client_is_complete_data_received(client);
-                read_len = esp_http_client_read_response(client, json, sizeof(json) - 1);
-                //read_len =  esp_http_client_read(client, json, sizeof(json));
-                totalRead += read_len;
-                INFO("%d %d %d\n", complete, read_len, totalRead);
-            	INFO("json:\n%s\n", json);
-                iteration++;
-                if (iteration > 10) {
-                    break;
-                }
-            } while (!totalRead || read_len);
-        }
-    } else {
-        INFO("HTTP request failed: %s\n", esp_err_to_name(err));
-    }
-
-    esp_http_client_cleanup(client);
 
     return true;
 }
@@ -972,6 +1028,23 @@ static bool dbgVaultRenew(uint8_t argc, char** argv)
     return true;
 }
 
+static bool dbgCurl(uint8_t argc, char** argv)
+{
+	bool	ret;
+	char	result[2048];
+	int		resultSize;
+	
+	if (argc < 3) {
+		return false;
+	}
+
+	resultSize = _curl(argv[1], HTTP_METHOD_GET, argv[2], strlen(argv[2]), result, sizeof(result));
+
+	PRINT("%d\n", resultSize);
+
+	return true;
+}
+
 static bool dbgInit(uint8_t argc, char** argv)
 {
 	_tlsInit();
@@ -990,6 +1063,7 @@ DEBUG_MENU_START(g_menu)
         DEBUG_MENU_CMD("storeKey",  NULL,	NULL, dbgStoreKey)
 		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
 		DEBUG_MENU_CMD("vaultRenew",NULL,	NULL, dbgVaultRenew)
+		DEBUG_MENU_CMD("curl",		NULL,	NULL, dbgCurl)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
