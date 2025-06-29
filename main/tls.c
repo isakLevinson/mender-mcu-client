@@ -930,14 +930,12 @@ static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 	return ESP_OK;
 }
 
-static int _curl(char* url, esp_http_client_method_t method, char* content, size_t contentSize)
+static int _curl(char* url, esp_http_client_method_t method, char* header_key, char* header_value, char* content, size_t contentSize)
 {
 	int		ret = true;
     esp_err_t err;
     int     read_len;
 	int		i;
-
-	char* token = "root";
 
     esp_http_client_config_t config = {
         .url = url,
@@ -953,12 +951,14 @@ static int _curl(char* url, esp_http_client_method_t method, char* content, size
 		return -1;
 	}
 
-    err = esp_http_client_set_header(client, "X-Vault-Token", token);
-    if (err != ESP_OK) {
-        ERROR("esp_http_client_set_header %x\n", err);
-		ret = -1;
-		goto end;
-    }
+	if ( header_key && header_value) {
+		err = esp_http_client_set_header(client, header_key, header_value);
+		if (err != ESP_OK) {
+			ERROR("esp_http_client_set_header %x\n", err);
+			ret = -1;
+			goto end;
+		}
+	}
 
 	if (content) {
 		//esp_http_client_set_header(client, "Accept", "application/json");
@@ -1029,7 +1029,7 @@ static bool _vaultRenew(char* url, char* token)
 	INFO("token: %s\n", token);
 	INFO("json:\n%s\n", json);
 
-	resultSize = _curl(url, HTTP_METHOD_POST, json, strlen(json));
+	resultSize = _curl(url, HTTP_METHOD_POST, NULL, NULL, json, strlen(json));
 
     cJSON *root = cJSON_Parse(http_client_result);
     if (root == NULL) {
@@ -1086,28 +1086,43 @@ static bool dbgCurl(uint8_t argc, char** argv)
 {
 	bool	ret;
 	int		resultSize;
-	esp_http_client_method_t	method;
-	char* 	content = NULL;
-	size_t	content_len = 0;
+	esp_http_client_method_t	method = HTTP_METHOD_GET;
+	char*	url;
+	char* 	data = NULL;
+	size_t	data_len = 0;
+	char*	header_key		= NULL;
+	char*	header_value	= NULL;
+	bool	isPost			= false;
 
-	if (argc < 3) {
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("k",		ARGS_TYPE_STRING,	0,	"header key",	&header_key)
+		ARGS_ENTRY("v",		ARGS_TYPE_STRING,	0,	"header value",	&header_value)
+		ARGS_ENTRY("p",		ARGS_TYPE_SWITCH,	0,	"post",			&isPost)
+		ARGS_ENTRY(NULL,	ARGS_TYPE_STRING,	0,	"url",   		&url)
+		ARGS_ENTRY(NULL,	ARGS_TYPE_STRING,	0,	"data",   		&data)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (!ret) {
 		return false;
 	}
 
-	if ('g' == argv[1][0]) {
-		method = HTTP_METHOD_GET;
-	} else if ('p' == argv[1][0]) {
+	if (!url) {
+		return false;
+	}
+
+	if (data) {
+		data_len = strlen(data);
+		isPost = true;
+	}
+
+	if (isPost) {
 		method = HTTP_METHOD_POST;
-		if (argc < 4) {
-			return false;
-		}
-		content = argv[3];
-		content_len = strlen(content);
-	} else {
-		return false;
 	}
 
-	resultSize = _curl(argv[2], method, content, content_len);
+	resultSize = _curl(url, method, header_key, header_value,  data, data_len);
 
 	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
 	//PRINT("response:\n%s\n", http_client_result);
