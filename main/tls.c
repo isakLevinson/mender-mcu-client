@@ -1010,6 +1010,60 @@ static int _curl(char* url, esp_http_client_method_t method, char* header_key, c
 	return ret;
 }
 
+static bool _vaultLogin(char* baseUrl, char* role, char* secret, char* o_pToken)
+{
+	char url[256];
+	char data[1024];
+
+	if (!baseUrl) {
+		return false;
+	}
+
+	if (!role) {
+		return false;
+	}
+
+	if (!secret) {
+		return false;
+	}
+
+	sprintf(url, "http://%s/v1/auth/approle/login", baseUrl);
+	sprintf(data, "{\"role_id\":\"%s\",\"secret_id\":\"%s\"}", role, secret);
+
+	_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data));
+	INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
+
+    cJSON *root = cJSON_Parse(http_client_result);
+    if (root == NULL) {
+        ERROR("Failed to parse JSON\n");
+        return false;
+    }
+
+    cJSON *auth = cJSON_GetObjectItem(root, "auth");
+    if (!cJSON_IsObject(auth)) {
+        ERROR("Missing or invalid 'auth' field\n");
+        goto err;
+    }
+
+    // Access .certificate
+    cJSON *token = cJSON_GetObjectItem(auth, "client_token");
+    if (!cJSON_IsString(token)) {
+        ERROR("Missing or invalid 'client_token' field\n");
+        goto err;
+    }
+	INFO("TOKEN: %s\n", token->valuestring);
+	if (o_pToken) {
+		strcpy(o_pToken, token->valuestring);
+	}
+
+	cJSON_Delete(root);
+	return true;
+
+	err:
+    cJSON_Delete(root);
+	return false;
+}
+
 static bool _vaultRenew(char* url, char* token)
 {
     bool    ret;
@@ -1077,7 +1131,25 @@ static bool dbgVaultRenew(uint8_t argc, char** argv)
 
     _vaultRenew(argv[1], token);
 
+	return true;
+}
 
+static bool dbgVaultLogin(uint8_t argc, char** argv)
+{
+	bool	ret;
+	char	token[1024];
+
+    if (argc < 4) {
+        return false;
+    }
+
+	ret = _vaultLogin(argv[1], argv[2], argv[3], token);
+	if (!ret) {
+		PRINT("login failed\n");
+		return true;
+	}
+
+	PRINT("TOKEN: %s\n", token);
 
 	return true;
 }
@@ -1147,8 +1219,9 @@ DEBUG_MENU_START(g_menu)
         DEBUG_MENU_CMD("genKey",    NULL,	NULL, dbgGenKey)
         DEBUG_MENU_CMD("storeKey",  NULL,	NULL, dbgStoreKey)
 		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
-		DEBUG_MENU_CMD("vaultRenew",NULL,	NULL, dbgVaultRenew)
 		DEBUG_MENU_CMD("curl",		NULL,	NULL, dbgCurl)
+		DEBUG_MENU_CMD("vaultRenew",NULL,	NULL, dbgVaultRenew)
+		DEBUG_MENU_CMD("login",		NULL,	NULL, dbgVaultLogin)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
