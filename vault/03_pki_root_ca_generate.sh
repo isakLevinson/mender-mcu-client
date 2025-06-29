@@ -1,7 +1,5 @@
 #!/bin/sh
 set -o xtrace
-export VAULT_ADDR=http://127.0.0.1:8200
-export VAULT_NAMESPACE=
 
 #enable Vault PKI secret engine 
 vault secrets enable pki

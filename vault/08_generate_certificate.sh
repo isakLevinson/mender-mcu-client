@@ -7,7 +7,6 @@ if [ "$#" -ne 1 ]; then
 fi
 
 set -o xtrace
-export VAULT_ADDR=http://127.0.0.1:8200
 #set roleid and secretid as env variables from the previous step
 export VAULT_USER="admin"
 export VAULT_PASSWORD="secret"

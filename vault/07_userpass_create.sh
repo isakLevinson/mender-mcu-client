@@ -1,7 +1,5 @@
 #!/bin/sh
 set -o xtrace
-export VAULT_ADDR=http://127.0.0.1:8200
-export VAULT_NAMESPACE=
 export VAULT_USER="admin"
 export VAULT_PASSWORD="secret"
 #enable userpass to create an authentication method for creating and managing the certificates

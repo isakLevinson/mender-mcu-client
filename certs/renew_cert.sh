@@ -31,19 +31,21 @@ echo "json = $JSON_PAYLOAD"
 
 # --- HTTP REQUEST TO VAULT ---
 echo "####"
+
+echo "HEADER=X-Vault-Token: $VAULT_TOKEN"
+echo "JSON=$JSON_PAYLOAD"
+echo "ADDR=$VAULT_ADDR/v1/pki_int/issue/$ROLE_NAME"
+
 echo "curl -sS \
-  --header X-Vault-Token: $VAULT_TOKEN \
-  --request PUT \
-  --data $JSON_PAYLOAD \
-  $VAULT_ADDR/v1/pki_int/issue/$ROLE_NAME"
+--header 'X-Vault-Token: $VAULT_TOKEN' \
+--request PUT \
+--data '$JSON_PAYLOAD' \
+$VAULT_ADDR/v1/pki_int/issue/$ROLE_NAME"
 
+curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request PUT --data "$JSON_PAYLOAD" "$VAULT_ADDR/v1/pki_int/issue/$ROLE_NAME"
 
-
-RESPONSE=$(curl -sS \
-  --header "X-Vault-Token: $VAULT_TOKEN" \
-  --request PUT \
-  --data "$JSON_PAYLOAD" \
-  "$VAULT_ADDR/v1/pki_int/issue/$ROLE_NAME")
+RESPONSE=$(curl -sS --header "X-Vault-Token: $VAULT_TOKEN" --request PUT --data "$JSON_PAYLOAD" "$VAULT_ADDR/v1/pki_int/issue/$ROLE_NAME")
+echo "RESPONSE=$RESPONSE"
 
 # --- PARSE RESULT ---
 CERT=$(echo "$RESPONSE" | jq -r .data.certificate)

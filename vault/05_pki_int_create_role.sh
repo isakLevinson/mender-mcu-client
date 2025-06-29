@@ -1,7 +1,5 @@
 #!/bin/sh
 set -o xtrace
-export VAULT_ADDR=http://127.0.0.1:8200
-export VAULT_NAMESPACE=
 
 #create a role to generate new certificates
 vault write pki_int/roles/brain-space \

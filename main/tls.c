@@ -29,6 +29,7 @@
 #include "mbedtls/oid.h"
 #include "nvs.h"
 #include "factory.h"
+#include "cJSON.h"
 
 #if defined(MBEDTLS_SSL_CACHE_C)
 #include "mbedtls/ssl_cache.h"
@@ -1030,7 +1031,36 @@ static bool _vaultRenew(char* url, char* token)
 
 	resultSize = _curl(url, HTTP_METHOD_POST, json, strlen(json));
 
+    cJSON *root = cJSON_Parse(http_client_result);
+    if (root == NULL) {
+        ERROR("Failed to parse JSON\n");
+        return false;
+    }
+
+    cJSON *data = cJSON_GetObjectItem(root, "data");
+    if (!cJSON_IsObject(data)) {
+        ERROR("Missing or invalid 'data' field\n");
+        goto err;
+    }
+
+    // Access .certificate
+    cJSON *cert = cJSON_GetObjectItem(data, "certificate");
+    if (!cJSON_IsString(cert)) {
+        ERROR("Missing or invalid 'certificate' field\n");
+        goto err;
+    }
+
+    // Print certificate (like jq -r)
+    INFO("CERT:\n%s\n", cert->valuestring);
+//	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
+
+    cJSON_Delete(root);
 	return true;
+
+	err:
+    cJSON_Delete(root);
+
+	return false;
 }
 
 static bool dbgVaultRenew(uint8_t argc, char** argv)
@@ -1047,10 +1077,9 @@ static bool dbgVaultRenew(uint8_t argc, char** argv)
 
     _vaultRenew(argv[1], token);
 
-	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
-	PRINT("response:\n%s\n", http_client_result);
 
-    return true;
+
+	return true;
 }
 
 static bool dbgCurl(uint8_t argc, char** argv)
@@ -1081,7 +1110,7 @@ static bool dbgCurl(uint8_t argc, char** argv)
 	resultSize = _curl(argv[2], method, content, content_len);
 
 	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
-	PRINT("response:\n%s\n", http_client_result);
+	//PRINT("response:\n%s\n", http_client_result);
 
 	return true;
 }
