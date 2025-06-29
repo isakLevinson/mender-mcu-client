@@ -870,10 +870,11 @@ static bool dbgCreateCsr(uint8_t argc, char** argv)
 	return true;
 }
 
+static char http_client_result[8192];
+static int  http_client_result_size;
+
 static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 {
-	static int read_pos = 0;
-
 	TRACE("_http_event_handler: ");
 
 	switch (evt->event_id) {
@@ -882,7 +883,6 @@ static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 			break;
 		case HTTP_EVENT_ON_CONNECTED:
 			TRACE("HTTP_EVENT_ON_CONNECTED");
-			read_pos = 0;
 			break;
 		case HTTP_EVENT_HEADER_SENT:
 			TRACE("HTTP_EVENT_HEADER_SENT");
@@ -892,20 +892,22 @@ static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 			TRACE_BUF("key", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_key, 10);
 			TRACE_BUF("val", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_value, 10);
 			break;
-		case HTTP_EVENT_ON_DATA:
-			INFO_BUF("HTTP_EVENT_ON_DATA",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, evt->data, evt->data_len);
+		case HTTP_EVENT_ON_DATA: {
+			bool chunked = esp_http_client_is_chunked_response(evt->client);
+			bool complete = esp_http_client_is_complete_data_received(evt->client);
+			INFO("chunked:%d complete:%d\n", chunked, complete);
+			TRACE_BUF("HTTP_EVENT_ON_DATA",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, evt->data, evt->data_len);
 
-            if (!esp_http_client_is_chunked_response(evt->client)) {
-                // If user_data buffer is configured, copy the response into the buffer
-                if (evt->user_data) {
-                    // The last byte in evt->user_data is kept for the NULL character in case of out-of-bound access.
-                    if (evt->data_len) {
-                        memcpy(evt->user_data + read_pos, evt->data, evt->data_len);
-                    }
-	                read_pos += evt->data_len;
-                }
-            }
-			break;
+			// If user_data buffer is configured, copy the response into the buffer
+			if (evt->user_data) {
+				// The last byte in evt->user_data is kept for the NULL character in case of out-of-bound access.
+				if (evt->data_len) {
+					memcpy(evt->user_data + http_client_result_size, evt->data, evt->data_len);
+				}
+				http_client_result_size += evt->data_len;
+			}
+		}
+		break;
 
 		case HTTP_EVENT_ON_FINISH:
 			TRACE("HTTP_EVENT_ON_FINISH");
@@ -927,12 +929,12 @@ static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 	return ESP_OK;
 }
 
-
-static int _curl(char* url, esp_http_client_method_t method, char* content, size_t contentSize, char* result, size_t resultSize)
+static int _curl(char* url, esp_http_client_method_t method, char* content, size_t contentSize)
 {
 	int		ret = true;
     esp_err_t err;
     int     read_len;
+	int		i;
 
 	char* token = "root";
 
@@ -940,8 +942,8 @@ static int _curl(char* url, esp_http_client_method_t method, char* content, size
         .url = url,
 		.method = method,
 		.event_handler = _http_event_handler,
-		.user_data = result,
-		//.buffer_size = resultSize,
+		.user_data = http_client_result,
+		.buffer_size = sizeof(http_client_result),
 	};
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -957,7 +959,7 @@ static int _curl(char* url, esp_http_client_method_t method, char* content, size
 		goto end;
     }
 
-	if (HTTP_METHOD_POST == method) {
+	if (content) {
 		//esp_http_client_set_header(client, "Accept", "application/json");
 		err = esp_http_client_set_post_field(client, content, contentSize);
 		if (err != ESP_OK) {
@@ -967,6 +969,7 @@ static int _curl(char* url, esp_http_client_method_t method, char* content, size
 		}
 	}
 
+	http_client_result_size = 0;
     err = esp_http_client_perform(client);
     if (err != ESP_OK) {
         ERROR("esp_http_client_perform %x\n", err);
@@ -974,14 +977,31 @@ static int _curl(char* url, esp_http_client_method_t method, char* content, size
 		goto end;
     }
 
+	bool complete;
+	i = 0;
+	do {
+		vTaskDelay(100);
+		i++;
+		if (i > 10) {
+			break;
+		}
+		complete = esp_http_client_is_complete_data_received(client);
+	} while (!complete);
+
+	INFO("complete after %d\n", i);
+
 	int content_len = esp_http_client_get_content_length(client);
 	int chunk_len;
+
+	bool chunked = esp_http_client_is_chunked_response(client);
+
 	esp_http_client_get_chunk_length(client, &chunk_len);
 
-	INFO("Status = %d, content_len=%d chunk_len=%d\n", esp_http_client_get_status_code(client), content_len, chunk_len);
-	result[content_len] = '\0';
-	INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, result, content_len);
-	INFO("response:\n%s\n", result);
+	INFO("Status = %d chunked:%d content_len=%d chunk_len=%d\n", esp_http_client_get_status_code(client), chunked, content_len, chunk_len);
+	http_client_result[http_client_result_size] = '\0';
+	TRACE_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
+	TRACE("response:\n%s\n", http_client_result);
+	ret = http_client_result_size;
 
 	end:
     esp_http_client_cleanup(client);
@@ -995,6 +1015,7 @@ static bool _vaultRenew(char* url, char* token)
     esp_err_t err;
     char    csr_buf[2048];
     char    json[2048];
+	int		resultSize;
 
     ret = _create_csr(&g_tls.pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
     if (!ret) {
@@ -1007,8 +1028,9 @@ static bool _vaultRenew(char* url, char* token)
 	INFO("token: %s\n", token);
 	INFO("json:\n%s\n", json);
 
+	resultSize = _curl(url, HTTP_METHOD_POST, json, strlen(json));
 
-    return true;
+	return true;
 }
 
 static bool dbgVaultRenew(uint8_t argc, char** argv)
@@ -1025,22 +1047,41 @@ static bool dbgVaultRenew(uint8_t argc, char** argv)
 
     _vaultRenew(argv[1], token);
 
+	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
+	PRINT("response:\n%s\n", http_client_result);
+
     return true;
 }
 
 static bool dbgCurl(uint8_t argc, char** argv)
 {
 	bool	ret;
-	char	result[2048];
 	int		resultSize;
-	
+	esp_http_client_method_t	method;
+	char* 	content = NULL;
+	size_t	content_len = 0;
+
 	if (argc < 3) {
 		return false;
 	}
 
-	resultSize = _curl(argv[1], HTTP_METHOD_GET, argv[2], strlen(argv[2]), result, sizeof(result));
+	if ('g' == argv[1][0]) {
+		method = HTTP_METHOD_GET;
+	} else if ('p' == argv[1][0]) {
+		method = HTTP_METHOD_POST;
+		if (argc < 4) {
+			return false;
+		}
+		content = argv[3];
+		content_len = strlen(content);
+	} else {
+		return false;
+	}
 
-	PRINT("%d\n", resultSize);
+	resultSize = _curl(argv[2], method, content, content_len);
+
+	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
+	PRINT("response:\n%s\n", http_client_result);
 
 	return true;
 }
