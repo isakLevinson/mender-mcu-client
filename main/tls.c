@@ -716,6 +716,13 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	return ret;
 }
 
+bool TLS_reload(void)
+{
+	bool	ret;
+	ret = _tlsInit();
+	return ret;
+}
+
 static bool dbgConnect(uint8_t argc, char** argv)
 {
 #if 0

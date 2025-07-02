@@ -30,6 +30,7 @@
 #include "factory.h"
 #include "config.h"
 #include "tls.h"
+#include "nvs.h"
 #include "cJSON.h"
 
 
@@ -387,6 +388,18 @@ static bool dbgRenew(uint8_t argc, char** argv)
 	}
 
 	PRINT("CERT:\n%s\n", certificate);
+
+	ret = NVS_set(nvs_id_certificate, certificate);
+	if (!ret) {
+		ERROR("NVS_set failed\n");
+		return true;
+	}
+
+	ret = TLS_reload();
+	if (!ret) {
+		ERROR("TLS_reload failed\n");
+		return true;
+	}
 
 	return true;
 }
