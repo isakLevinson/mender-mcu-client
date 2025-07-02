@@ -36,7 +36,7 @@
 
 #define VAULT_ROLE_NAME		"brain-space"
 #define VAULT_URL_LOGIN		"/v1/auth/approle/login"
-#define VAULT_URL_RENEW		"/v1/pki_int/issue/" VAULT_ROLE_NAME
+#define VAULT_URL_RENEW		"/v1/pki_int/sign/" VAULT_ROLE_NAME
 
 static uint8_t _createSanExt(char* cn_list[], uint8_t size, uint8_t* buf)
 {
@@ -151,7 +151,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 {
 	int     ret;
 	char    errStr[256];
-	char*   caCert;
+	char*   ca_pem;
 	char    certificate[2048];
 	mbedtls_x509_crt* cert = TLS_getCert();
 
@@ -159,24 +159,16 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 	mbedtls_x509_crt_init(&ca_cert);
 
-	FACTORY_get(factory_id_ca_certificate, &caCert);
+	FACTORY_get(factory_id_ca_certificate, &ca_pem);
 
-	if (caCert) {
-		uint32_t len = strlen(caCert) + 1;
+	if (ca_pem) {
+		uint32_t len = strlen(ca_pem) + 1;
 
-		ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)caCert, len);
+		ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)ca_pem, len);
 		if (ret < 0) {
 			mbedtls_strerror(ret, errStr, sizeof(errStr));
 			ERROR("Failed to parse CA cert: -0x%04x %s\n", -ret, errStr);
-
-			INFO("CA cert: %d\n", len);
-			for (int i = 0; i < len; i++) {
-				if (caCert[i] < 0x20) {
-					INFO("(%02x)", caCert[i]);
-				}
-				INFO("%c", caCert[i]);
-			}
-			INFO("\n###\n");
+			INFO_BUF("CA",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, ca_pem, len);
 		} else {
 			INFO("CA  : ");
 			_print_cert_dates(&ca_cert);
@@ -345,6 +337,33 @@ static bool _vaultRenew(char* token, char* new_certificate)
         ERROR("Missing or invalid 'certificate' field\n");
         goto err;
     }
+
+	cJSON *ca = cJSON_GetObjectItem(data, "issuing_ca");
+	if (ca) {
+		INFO("CA:\n%s\n", ca->valuestring);
+	}
+	cJSON *chain = cJSON_GetObjectItem(data, "ca_chain");
+	if (chain) {
+		INFO("CHAIN\n");
+		if (cJSON_IsArray(chain)) {
+			int size = cJSON_GetArraySize(chain);
+			INFO("CHAIN ARR size:%d\n", size);
+			for (int i=0; i<size; i++) {
+				cJSON *item = cJSON_GetArrayItem(chain, i);
+		        if (cJSON_IsString(item)) {
+					INFO("CHAIN %d: %s\n", i, item->valuestring);
+				}
+			}
+		}
+		//INFO_BUF("CHAIN",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, chain->valuestring, strlen(chain->valuestring));
+//		INFO("CHAIN:\n%s\n", chain->valuestring);
+	}
+	cJSON *key = cJSON_GetObjectItem(data, "private_key");
+	if (key) {
+		INFO("PKEY\n");
+		INFO_BUF("PKEY",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, key->valuestring, strlen(key->valuestring));
+//		INFO("PKEY:\n%s\n", key->valuestring);
+	}
 
     // Print certificate (like jq -r)
     INFO("CERT:\n%s\n", cert->valuestring);
