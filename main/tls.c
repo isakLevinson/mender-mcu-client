@@ -29,7 +29,6 @@
 #include "mbedtls/oid.h"
 #include "nvs.h"
 #include "factory.h"
-#include "cJSON.h"
 
 #if defined(MBEDTLS_SSL_CACHE_C)
 #include "mbedtls/ssl_cache.h"
@@ -668,7 +667,6 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	}
 
 	if (content) {
-		//esp_http_client_set_header(client, "Accept", "application/json");
 		err = esp_http_client_set_post_field(client, content, contentSize);
 		if (err != ESP_OK) {
 			ERROR("esp_http_client_set_post_field %x\n", err);

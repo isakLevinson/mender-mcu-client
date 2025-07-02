@@ -9,7 +9,7 @@
 
 #include <esp_event.h>
 #include <esp_system.h>
-#include <nvs_flash.h>
+
 #include <sys/param.h>
 #include "esp_netif.h"
 #include "esp_http_client.h"
@@ -27,16 +27,15 @@
 #include "mbedtls/esp_debug.h"
 #include "mbedtls/error.h"
 #include "mbedtls/oid.h"
-#include "nvs.h"
 #include "factory.h"
 #include "config.h"
 #include "tls.h"
 #include "cJSON.h"
 
-#ifdef CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
-#include "psa/crypto.h"
-#endif
-#include "esp_crt_bundle.h"
+
+#define VAULT_ROLE_NAME		"brain-space"
+#define VAULT_URL_LOGIN		"/v1/auth/approle/login"
+#define VAULT_URL_RENEW		"/v1/pki_int/issue/" VAULT_ROLE_NAME
 
 static uint8_t _createSanExt(char* cn_list[], uint8_t size, uint8_t* buf)
 {
@@ -228,7 +227,7 @@ static bool dbgCreateCsr(uint8_t argc, char** argv)
 
 static bool _vaultLogin(char* o_pToken)
 {
-	char url[256];
+	char url[128];
 	char data[1024];
 	char* baseUrl;
 	char* role;
@@ -254,7 +253,7 @@ static bool _vaultLogin(char* o_pToken)
 		return false;
 	}
 
-	sprintf(url, "%s/v1/auth/approle/login", baseUrl);
+	sprintf(url, "%s%s", baseUrl, VAULT_URL_LOGIN);
 	sprintf(data, "{\"role_id\":\"%s\",\"secret_id\":\"%s\"}", role, secret);
 
 	http_result_size = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data), &http_result);
@@ -291,7 +290,7 @@ static bool _vaultLogin(char* o_pToken)
 	return false;
 }
 
-static bool _vaultRenew(char* url, char* token)
+static bool _vaultRenew(char* token, char* new_certificate)
 {
     bool    ret;
     esp_err_t err;
@@ -300,6 +299,17 @@ static bool _vaultRenew(char* url, char* token)
 	int		resultSize;
 	mbedtls_pk_context*	pkey = TLS_getPkey();
 	char*	http_result;
+	char*	baseUrl;
+	char	url[256];
+
+	FACTORY_get(factory_id_vault_url, &baseUrl);
+	if (!baseUrl) {
+		ERROR("vault url not set\n");
+		return false;
+	}
+
+	sprintf(url, "%s%s", baseUrl, VAULT_URL_RENEW);
+	INFO("url: %s\n", url);
 
     ret = _create_csr(pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
     if (!ret) {
@@ -307,12 +317,14 @@ static bool _vaultRenew(char* url, char* token)
         return true;
     }
 
+	INFO("csr:\n%s\n", csr_buf);
+
     _voultCreateCsrJson(csr_buf, "720h", json);
 
 	INFO("token: %s\n", token);
 	INFO("json:\n%s\n", json);
 
-	resultSize = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL, json, strlen(json), &http_result);
+	resultSize = TLS_curl(url, HTTP_METHOD_POST, "X-Vault-Token", token, json, strlen(json), &http_result);
 
     cJSON *root = cJSON_Parse(http_result);
     if (root == NULL) {
@@ -337,6 +349,10 @@ static bool _vaultRenew(char* url, char* token)
     INFO("CERT:\n%s\n", cert->valuestring);
 //	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
 
+	if (new_certificate) {
+		strcpy(new_certificate, cert->valuestring);
+	}
+
     cJSON_Delete(root);
 	return true;
 
@@ -346,24 +362,36 @@ static bool _vaultRenew(char* url, char* token)
 	return false;
 }
 
-static bool dbgVaultRenew(uint8_t argc, char** argv)
+static bool dbgRenew(uint8_t argc, char** argv)
 {
-    char* token = "root";
+	bool	ret;
+	char	token[256];
+	char	certificate[2048];
 
     if (argc < 2) {
-        return false;
-    }
+        ret = _vaultLogin(token);
+		if (!ret) {
+			PRINT("login failed\n");
+			return true;
+		}
+    } else {
+        strcpy(token, argv[2]);
+	}
 
-    if (argc >= 3) {
-        token = argv[2];
-    }
+	PRINT("using token: %s\n", token);
 
-    _vaultRenew(argv[1], token);
+    ret = _vaultRenew(token, certificate);
+	if (!ret) {
+		PRINT("reniew failed\n");
+		return true;
+	}
+
+	PRINT("CERT:\n%s\n", certificate);
 
 	return true;
 }
 
-static bool dbgVaultLogin(uint8_t argc, char** argv)
+static bool dbgLogin(uint8_t argc, char** argv)
 {
 	bool	ret;
 	char	token[1024];
@@ -434,8 +462,8 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("status",    NULL,	NULL, dbgStatus)
 		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
 		DEBUG_MENU_CMD("curl",		NULL,	NULL, dbgCurl)
-		DEBUG_MENU_CMD("vaultRenew",NULL,	NULL, dbgVaultRenew)
-		DEBUG_MENU_CMD("login",		NULL,	NULL, dbgVaultLogin)
+		DEBUG_MENU_CMD("renew",		NULL,	NULL, dbgRenew)
+		DEBUG_MENU_CMD("login",		NULL,	NULL, dbgLogin)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
