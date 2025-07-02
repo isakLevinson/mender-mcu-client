@@ -11,6 +11,7 @@
 	cmd(hw_revision)	\
 	cmd(model)	\
 	cmd(ca_certificate)	\
+	cmd(vault_token)	\
 // *INDENT-ON*
 
 #define FACTORY_ENUM(id)	factory_id_ ## id,

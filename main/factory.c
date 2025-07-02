@@ -25,6 +25,8 @@ char* g_str[] = {
 	FACTORY_LIST(FACTORY_STR)
 };
 
+char* g_override[factory_id_last] = {0};
+
 static const esp_partition_t* find_partition(esp_partition_type_t type, esp_partition_subtype_t subtype, const char* name)
 {
 	//    INFO("Find partition with type %s, subtype %s, label %s...", get_type_str(type), get_subtype_str(subtype),
@@ -112,6 +114,11 @@ bool FACTORY_get(factory_id id, char** o_ppStr)
 
 	if (id >= factory_id_last) {
 		return false;
+	}
+
+	if (g_override[id]) {
+		*o_ppStr = g_override[id];
+		return true;
 	}
 
 	object = _getFactoryObjectStr(g_str[id], o_ppStr);
@@ -262,6 +269,43 @@ static bool dbgGetObject(uint8_t argc, char** argv)
 	return true;
 }
 
+
+static bool dbgSet(uint8_t argc, char** argv)
+{
+	bool    ret;
+	factory_id id = 0;
+
+	if (argc < 3) {
+		return false;
+	}
+
+	while (id < factory_id_last) {
+		if (!strcmp(argv[1], g_str[id])) {
+			break;
+		}
+		id++;
+	}
+
+	if (id >= factory_id_last) {
+		ERROR("invalid id\n");
+		return false;
+	}
+
+	if (g_override[id]) {
+		free(g_override[id]);
+	}
+	
+	g_override[id] = malloc(strlen(argv[2])+1);
+	if (!g_override[id]) {
+		ERROR("failed to allocate %d\n", strlen(argv[2]));
+		return true;
+	}
+
+	strcpy(g_override[id], argv[2]);
+
+	return true;
+}
+
 static bool dbgFreeObject(uint8_t argc, char** argv)
 {
 	_freeObject();
@@ -310,6 +354,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("findPart",  	NULL,		NULL, dbgFindPart)
 		DEBUG_MENU_CMD("rd",	    	NULL,		NULL, dbgRead)
 		DEBUG_MENU_CMD("get", 			NULL,		NULL, dbgGetObject)
+		DEBUG_MENU_CMD("set", 			NULL,		NULL, dbgSet)
 		DEBUG_MENU_CMD("freeObject",	NULL,		NULL, dbgFreeObject)
 		DEBUG_MENU_CMD("gpio",			NULL,		NULL, dbgGpio)
 	DEBUG_MENU_DIR_END
