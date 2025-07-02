@@ -38,6 +38,7 @@
 #include "max30001.h"
 #include "max17049.h"
 #include "mender_ota.h"
+#include "vault.h"
 
 #define BUF_SIZE    1024
 
@@ -146,6 +147,7 @@ void app_main(void)
 	WIFI_init();
 	ntp_init();
 	TLS_init();
+	VAULT_init();
 
 	PMP_init();
 	CTRL_init();

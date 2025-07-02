@@ -52,6 +52,7 @@
 
 #define USE_HTTP		1
 #define USE_TLS			1
+#define USE_VAULT		1
 #define USE_WSS			0
 #define USE_REST		0
 #define HTTP_UNSECURE	0

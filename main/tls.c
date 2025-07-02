@@ -58,7 +58,7 @@ static struct {
 	mbedtls_ssl_config conf;
 	mbedtls_entropy_context entropy;
 	mbedtls_ctr_drbg_context ctr_drbg;
-	mbedtls_x509_crt srvcert;
+	mbedtls_x509_crt cert;
 	mbedtls_pk_context pkey;
 #if defined(MBEDTLS_SSL_CACHE_C)
 	mbedtls_ssl_cache_context cache;
@@ -71,6 +71,9 @@ static struct {
 
 	TimerHandle_t		kaTimer;
 } g_tls;
+
+static char http_client_result[8192];
+static int  http_client_result_size;
 
 static void my_debug(void* ctx, int level, const char* file, int line, const char* str)
 {
@@ -375,105 +378,6 @@ static void _kaTimerCb(TimerHandle_t pxTimer)
 	mbedtls_net_free(&g_tls.fd_stream);
 }
 
-static uint8_t _createSanExt(char* cn_list[], uint8_t size, uint8_t* buf)
-{
-	uint8_t     i;
-	uint8_t*    pBuf = buf + 2;
-	uint8_t     len;
-
-	for (i = 0; i < size; i++) {
-		len = strlen(cn_list[i]);
-		*pBuf++ = 0x82;
-		*pBuf++ = len;
-		memcpy(pBuf, cn_list[i], len);
-		pBuf += len;
-	}
-
-	buf[0] = 0x30;
-	buf[1] = pBuf - buf - 2;
-
-	return pBuf - buf;
-}
-
-static bool _create_csr(mbedtls_pk_context* pKey, unsigned char* csr_buf, size_t size)
-{
-	int ret;
-	mbedtls_x509write_csr csr;
-	char    errStr[256];
-	char    subject[64];
-	char*   sn;
-	unsigned char san_ext[256];
-	uint8_t san_length;
-	char    sn_local[64];
-
-	ret = FACTORY_get(factory_id_sn, &sn);
-	if (!ret) {
-		ERROR("SN not set\n");
-		return false;
-	}
-	sprintf(subject, "CN=%s", sn);
-	sprintf(sn_local, "%s.local", sn);
-
-	char* dns_list[] = {
-		sn,
-		sn_local,
-	};
-
-	san_length = _createSanExt(dns_list, 2, san_ext);
-	INFO_BUF("san_ext",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, san_ext, san_length);
-
-	mbedtls_x509write_csr_init(&csr);
-
-	// Setup CSR
-	mbedtls_x509write_csr_set_md_alg(&csr, MBEDTLS_MD_SHA256);
-	mbedtls_x509write_csr_set_key(&csr, &g_tls.pkey);
-
-	mbedtls_x509write_csr_set_subject_name(&csr, subject);
-	ret = mbedtls_x509write_csr_set_extension(&csr, MBEDTLS_OID_SUBJECT_ALT_NAME, MBEDTLS_OID_SIZE(MBEDTLS_OID_SUBJECT_ALT_NAME), 1, san_ext, san_length);
-	if (ret != 0) {
-		mbedtls_strerror(ret, errStr, sizeof(errStr));
-		ERROR("mbedtls_x509write_csr_set_extension: -0x%04X %s\n", -ret, errStr);
-		return false;
-	}
-
-
-	memset(csr_buf, 0, size);
-	ret = mbedtls_x509write_csr_pem(&csr, csr_buf, size, mbedtls_ctr_drbg_random, &g_tls.ctr_drbg);
-	if (ret < 0) {
-		mbedtls_strerror(ret, errStr, sizeof(errStr));
-		ERROR("mbedtls_x509write_csr_pem: -0x%04X %s\n", -ret, errStr);
-		return false;
-	}
-
-	mbedtls_x509write_csr_free(&csr);
-
-	return true;
-}
-
-static bool _voultCreateCsrJson(char* csr, char* ttl, char* json)
-{
-    char* pJson = json;
-
-    pJson += sprintf(pJson, "{\"csr\":\"");
-
-    while ('\0' != *csr) {
-        switch (*csr) {
-            case '\n':
-                *pJson++ = '\\';
-                *pJson++ = 'n';
-                break;
-
-            default:
-                *pJson++ = *csr;
-        }
-        csr++;
-    }
-
-    pJson += sprintf(pJson, "\",\"ttl\":\"%s\"}", ttl);
-
-    return true;
-}
-
 static bool _genPrivateKey(void)
 {
 	int     ret;
@@ -535,7 +439,7 @@ static bool _tlsInit(void)
 #if defined(MBEDTLS_SSL_CACHE_C)
 	mbedtls_ssl_cache_init(&g_tls.cache);
 #endif
-	mbedtls_x509_crt_init(&g_tls.srvcert);
+	mbedtls_x509_crt_init(&g_tls.cert);
 	mbedtls_pk_init(&g_tls.pkey);
 	mbedtls_entropy_init(&g_tls.entropy);
 	mbedtls_ctr_drbg_init(&g_tls.ctr_drbg);
@@ -574,13 +478,13 @@ static bool _tlsInit(void)
 	FACTORY_get(factory_id_ca_certificate, &cacert_pem);
 	int cacert_len = strlen(cacert_pem) + 1;
 
-	ret = mbedtls_x509_crt_parse(&g_tls.srvcert, (unsigned char*)certificate, cert_len);
+	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)certificate, cert_len);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return false;
 	}
 
-	ret = mbedtls_x509_crt_parse(&g_tls.srvcert, (const unsigned char*) cacert_pem, cacert_len);
+	ret = mbedtls_x509_crt_parse(&g_tls.cert, (const unsigned char*) cacert_pem, cacert_len);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return false;
@@ -611,8 +515,8 @@ static bool _tlsInit(void)
 	mbedtls_ssl_conf_session_cache(&g_tls.conf, &g_tls.cache, mbedtls_ssl_cache_get, mbedtls_ssl_cache_set);
 #endif
 
-	mbedtls_ssl_conf_ca_chain(&g_tls.conf, g_tls.srvcert.next, NULL);
-	if ((ret = mbedtls_ssl_conf_own_cert(&g_tls.conf, &g_tls.srvcert, &g_tls.pkey)) != 0) {
+	mbedtls_ssl_conf_ca_chain(&g_tls.conf, g_tls.cert.next, NULL);
+	if ((ret = mbedtls_ssl_conf_own_cert(&g_tls.conf, &g_tls.cert, &g_tls.pkey)) != 0) {
 		ERROR("mbedtls_ssl_conf_own_cert returned %d\n", ret);
 		return false;
 	}
@@ -620,6 +524,63 @@ static bool _tlsInit(void)
 	mbedtls_ssl_conf_authmode(&g_tls.conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
 
 	return true;
+}
+
+
+static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
+{
+	TRACE("_http_event_handler: ");
+
+	switch (evt->event_id) {
+		case HTTP_EVENT_ERROR:
+			TRACE("HTTP_EVENT_ERROR");
+			break;
+		case HTTP_EVENT_ON_CONNECTED:
+			TRACE("HTTP_EVENT_ON_CONNECTED");
+			break;
+		case HTTP_EVENT_HEADER_SENT:
+			TRACE("HTTP_EVENT_HEADER_SENT");
+			break;
+		case HTTP_EVENT_ON_HEADER:
+			TRACE("HTTP_EVENT_ON_HEADER");
+			TRACE_BUF("key", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_key, 10);
+			TRACE_BUF("val", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_value, 10);
+			break;
+		case HTTP_EVENT_ON_DATA: {
+			bool chunked = esp_http_client_is_chunked_response(evt->client);
+			bool complete = esp_http_client_is_complete_data_received(evt->client);
+			INFO("chunked:%d complete:%d\n", chunked, complete);
+			TRACE_BUF("HTTP_EVENT_ON_DATA",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, evt->data, evt->data_len);
+
+			// If user_data buffer is configured, copy the response into the buffer
+			if (evt->user_data) {
+				// The last byte in evt->user_data is kept for the NULL character in case of out-of-bound access.
+				if (evt->data_len) {
+					memcpy(evt->user_data + http_client_result_size, evt->data, evt->data_len);
+				}
+				http_client_result_size += evt->data_len;
+			}
+		}
+		break;
+
+		case HTTP_EVENT_ON_FINISH:
+			TRACE("HTTP_EVENT_ON_FINISH");
+			break;
+
+		case HTTP_EVENT_DISCONNECTED:
+			TRACE("HTTP_EVENT_DISCONNECTED");
+			break;
+
+		case HTTP_EVENT_REDIRECT:
+			TRACE("HTTP_EVENT_REDIRECT");
+			break;
+		default:
+			TRACE("%d", evt->event_id);
+	}
+
+	TRACE("\n");
+
+	return ESP_OK;
 }
 
 static bool _init(void)
@@ -659,6 +620,102 @@ bool	TLS_isConnected(void)
 	}
 
 	return true;
+}
+
+mbedtls_pk_context* TLS_getPkey(void)
+{
+	return &g_tls.pkey;
+}
+
+mbedtls_ctr_drbg_context* TLS_getDrbg(void)
+{
+	return &g_tls.ctr_drbg;
+}
+
+mbedtls_x509_crt* TLS_getCert(void)
+{
+	return &g_tls.cert;
+}
+
+int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char* header_value, char* content, size_t contentSize, char** result)
+{
+	int		ret = true;
+    esp_err_t err;
+    int     read_len;
+	int		i;
+
+    esp_http_client_config_t config = {
+        .url = url,
+		.method = method,
+		.event_handler = _http_event_handler,
+		.user_data = http_client_result,
+		.buffer_size = sizeof(http_client_result),
+	};
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+	if (!client) {
+		ERROR("esp_http_client_init failed\n");
+		return -1;
+	}
+
+	if ( header_key && header_value) {
+		err = esp_http_client_set_header(client, header_key, header_value);
+		if (err != ESP_OK) {
+			ERROR("esp_http_client_set_header %x\n", err);
+			ret = -1;
+			goto end;
+		}
+	}
+
+	if (content) {
+		//esp_http_client_set_header(client, "Accept", "application/json");
+		err = esp_http_client_set_post_field(client, content, contentSize);
+		if (err != ESP_OK) {
+			ERROR("esp_http_client_set_post_field %x\n", err);
+			ret = -1;
+			goto end;
+		}
+	}
+
+	http_client_result_size = 0;
+    err = esp_http_client_perform(client);
+    if (err != ESP_OK) {
+        ERROR("esp_http_client_perform %x\n", err);
+		ret = -1;
+		goto end;
+    }
+
+	bool complete;
+	i = 0;
+	do {
+		vTaskDelay(100);
+		i++;
+		if (i > 10) {
+			break;
+		}
+		complete = esp_http_client_is_complete_data_received(client);
+	} while (!complete);
+
+	INFO("complete after %d\n", i);
+
+	int content_len = esp_http_client_get_content_length(client);
+	int chunk_len;
+
+	bool chunked = esp_http_client_is_chunked_response(client);
+
+	esp_http_client_get_chunk_length(client, &chunk_len);
+
+	INFO("Status = %d chunked:%d content_len=%d chunk_len=%d\n", esp_http_client_get_status_code(client), chunked, content_len, chunk_len);
+	http_client_result[http_client_result_size] = '\0';
+	TRACE_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
+	TRACE("response:\n%s\n", http_client_result);
+
+	end:
+    esp_http_client_cleanup(client);
+
+	*result = http_client_result;
+	ret = http_client_result_size;
+	return ret;
 }
 
 static bool dbgConnect(uint8_t argc, char** argv)
@@ -748,21 +805,10 @@ static bool dbgClose(uint8_t argc, char** argv)
 	return true;
 }
 
-static void _print_cert_dates(const mbedtls_x509_crt* cert)
-{
-	const mbedtls_x509_time* from = &cert->valid_from;
-	const mbedtls_x509_time* to   = &cert->valid_to;
-
-	INFO("%04d-%02d-%02d %02d:%02d:%02d - ", from->year, from->mon, from->day, from->hour, from->min, from->sec);
-	INFO("%04d-%02d-%02d %02d:%02d:%02d\n", to->year, to->mon, to->day, to->hour, to->min, to->sec);
-}
-
 static bool dbgStatus(uint8_t argc, char** argv)
 {
 	int     ret;
 	char    errStr[256];
-	char*   caCert;
-	char    certificate[2048];
 
 	PRINT("cmd    : %d\n", g_tls.fd_cmd.fd);
 	PRINT("stresam: %d\n", g_tls.fd_stream.fd);
@@ -775,52 +821,6 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	} else {
 		PRINT("timer not active\n");
 	}
-
-	mbedtls_x509_crt ca_cert;
-
-	mbedtls_x509_crt_init(&ca_cert);
-
-	FACTORY_get(factory_id_ca_certificate, &caCert);
-
-	if (caCert) {
-		uint32_t len = strlen(caCert) + 1;
-
-		ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)caCert, len);
-		if (ret < 0) {
-			mbedtls_strerror(ret, errStr, sizeof(errStr));
-			ERROR("Failed to parse CA cert: -0x%04x %s\n", -ret, errStr);
-
-			INFO("CA cert: %d\n", len);
-			for (int i = 0; i < len; i++) {
-				if (caCert[i] < 0x20) {
-					INFO("(%02x)", caCert[i]);
-				}
-				INFO("%c", caCert[i]);
-			}
-			INFO("\n###\n");
-		} else {
-			INFO("CA  : ");
-			_print_cert_dates(&ca_cert);
-		}
-	}
-
-	INFO("cert: ");
-	_print_cert_dates(&g_tls.srvcert);
-
-	uint32_t flags;
-	mbedtls_x509_crt_profile profile = mbedtls_x509_crt_profile_default;
-	//ret = mbedtls_x509_crt_verify_with_profile(&g_tls.srvcert, &ca_cert, NULL, &profile, NULL, &flags, NULL, NULL);
-	ret = mbedtls_x509_crt_verify(&g_tls.srvcert, &ca_cert, NULL, NULL, &flags, NULL, NULL);
-
-	if (ret) {
-		char buf[256];
-		mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
-		INFO("Certificate verification failed: %s\n", buf);
-	} else {
-		INFO("Certificate verification SUCCESS.\n");
-	}
-
-	mbedtls_x509_crt_free(&ca_cert);
 
 	return true;
 }
@@ -851,314 +851,6 @@ static bool dbgStoreKey(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgCreateCsr(uint8_t argc, char** argv)
-{
-    bool    ret;
-    char    csr_buf[2048];
-    char    json[2048];
-	ret = _create_csr(&g_tls.pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
-    if (!ret) {
-        ERROR("_create_csr failed\n");
-        return true;
-    }
-
-	PRINT("csr:\n%s\n", csr_buf);
-
-    _voultCreateCsrJson(csr_buf, "720h", json);
-
-	PRINT("json:\n%s\n", json);
-
-	return true;
-}
-
-static char http_client_result[8192];
-static int  http_client_result_size;
-
-static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
-{
-	TRACE("_http_event_handler: ");
-
-	switch (evt->event_id) {
-		case HTTP_EVENT_ERROR:
-			TRACE("HTTP_EVENT_ERROR");
-			break;
-		case HTTP_EVENT_ON_CONNECTED:
-			TRACE("HTTP_EVENT_ON_CONNECTED");
-			break;
-		case HTTP_EVENT_HEADER_SENT:
-			TRACE("HTTP_EVENT_HEADER_SENT");
-			break;
-		case HTTP_EVENT_ON_HEADER:
-			TRACE("HTTP_EVENT_ON_HEADER");
-			TRACE_BUF("key", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_key, 10);
-			TRACE_BUF("val", PRINT_BUF_STYLE_ASC_SIZE_NL, evt->header_value, 10);
-			break;
-		case HTTP_EVENT_ON_DATA: {
-			bool chunked = esp_http_client_is_chunked_response(evt->client);
-			bool complete = esp_http_client_is_complete_data_received(evt->client);
-			INFO("chunked:%d complete:%d\n", chunked, complete);
-			TRACE_BUF("HTTP_EVENT_ON_DATA",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, evt->data, evt->data_len);
-
-			// If user_data buffer is configured, copy the response into the buffer
-			if (evt->user_data) {
-				// The last byte in evt->user_data is kept for the NULL character in case of out-of-bound access.
-				if (evt->data_len) {
-					memcpy(evt->user_data + http_client_result_size, evt->data, evt->data_len);
-				}
-				http_client_result_size += evt->data_len;
-			}
-		}
-		break;
-
-		case HTTP_EVENT_ON_FINISH:
-			TRACE("HTTP_EVENT_ON_FINISH");
-			break;
-
-		case HTTP_EVENT_DISCONNECTED:
-			TRACE("HTTP_EVENT_DISCONNECTED");
-			break;
-
-		case HTTP_EVENT_REDIRECT:
-			TRACE("HTTP_EVENT_REDIRECT");
-			break;
-		default:
-			TRACE("%d", evt->event_id);
-	}
-
-	TRACE("\n");
-
-	return ESP_OK;
-}
-
-static int _curl(char* url, esp_http_client_method_t method, char* header_key, char* header_value, char* content, size_t contentSize)
-{
-	int		ret = true;
-    esp_err_t err;
-    int     read_len;
-	int		i;
-
-    esp_http_client_config_t config = {
-        .url = url,
-		.method = method,
-		.event_handler = _http_event_handler,
-		.user_data = http_client_result,
-		.buffer_size = sizeof(http_client_result),
-	};
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-	if (!client) {
-		ERROR("esp_http_client_init failed\n");
-		return -1;
-	}
-
-	if ( header_key && header_value) {
-		err = esp_http_client_set_header(client, header_key, header_value);
-		if (err != ESP_OK) {
-			ERROR("esp_http_client_set_header %x\n", err);
-			ret = -1;
-			goto end;
-		}
-	}
-
-	if (content) {
-		//esp_http_client_set_header(client, "Accept", "application/json");
-		err = esp_http_client_set_post_field(client, content, contentSize);
-		if (err != ESP_OK) {
-			ERROR("esp_http_client_set_post_field %x\n", err);
-			ret = -1;
-			goto end;
-		}
-	}
-
-	http_client_result_size = 0;
-    err = esp_http_client_perform(client);
-    if (err != ESP_OK) {
-        ERROR("esp_http_client_perform %x\n", err);
-		ret = -1;
-		goto end;
-    }
-
-	bool complete;
-	i = 0;
-	do {
-		vTaskDelay(100);
-		i++;
-		if (i > 10) {
-			break;
-		}
-		complete = esp_http_client_is_complete_data_received(client);
-	} while (!complete);
-
-	INFO("complete after %d\n", i);
-
-	int content_len = esp_http_client_get_content_length(client);
-	int chunk_len;
-
-	bool chunked = esp_http_client_is_chunked_response(client);
-
-	esp_http_client_get_chunk_length(client, &chunk_len);
-
-	INFO("Status = %d chunked:%d content_len=%d chunk_len=%d\n", esp_http_client_get_status_code(client), chunked, content_len, chunk_len);
-	http_client_result[http_client_result_size] = '\0';
-	TRACE_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
-	TRACE("response:\n%s\n", http_client_result);
-	ret = http_client_result_size;
-
-	end:
-    esp_http_client_cleanup(client);
-
-	return ret;
-}
-
-static bool _vaultLogin(char* o_pToken)
-{
-	char url[256];
-	char data[1024];
-	char* baseUrl;
-	char* role;
-	char* secret;
-
-	FACTORY_get(factory_id_vault_url, &baseUrl);
-	if (!baseUrl) {
-		ERROR("vault url not set\n");
-		return false;
-	}
-
-	FACTORY_get(factory_id_vault_role, &role);
-	if (!role) {
-		ERROR("vault role not set\n");
-		return false;
-	}
-
-	FACTORY_get(factory_id_vault_secret, &secret);
-	if (!secret) {
-		ERROR("vault secret not set\n");
-		return false;
-	}
-
-	sprintf(url, "%s/v1/auth/approle/login", baseUrl);
-	sprintf(data, "{\"role_id\":\"%s\",\"secret_id\":\"%s\"}", role, secret);
-
-	_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data));
-	INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
-
-    cJSON *root = cJSON_Parse(http_client_result);
-    if (root == NULL) {
-        ERROR("Failed to parse JSON\n");
-        return false;
-    }
-
-    cJSON *auth = cJSON_GetObjectItem(root, "auth");
-    if (!cJSON_IsObject(auth)) {
-        ERROR("Missing or invalid 'auth' field\n");
-        goto err;
-    }
-
-    // Access .certificate
-    cJSON *token = cJSON_GetObjectItem(auth, "client_token");
-    if (!cJSON_IsString(token)) {
-        ERROR("Missing or invalid 'client_token' field\n");
-        goto err;
-    }
-	INFO("TOKEN: %s\n", token->valuestring);
-	if (o_pToken) {
-		strcpy(o_pToken, token->valuestring);
-	}
-
-	cJSON_Delete(root);
-	return true;
-
-	err:
-    cJSON_Delete(root);
-	return false;
-}
-
-static bool _vaultRenew(char* url, char* token)
-{
-    bool    ret;
-    esp_err_t err;
-    char    csr_buf[2048];
-    char    json[2048];
-	int		resultSize;
-
-    ret = _create_csr(&g_tls.pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
-    if (!ret) {
-        ERROR("_create_csr failed\n");
-        return true;
-    }
-
-    _voultCreateCsrJson(csr_buf, "720h", json);
-
-	INFO("token: %s\n", token);
-	INFO("json:\n%s\n", json);
-
-	resultSize = _curl(url, HTTP_METHOD_POST, NULL, NULL, json, strlen(json));
-
-    cJSON *root = cJSON_Parse(http_client_result);
-    if (root == NULL) {
-        ERROR("Failed to parse JSON\n");
-        return false;
-    }
-
-    cJSON *data = cJSON_GetObjectItem(root, "data");
-    if (!cJSON_IsObject(data)) {
-        ERROR("Missing or invalid 'data' field\n");
-        goto err;
-    }
-
-    // Access .certificate
-    cJSON *cert = cJSON_GetObjectItem(data, "certificate");
-    if (!cJSON_IsString(cert)) {
-        ERROR("Missing or invalid 'certificate' field\n");
-        goto err;
-    }
-
-    // Print certificate (like jq -r)
-    INFO("CERT:\n%s\n", cert->valuestring);
-//	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
-
-    cJSON_Delete(root);
-	return true;
-
-	err:
-    cJSON_Delete(root);
-
-	return false;
-}
-
-static bool dbgVaultRenew(uint8_t argc, char** argv)
-{
-    char* token = "root";
-
-    if (argc < 2) {
-        return false;
-    }
-
-    if (argc >= 3) {
-        token = argv[2];
-    }
-
-    _vaultRenew(argv[1], token);
-
-	return true;
-}
-
-static bool dbgVaultLogin(uint8_t argc, char** argv)
-{
-	bool	ret;
-	char	token[1024];
-
-	ret = _vaultLogin(token);
-	if (!ret) {
-		PRINT("login failed\n");
-		return true;
-	}
-
-	PRINT("TOKEN: %s\n", token);
-
-	return true;
-}
-
 static bool dbgCurl(uint8_t argc, char** argv)
 {
 	bool	ret;
@@ -1170,6 +862,7 @@ static bool dbgCurl(uint8_t argc, char** argv)
 	char*	header_key		= NULL;
 	char*	header_value	= NULL;
 	bool	isPost			= false;
+	char*	http_result;
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
@@ -1199,9 +892,9 @@ static bool dbgCurl(uint8_t argc, char** argv)
 		method = HTTP_METHOD_POST;
 	}
 
-	resultSize = _curl(url, method, header_key, header_value,  data, data_len);
+	resultSize = TLS_curl(url, method, header_key, header_value,  data, data_len, &http_result);
 
-	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
+	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
 	//PRINT("response:\n%s\n", http_client_result);
 
 	return true;
@@ -1223,10 +916,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("timer",     NULL,	NULL, dbgTimer)
         DEBUG_MENU_CMD("genKey",    NULL,	NULL, dbgGenKey)
         DEBUG_MENU_CMD("storeKey",  NULL,	NULL, dbgStoreKey)
-		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
 		DEBUG_MENU_CMD("curl",		NULL,	NULL, dbgCurl)
-		DEBUG_MENU_CMD("vaultRenew",NULL,	NULL, dbgVaultRenew)
-		DEBUG_MENU_CMD("login",		NULL,	NULL, dbgVaultLogin)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

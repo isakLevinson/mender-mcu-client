@@ -1,0 +1,450 @@
+#define DEF_DBG_MODULE	DBG_MODULE_TLS
+
+#include <sys_def.h>
+#include "dbgMenus.h"
+#include "dbgPrint.h"
+#include "parseArgs.h"
+
+#if USE_TLS
+
+#include <esp_event.h>
+#include <esp_system.h>
+#include <nvs_flash.h>
+#include <sys/param.h>
+#include "esp_netif.h"
+#include "esp_http_client.h"
+
+#include "freertos/FreeRTOS.h"
+#include "lwip/sockets.h"
+#include "mbedtls/platform.h"
+#include "mbedtls/net_sockets.h"
+#include "mbedtls/x509.h"
+#include "mbedtls/debug.h"
+#include "mbedtls/ssl.h"
+#include "mbedtls/entropy.h"
+#include "mbedtls/ctr_drbg.h"
+#include "mbedtls/x509_csr.h"
+#include "mbedtls/esp_debug.h"
+#include "mbedtls/error.h"
+#include "mbedtls/oid.h"
+#include "nvs.h"
+#include "factory.h"
+#include "config.h"
+#include "tls.h"
+#include "cJSON.h"
+
+#ifdef CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
+#include "psa/crypto.h"
+#endif
+#include "esp_crt_bundle.h"
+
+static uint8_t _createSanExt(char* cn_list[], uint8_t size, uint8_t* buf)
+{
+	uint8_t     i;
+	uint8_t*    pBuf = buf + 2;
+	uint8_t     len;
+
+	for (i = 0; i < size; i++) {
+		len = strlen(cn_list[i]);
+		*pBuf++ = 0x82;
+		*pBuf++ = len;
+		memcpy(pBuf, cn_list[i], len);
+		pBuf += len;
+	}
+
+	buf[0] = 0x30;
+	buf[1] = pBuf - buf - 2;
+
+	return pBuf - buf;
+}
+
+static bool _create_csr(mbedtls_pk_context* pKey, unsigned char* csr_buf, size_t size)
+{
+	int ret;
+	mbedtls_x509write_csr csr;
+	char    errStr[256];
+	char    subject[64];
+	char*   sn;
+	unsigned char san_ext[256];
+	uint8_t san_length;
+	char    sn_local[64];
+	mbedtls_pk_context*	pkey = TLS_getPkey();
+	mbedtls_ctr_drbg_context* drbg = TLS_getDrbg();
+
+	ret = FACTORY_get(factory_id_sn, &sn);
+	if (!ret) {
+		ERROR("SN not set\n");
+		return false;
+	}
+	sprintf(subject, "CN=%s", sn);
+	sprintf(sn_local, "%s.local", sn);
+
+	char* dns_list[] = {
+		sn,
+		sn_local,
+	};
+
+	san_length = _createSanExt(dns_list, 2, san_ext);
+	INFO_BUF("san_ext",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, san_ext, san_length);
+
+	mbedtls_x509write_csr_init(&csr);
+
+	// Setup CSR
+	mbedtls_x509write_csr_set_md_alg(&csr, MBEDTLS_MD_SHA256);
+	mbedtls_x509write_csr_set_key(&csr, pkey);
+
+	mbedtls_x509write_csr_set_subject_name(&csr, subject);
+	ret = mbedtls_x509write_csr_set_extension(&csr, MBEDTLS_OID_SUBJECT_ALT_NAME, MBEDTLS_OID_SIZE(MBEDTLS_OID_SUBJECT_ALT_NAME), 1, san_ext, san_length);
+	if (ret != 0) {
+		mbedtls_strerror(ret, errStr, sizeof(errStr));
+		ERROR("mbedtls_x509write_csr_set_extension: -0x%04X %s\n", -ret, errStr);
+		return false;
+	}
+
+	memset(csr_buf, 0, size);
+	ret = mbedtls_x509write_csr_pem(&csr, csr_buf, size, mbedtls_ctr_drbg_random, drbg);
+	if (ret < 0) {
+		mbedtls_strerror(ret, errStr, sizeof(errStr));
+		ERROR("mbedtls_x509write_csr_pem: -0x%04X %s\n", -ret, errStr);
+		return false;
+	}
+
+	mbedtls_x509write_csr_free(&csr);
+
+	return true;
+}
+
+static bool _voultCreateCsrJson(char* csr, char* ttl, char* json)
+{
+    char* pJson = json;
+
+    pJson += sprintf(pJson, "{\"csr\":\"");
+
+    while ('\0' != *csr) {
+        switch (*csr) {
+            case '\n':
+                *pJson++ = '\\';
+                *pJson++ = 'n';
+                break;
+
+            default:
+                *pJson++ = *csr;
+        }
+        csr++;
+    }
+
+    pJson += sprintf(pJson, "\",\"ttl\":\"%s\"}", ttl);
+
+    return true;
+}
+
+static void _print_cert_dates(const mbedtls_x509_crt* cert)
+{
+	const mbedtls_x509_time* from = &cert->valid_from;
+	const mbedtls_x509_time* to   = &cert->valid_to;
+
+	INFO("%04d-%02d-%02d %02d:%02d:%02d - ", from->year, from->mon, from->day, from->hour, from->min, from->sec);
+	INFO("%04d-%02d-%02d %02d:%02d:%02d\n", to->year, to->mon, to->day, to->hour, to->min, to->sec);
+}
+
+static bool dbgStatus(uint8_t argc, char** argv)
+{
+	int     ret;
+	char    errStr[256];
+	char*   caCert;
+	char    certificate[2048];
+	mbedtls_x509_crt* cert = TLS_getCert();
+
+	mbedtls_x509_crt ca_cert;
+
+	mbedtls_x509_crt_init(&ca_cert);
+
+	FACTORY_get(factory_id_ca_certificate, &caCert);
+
+	if (caCert) {
+		uint32_t len = strlen(caCert) + 1;
+
+		ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)caCert, len);
+		if (ret < 0) {
+			mbedtls_strerror(ret, errStr, sizeof(errStr));
+			ERROR("Failed to parse CA cert: -0x%04x %s\n", -ret, errStr);
+
+			INFO("CA cert: %d\n", len);
+			for (int i = 0; i < len; i++) {
+				if (caCert[i] < 0x20) {
+					INFO("(%02x)", caCert[i]);
+				}
+				INFO("%c", caCert[i]);
+			}
+			INFO("\n###\n");
+		} else {
+			INFO("CA  : ");
+			_print_cert_dates(&ca_cert);
+		}
+	}
+
+	INFO("cert: ");
+	_print_cert_dates(cert);
+
+	uint32_t flags;
+	mbedtls_x509_crt_profile profile = mbedtls_x509_crt_profile_default;
+	//ret = mbedtls_x509_crt_verify_with_profile(&g_tls.srvcert, &ca_cert, NULL, &profile, NULL, &flags, NULL, NULL);
+	ret = mbedtls_x509_crt_verify(cert, &ca_cert, NULL, NULL, &flags, NULL, NULL);
+
+	if (ret) {
+		char buf[256];
+		mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
+		INFO("Certificate verification failed: %s\n", buf);
+	} else {
+		INFO("Certificate verification SUCCESS.\n");
+	}
+
+	mbedtls_x509_crt_free(&ca_cert);
+
+	return true;
+}
+
+static bool dbgCreateCsr(uint8_t argc, char** argv)
+{
+    bool    ret;
+    char    csr_buf[2048];
+    char    json[2048];
+	mbedtls_pk_context*	pkey = TLS_getPkey();
+
+	ret = _create_csr(pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
+    if (!ret) {
+        ERROR("_create_csr failed\n");
+        return true;
+    }
+
+	PRINT("csr:\n%s\n", csr_buf);
+
+    _voultCreateCsrJson(csr_buf, "720h", json);
+
+	PRINT("json:\n%s\n", json);
+
+	return true;
+}
+
+static bool _vaultLogin(char* o_pToken)
+{
+	char url[256];
+	char data[1024];
+	char* baseUrl;
+	char* role;
+	char* secret;
+	char* http_result;
+	int	  http_result_size;
+
+	FACTORY_get(factory_id_vault_url, &baseUrl);
+	if (!baseUrl) {
+		ERROR("vault url not set\n");
+		return false;
+	}
+
+	FACTORY_get(factory_id_vault_role, &role);
+	if (!role) {
+		ERROR("vault role not set\n");
+		return false;
+	}
+
+	FACTORY_get(factory_id_vault_secret, &secret);
+	if (!secret) {
+		ERROR("vault secret not set\n");
+		return false;
+	}
+
+	sprintf(url, "%s/v1/auth/approle/login", baseUrl);
+	sprintf(data, "{\"role_id\":\"%s\",\"secret_id\":\"%s\"}", role, secret);
+
+	http_result_size = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data), &http_result);
+	INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, http_result_size);
+
+	cJSON *root = cJSON_Parse(http_result);
+    if (root == NULL) {
+        ERROR("Failed to parse JSON\n");
+        return false;
+    }
+
+    cJSON *auth = cJSON_GetObjectItem(root, "auth");
+    if (!cJSON_IsObject(auth)) {
+        ERROR("Missing or invalid 'auth' field\n");
+        goto err;
+    }
+
+    // Access .certificate
+    cJSON *token = cJSON_GetObjectItem(auth, "client_token");
+    if (!cJSON_IsString(token)) {
+        ERROR("Missing or invalid 'client_token' field\n");
+        goto err;
+    }
+	INFO("TOKEN: %s\n", token->valuestring);
+	if (o_pToken) {
+		strcpy(o_pToken, token->valuestring);
+	}
+
+	cJSON_Delete(root);
+	return true;
+
+	err:
+    cJSON_Delete(root);
+	return false;
+}
+
+static bool _vaultRenew(char* url, char* token)
+{
+    bool    ret;
+    esp_err_t err;
+    char    csr_buf[2048];
+    char    json[2048];
+	int		resultSize;
+	mbedtls_pk_context*	pkey = TLS_getPkey();
+	char*	http_result;
+
+    ret = _create_csr(pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
+    if (!ret) {
+        ERROR("_create_csr failed\n");
+        return true;
+    }
+
+    _voultCreateCsrJson(csr_buf, "720h", json);
+
+	INFO("token: %s\n", token);
+	INFO("json:\n%s\n", json);
+
+	resultSize = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL, json, strlen(json), &http_result);
+
+    cJSON *root = cJSON_Parse(http_result);
+    if (root == NULL) {
+        ERROR("Failed to parse JSON\n");
+        return false;
+    }
+
+    cJSON *data = cJSON_GetObjectItem(root, "data");
+    if (!cJSON_IsObject(data)) {
+        ERROR("Missing or invalid 'data' field\n");
+        goto err;
+    }
+
+    // Access .certificate
+    cJSON *cert = cJSON_GetObjectItem(data, "certificate");
+    if (!cJSON_IsString(cert)) {
+        ERROR("Missing or invalid 'certificate' field\n");
+        goto err;
+    }
+
+    // Print certificate (like jq -r)
+    INFO("CERT:\n%s\n", cert->valuestring);
+//	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
+
+    cJSON_Delete(root);
+	return true;
+
+	err:
+    cJSON_Delete(root);
+
+	return false;
+}
+
+static bool dbgVaultRenew(uint8_t argc, char** argv)
+{
+    char* token = "root";
+
+    if (argc < 2) {
+        return false;
+    }
+
+    if (argc >= 3) {
+        token = argv[2];
+    }
+
+    _vaultRenew(argv[1], token);
+
+	return true;
+}
+
+static bool dbgVaultLogin(uint8_t argc, char** argv)
+{
+	bool	ret;
+	char	token[1024];
+
+	ret = _vaultLogin(token);
+	if (!ret) {
+		PRINT("login failed\n");
+		return true;
+	}
+
+	PRINT("TOKEN: %s\n", token);
+
+	return true;
+}
+
+static bool dbgCurl(uint8_t argc, char** argv)
+{
+	bool	ret;
+	int		resultSize;
+	esp_http_client_method_t	method = HTTP_METHOD_GET;
+	char*	url;
+	char* 	data = NULL;
+	size_t	data_len = 0;
+	char*	header_key		= NULL;
+	char*	header_value	= NULL;
+	bool	isPost			= false;
+	char*	http_result;
+
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("k",		ARGS_TYPE_STRING,	0,	"header key",	&header_key)
+		ARGS_ENTRY("v",		ARGS_TYPE_STRING,	0,	"header value",	&header_value)
+		ARGS_ENTRY("p",		ARGS_TYPE_SWITCH,	0,	"post",			&isPost)
+		ARGS_ENTRY(NULL,	ARGS_TYPE_STRING,	0,	"url",   		&url)
+		ARGS_ENTRY(NULL,	ARGS_TYPE_STRING,	0,	"data",   		&data)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (!ret) {
+		return false;
+	}
+
+	if (!url) {
+		return false;
+	}
+
+	if (data) {
+		data_len = strlen(data);
+		isPost = true;
+	}
+
+	if (isPost) {
+		method = HTTP_METHOD_POST;
+	}
+
+	resultSize = TLS_curl(url, method, header_key, header_value,  data, data_len, &http_result);
+
+	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
+	//PRINT("response:\n%s\n", http_client_result);
+
+	return true;
+}
+
+// *INDENT-OFF*
+DEBUG_MENU_START(g_menu)
+	DEBUG_MENU_DIR("vault", NULL)
+		DEBUG_MENU_CMD("status",    NULL,	NULL, dbgStatus)
+		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
+		DEBUG_MENU_CMD("curl",		NULL,	NULL, dbgCurl)
+		DEBUG_MENU_CMD("vaultRenew",NULL,	NULL, dbgVaultRenew)
+		DEBUG_MENU_CMD("login",		NULL,	NULL, dbgVaultLogin)
+	DEBUG_MENU_DIR_END
+DEBUG_MENU_END
+// *INDENT-ON*
+
+bool VAULT_init(void)
+{
+	DBG_TREE_add("/", g_menu);
+
+	return true;
+}
+
+#endif

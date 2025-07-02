@@ -9,8 +9,8 @@ ROLE_ID=$(vault read -format=json auth/approle/role/my-app-role/role-id | jq -r 
 # Secret ID (dynamic, like a password)
 SECRET_ID=$(vault write -f -format=json auth/approle/role/my-app-role/secret-id | jq -r .data.secret_id)
 
-echo "ROLE=$ROLE_ID"
-echo "SECRET=$SECRET_ID"
+echo "ROLE  : $ROLE_ID"
+echo "SECRET: $SECRET_ID"
 
 echo $ROLE_ID > $ROLE_FILE
 echo $SECRET_ID > $SECRET_FILE
