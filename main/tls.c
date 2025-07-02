@@ -1010,24 +1010,33 @@ static int _curl(char* url, esp_http_client_method_t method, char* header_key, c
 	return ret;
 }
 
-static bool _vaultLogin(char* baseUrl, char* role, char* secret, char* o_pToken)
+static bool _vaultLogin(char* o_pToken)
 {
 	char url[256];
 	char data[1024];
+	char* baseUrl;
+	char* role;
+	char* secret;
 
+	FACTORY_get(factory_id_vault_url, &baseUrl);
 	if (!baseUrl) {
+		ERROR("vault url not set\n");
 		return false;
 	}
 
+	FACTORY_get(factory_id_vault_role, &role);
 	if (!role) {
+		ERROR("vault role not set\n");
 		return false;
 	}
 
+	FACTORY_get(factory_id_vault_secret, &secret);
 	if (!secret) {
+		ERROR("vault secret not set\n");
 		return false;
 	}
 
-	sprintf(url, "http://%s/v1/auth/approle/login", baseUrl);
+	sprintf(url, "%s/v1/auth/approle/login", baseUrl);
 	sprintf(data, "{\"role_id\":\"%s\",\"secret_id\":\"%s\"}", role, secret);
 
 	_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data));
@@ -1139,11 +1148,7 @@ static bool dbgVaultLogin(uint8_t argc, char** argv)
 	bool	ret;
 	char	token[1024];
 
-    if (argc < 4) {
-        return false;
-    }
-
-	ret = _vaultLogin(argv[1], argv[2], argv[3], token);
+	ret = _vaultLogin(token);
 	if (!ret) {
 		PRINT("login failed\n");
 		return true;
