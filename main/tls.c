@@ -58,6 +58,7 @@ static struct {
 	mbedtls_entropy_context entropy;
 	mbedtls_ctr_drbg_context ctr_drbg;
 	mbedtls_x509_crt cert;
+	mbedtls_x509_crt ca_cert;
 	mbedtls_pk_context pkey;
 #if defined(MBEDTLS_SSL_CACHE_C)
 	mbedtls_ssl_cache_context cache;
@@ -439,6 +440,8 @@ static bool _tlsInit(void)
 	mbedtls_ssl_cache_init(&g_tls.cache);
 #endif
 	mbedtls_x509_crt_init(&g_tls.cert);
+	mbedtls_x509_crt_init(&g_tls.ca_cert);
+
 	mbedtls_pk_init(&g_tls.pkey);
 	mbedtls_entropy_init(&g_tls.entropy);
 	mbedtls_ctr_drbg_init(&g_tls.ctr_drbg);
@@ -469,7 +472,16 @@ static bool _tlsInit(void)
 	INFO("Loading CA cert\n");
 	char* cacert_pem;
 	FACTORY_get(factory_id_ca_certificate, &cacert_pem);
-	ret = mbedtls_x509_crt_parse(&g_tls.cert, (const unsigned char*) cacert_pem, strlen(cacert_pem) + 1);
+	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (const unsigned char*) cacert_pem, strlen(cacert_pem) + 1);
+	if (ret != 0) {
+		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
+		return false;
+	}
+
+	INFO("Loading cert\n");
+	NVS_get(nvs_id_certificate,  buf0, sizeof(buf0));
+
+	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf0, strlen(buf0) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return false;
@@ -484,14 +496,6 @@ static bool _tlsInit(void)
 		return false;
 	}
 
-	INFO("Loading cert\n");
-	NVS_get(nvs_id_certificate,  buf0, sizeof(buf0));
-
-	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf0, strlen(buf0) + 1);
-	if (ret != 0) {
-		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
-		return false;
-	}
 
 	INFO("Loading key\n");
 	NVS_get(nvs_id_key,  buf0, sizeof(buf0));
@@ -522,8 +526,9 @@ static bool _tlsInit(void)
 	mbedtls_ssl_conf_session_cache(&g_tls.conf, &g_tls.cache, mbedtls_ssl_cache_get, mbedtls_ssl_cache_set);
 #endif
 
-	mbedtls_ssl_conf_ca_chain(&g_tls.conf, g_tls.cert.next, NULL);
-	if ((ret = mbedtls_ssl_conf_own_cert(&g_tls.conf, &g_tls.cert, &g_tls.pkey)) != 0) {
+	mbedtls_ssl_conf_ca_chain(&g_tls.conf, g_tls.ca_cert.next, NULL);
+	ret = mbedtls_ssl_conf_own_cert(&g_tls.conf, &g_tls.cert, &g_tls.pkey);
+	if (ret != 0) {
 		ERROR("mbedtls_ssl_conf_own_cert returned %d\n", ret);
 		return false;
 	}
@@ -532,7 +537,6 @@ static bool _tlsInit(void)
 
 	return true;
 }
-
 
 static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 {
@@ -938,8 +942,8 @@ bool TLS_init(void)
 {
 	DBG_TREE_add("/", g_menu);
 
-	_init();
 	_tlsInit();
+	_init();
 
 	return true;
 }
