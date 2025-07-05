@@ -429,10 +429,10 @@ static bool _storePrivateKey(mbedtls_pk_context* pkey)
 
 static bool _tlsInit(void)
 {
-	int ret;
+	int			ret;
 	const char* pers = "ssl_server";
-	static char certificate[2048];
-	static char key[2048];
+	static char buf0[2048];
+	uint32_t	len;
 
 	mbedtls_ssl_config_init(&g_tls.conf);
 #if defined(MBEDTLS_SSL_CACHE_C)
@@ -466,30 +466,38 @@ static bool _tlsInit(void)
 		return false;
 	}
 
-	INFO("Loading the server cert and key\n");
-	NVS_get(nvs_id_certificate,  certificate, sizeof(certificate));
-	uint32_t    cert_len = strlen(certificate) + 1;
-
-	NVS_get(nvs_id_key,  key, sizeof(key));
-	uint32_t    key_len = strlen(key) + 1;
-
+	INFO("Loading CA cert\n");
 	char* cacert_pem;
 	FACTORY_get(factory_id_ca_certificate, &cacert_pem);
-	int cacert_len = strlen(cacert_pem) + 1;
-
-	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)certificate, cert_len);
+	ret = mbedtls_x509_crt_parse(&g_tls.cert, (const unsigned char*) cacert_pem, strlen(cacert_pem) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return false;
 	}
 
-	ret = mbedtls_x509_crt_parse(&g_tls.cert, (const unsigned char*) cacert_pem, cacert_len);
+	INFO("Loading intermediate cert\n");
+	NVS_get(nvs_id_intermediate,  buf0, sizeof(buf0));
+
+	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf0, strlen(buf0) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return false;
 	}
 
-	ret =  mbedtls_pk_parse_key(&g_tls.pkey, (unsigned char*)key, key_len, NULL, 0, mbedtls_ctr_drbg_random, &g_tls.ctr_drbg);
+	INFO("Loading cert\n");
+	NVS_get(nvs_id_certificate,  buf0, sizeof(buf0));
+
+	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf0, strlen(buf0) + 1);
+	if (ret != 0) {
+		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
+		return false;
+	}
+
+	INFO("Loading key\n");
+	NVS_get(nvs_id_key,  buf0, sizeof(buf0));
+	uint32_t    key_len = strlen(buf0) + 1;
+
+	ret =  mbedtls_pk_parse_key(&g_tls.pkey, (unsigned char*)buf0, key_len, NULL, 0, mbedtls_ctr_drbg_random, &g_tls.ctr_drbg);
 	if (ret != 0) {
 		ERROR("mbedtls_pk_parse_key returned %d\n", ret);
 		return false;

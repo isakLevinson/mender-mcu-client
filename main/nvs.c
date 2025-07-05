@@ -12,7 +12,7 @@
 #include "nvs.h"
 
 #define	NVS_NAMESPACE      "cfg"
-#define NVS_MAX_LENGTH    256
+//#define NVS_MAX_LENGTH    1024
 
 #define NVS_ARR(id, def)	[nvs_id_ ## id] = {.pId = #id, .pDefault = def},
 
@@ -60,8 +60,11 @@ static bool _set(char* key,  char* val)
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
+
+#ifdef 	NVS_MAX_LENGTH
 	char    str[NVS_MAX_LENGTH];
 	size_t  length;
+#endif
 
 	err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
 	if (err != ESP_OK) {
@@ -69,6 +72,7 @@ static bool _set(char* key,  char* val)
 		return false;
 	}
 
+#ifdef 	NVS_MAX_LENGTH
 	length = sizeof(str);
 	err =  nvs_get_str(handle, key, str, &length);
 	if (err != ESP_OK) {
@@ -84,7 +88,9 @@ static bool _set(char* key,  char* val)
 	INFO("no need to store <%s>\n", key);
 	goto exit;
 
-store:
+	store:
+#endif
+
 	INFO("storing %s\n", key);
 	err = nvs_set_str(handle, key, val);
 	if (err != ESP_OK) {
@@ -92,7 +98,10 @@ store:
 		ret = false;
 	}
 
-exit:
+#ifdef 	NVS_MAX_LENGTH
+	exit:
+#endif
+
 	nvs_close(handle);
 	return ret;
 }

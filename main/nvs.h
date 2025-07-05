@@ -2,11 +2,6 @@
 
 #include <sys_def.h>
 
-extern const unsigned char _server_cert_start[] asm("_binary_server_crt_start");
-extern const unsigned char _server_cert_end[]   asm("_binary_server_crt_end");
-extern const unsigned char _prvtkey_start[] asm("_binary_server_key_start");
-extern const unsigned char _prvtkey_end[]   asm("_binary_server_key_end");
-
 // *INDENT-OFF*
 #define NVS_LIST(cmd)	\
 	cmd(ssid,		NULL)	\
@@ -17,7 +12,8 @@ extern const unsigned char _prvtkey_end[]   asm("_binary_server_key_end");
 	cmd(mdns,		NULL)	\
 	cmd(ota_url,	CONFIG_MENDER_SERVER_HOST)	\
 	cmd(ota_token,	CONFIG_MENDER_SERVER_TENANT_TOKEN)	\
-	cmd(certificate,	_server_cert_start)	\
+	cmd(certificate,	NULL)	\
+	cmd(intermediate,	NULL)	\
 	cmd(key,			NULL)	\
 	cmd(ota_updated,"0")\
 
@@ -29,7 +25,6 @@ typedef struct {
 } nvs_arr_t;
 
 #define NVS_ENUM(id, def)	nvs_id_ ## id,
-#define NVS_ARR(id, def)	[nvs_id_ ## id] = {.pId = #id, .pDefault = def},
 
 typedef enum {
 	nvs_id_invalid,

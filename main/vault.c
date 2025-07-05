@@ -1,4 +1,4 @@
-#define DEF_DBG_MODULE	DBG_MODULE_TLS
+#define DEF_DBG_MODULE	DBG_MODULE_VAULT
 
 #include <sys_def.h>
 #include "dbgMenus.h"
@@ -37,6 +37,7 @@
 #define VAULT_ROLE_NAME		"brain-space"
 #define VAULT_URL_LOGIN		"/v1/auth/approle/login"
 #define VAULT_URL_RENEW		"/v1/pki_int/sign/" VAULT_ROLE_NAME
+//#define VAULT_URL_RENEW		"/v1/pki_int/issue/" VAULT_ROLE_NAME
 
 static uint8_t _createSanExt(char* cn_list[], uint8_t size, uint8_t* buf)
 {
@@ -147,76 +148,6 @@ static void _print_cert_dates(const mbedtls_x509_crt* cert)
 	INFO("%04d-%02d-%02d %02d:%02d:%02d\n", to->year, to->mon, to->day, to->hour, to->min, to->sec);
 }
 
-static bool dbgStatus(uint8_t argc, char** argv)
-{
-	int     ret;
-	char    errStr[256];
-	char*   ca_pem;
-	char    certificate[2048];
-	mbedtls_x509_crt* cert = TLS_getCert();
-
-	mbedtls_x509_crt ca_cert;
-
-	mbedtls_x509_crt_init(&ca_cert);
-
-	FACTORY_get(factory_id_ca_certificate, &ca_pem);
-
-	if (ca_pem) {
-		uint32_t len = strlen(ca_pem) + 1;
-
-		ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)ca_pem, len);
-		if (ret < 0) {
-			mbedtls_strerror(ret, errStr, sizeof(errStr));
-			ERROR("Failed to parse CA cert: -0x%04x %s\n", -ret, errStr);
-			INFO_BUF("CA",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, ca_pem, len);
-		} else {
-			INFO("CA  : ");
-			_print_cert_dates(&ca_cert);
-		}
-	}
-
-	INFO("cert: ");
-	_print_cert_dates(cert);
-
-	uint32_t flags;
-	mbedtls_x509_crt_profile profile = mbedtls_x509_crt_profile_default;
-	//ret = mbedtls_x509_crt_verify_with_profile(&g_tls.srvcert, &ca_cert, NULL, &profile, NULL, &flags, NULL, NULL);
-	ret = mbedtls_x509_crt_verify(cert, &ca_cert, NULL, NULL, &flags, NULL, NULL);
-
-	if (ret) {
-		char buf[256];
-		mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
-		INFO("Certificate verification failed: %s\n", buf);
-	} else {
-		INFO("Certificate verification SUCCESS.\n");
-	}
-
-	mbedtls_x509_crt_free(&ca_cert);
-
-	return true;
-}
-
-static bool dbgCreateCsr(uint8_t argc, char** argv)
-{
-    bool    ret;
-    char    csr_buf[2048];
-    char    json[2048];
-	mbedtls_pk_context*	pkey = TLS_getPkey();
-
-	ret = _create_csr(pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
-    if (!ret) {
-        ERROR("_create_csr failed\n");
-        return true;
-    }
-
-	PRINT("csr:\n%s\n", csr_buf);
-
-    _voultCreateCsrJson(csr_buf, "720h", json);
-
-	PRINT("json:\n%s\n", json);
-
-	return true;
-}
 
 static bool _vaultLogin(char* o_pToken)
 {
@@ -250,7 +181,6 @@ static bool _vaultLogin(char* o_pToken)
 	sprintf(data, "{\"role_id\":\"%s\",\"secret_id\":\"%s\"}", role, secret);
 
 	http_result_size = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data), &http_result);
-	INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, http_result_size);
 
 	cJSON *root = cJSON_Parse(http_result);
     if (root == NULL) {
@@ -279,11 +209,30 @@ static bool _vaultLogin(char* o_pToken)
 	return true;
 
 	err:
-    cJSON_Delete(root);
+	INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, http_result_size);
+	cJSON *errors = cJSON_GetObjectItem(root, "errors");
+    if (cJSON_IsObject(errors)) {
+		if (cJSON_IsArray(errors)) {
+			int size = cJSON_GetArraySize(errors);
+			for (int i=0; i<size; i++) {
+				cJSON *item = cJSON_GetArrayItem(errors, i);
+		        if (cJSON_IsString(item)) {
+					ERROR(" <%s> ", item->valuestring);
+				}
+			}
+			ERROR("\n%d\n", size);
+		} else {
+			ERROR("errors field is not an array\n");
+		}
+	} else {
+		ERROR("vault didn't return errors field\n");
+	}
+
+	cJSON_Delete(root);
 	return false;
 }
 
-static bool _vaultRenew(char* token, char* new_certificate)
+static bool _vaultRenew(char* token)
 {
     bool    ret;
     esp_err_t err;
@@ -315,15 +264,19 @@ static bool _vaultRenew(char* token, char* new_certificate)
     _voultCreateCsrJson(csr_buf, "720h", json);
 
 	INFO("token: %s\n", token);
-	INFO("json:\n%s\n", json);
+	//INFO("json:\n%s\n", json);
 
 	resultSize = TLS_curl(url, HTTP_METHOD_POST, "X-Vault-Token", token, json, strlen(json), &http_result);
+
+//	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
 
     cJSON *root = cJSON_Parse(http_result);
     if (root == NULL) {
         ERROR("Failed to parse JSON\n");
         return false;
     }
+
+	INFO_BUF("result",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
 
     cJSON *data = cJSON_GetObjectItem(root, "data");
     if (!cJSON_IsObject(data)) {
@@ -354,6 +307,20 @@ static bool _vaultRenew(char* token, char* new_certificate)
 					INFO("CHAIN %d: %s\n", i, item->valuestring);
 				}
 			}
+			if (2 == size) {
+				cJSON *item = cJSON_GetArrayItem(chain, 1);
+		        if (cJSON_IsString(item)) {
+					INFO("INTERMEDIATE:\n%s\n", item->valuestring);
+					ret = NVS_set(nvs_id_intermediate, item->valuestring);
+					if (!ret) {
+						ERROR("NVS_set failed\n");
+						goto err;
+					}
+				}
+			} else {
+				ERROR("unexpected ca_chain size %d\n", size);
+				goto err;
+			}
 		}
 		//INFO_BUF("CHAIN",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, chain->valuestring, strlen(chain->valuestring));
 //		INFO("CHAIN:\n%s\n", chain->valuestring);
@@ -367,13 +334,20 @@ static bool _vaultRenew(char* token, char* new_certificate)
 
     // Print certificate (like jq -r)
     INFO("CERT:\n%s\n", cert->valuestring);
-//	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
-
-	if (new_certificate) {
-		strcpy(new_certificate, cert->valuestring);
+	ret = NVS_set(nvs_id_certificate, cert->valuestring);
+	if (!ret) {
+		ERROR("NVS_set failed\n");
+		goto err;
 	}
 
     cJSON_Delete(root);
+
+	ret = TLS_reload();
+	if (!ret) {
+		ERROR("TLS_reload failed\n");
+		return true;
+	}
+
 	return true;
 
 	err:
@@ -382,11 +356,123 @@ static bool _vaultRenew(char* token, char* new_certificate)
 	return false;
 }
 
+static bool dbgStatus(uint8_t argc, char** argv)
+{
+	int     ret;
+	char    errStr[256];
+	char*   ca_pem;
+	uint32_t flags;
+	mbedtls_x509_crt ca_cert;
+
+	mbedtls_x509_crt* cert = TLS_getCert();
+	mbedtls_x509_crt_init(&ca_cert);
+
+	FACTORY_get(factory_id_ca_certificate, &ca_pem);
+
+	if (ca_pem) {
+		uint32_t len = strlen(ca_pem) + 1;
+
+		ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)ca_pem, len);
+		if (ret < 0) {
+			mbedtls_strerror(ret, errStr, sizeof(errStr));
+			ERROR("Failed to parse CA cert: -0x%04x %s\n", -ret, errStr);
+			INFO_BUF("CA",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, ca_pem, len);
+		} else {
+			INFO("CA  : ");
+			_print_cert_dates(&ca_cert);
+		}
+	}
+
+	INFO("cert: ");
+	_print_cert_dates(cert);
+
+	ret = mbedtls_x509_crt_verify(cert, &ca_cert, NULL, NULL, &flags, NULL, NULL);
+
+	if (ret) {
+		char buf[256];
+		mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
+		INFO("Certificate verification failed: %s\n", buf);
+	} else {
+		INFO("Certificate verification SUCCESS.\n");
+	}
+
+	mbedtls_x509_crt_free(&ca_cert);
+
+	return true;
+}
+
+static bool dbgVerify(uint8_t argc, char** argv)
+{
+	int     ret;
+	mbedtls_x509_crt cert;
+    mbedtls_x509_crt ca_chain;
+    char	buf[2048];
+	char*	ca_pem;
+    uint32_t flags;
+
+    mbedtls_x509_crt_init(&cert);
+    mbedtls_x509_crt_init(&ca_chain);
+
+	FACTORY_get(factory_id_ca_certificate, &ca_pem);
+    if (mbedtls_x509_crt_parse(&ca_chain, (const unsigned char *)ca_pem, strlen(ca_pem) + 1) != 0) {
+        PRINT("Failed to parse root CA cert\n");
+        return true;
+    }
+
+	NVS_get(nvs_id_intermediate,  buf, sizeof(buf));
+	ret = mbedtls_x509_crt_parse(&ca_chain, (unsigned char*)buf, strlen(buf) + 1);
+	if (ret != 0) {
+		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
+		return true;
+	}
+
+	NVS_get(nvs_id_certificate,  buf, sizeof(buf));
+	if (mbedtls_x509_crt_parse(&cert, (const unsigned char *)buf, strlen(buf) + 1) != 0) {
+		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
+        return true;
+    }
+
+    ret = mbedtls_x509_crt_verify(&cert, &ca_chain, NULL, NULL, &flags, NULL, NULL);
+
+    if (ret == 0) {
+        PRINT("Certificate is valid and correctly signed.\n");
+    } else {
+        mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
+        PRINT("Certificate verification failed: %s\n", buf);
+    }
+
+    mbedtls_x509_crt_free(&cert);
+    mbedtls_x509_crt_free(&ca_chain);
+
+	return true;
+}
+
+static bool dbgCreateCsr(uint8_t argc, char** argv)
+{
+    bool    ret;
+    char    csr_buf[2048];
+    char    json[2048];
+	mbedtls_pk_context*	pkey = TLS_getPkey();
+
+	ret = _create_csr(pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
+    if (!ret) {
+        ERROR("_create_csr failed\n");
+        return true;
+    }
+
+	PRINT("csr:\n%s\n", csr_buf);
+
+    _voultCreateCsrJson(csr_buf, "720h", json);
+
+	PRINT("json:\n%s\n", json);
+
+	return true;
+}
+
 static bool dbgRenew(uint8_t argc, char** argv)
 {
 	bool	ret;
 	char	token[256];
-	char	certificate[2048];
 
     if (argc < 2) {
         ret = _vaultLogin(token);
@@ -400,23 +486,9 @@ static bool dbgRenew(uint8_t argc, char** argv)
 
 	PRINT("using token: %s\n", token);
 
-    ret = _vaultRenew(token, certificate);
+    ret = _vaultRenew(token);
 	if (!ret) {
 		PRINT("reniew failed\n");
-		return true;
-	}
-
-	PRINT("CERT:\n%s\n", certificate);
-
-	ret = NVS_set(nvs_id_certificate, certificate);
-	if (!ret) {
-		ERROR("NVS_set failed\n");
-		return true;
-	}
-
-	ret = TLS_reload();
-	if (!ret) {
-		ERROR("TLS_reload failed\n");
 		return true;
 	}
 
@@ -492,6 +564,7 @@ static bool dbgCurl(uint8_t argc, char** argv)
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("vault", NULL)
 		DEBUG_MENU_CMD("status",    NULL,	NULL, dbgStatus)
+		DEBUG_MENU_CMD("verify",    NULL,	NULL, dbgVerify)
 		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
 		DEBUG_MENU_CMD("curl",		NULL,	NULL, dbgCurl)
 		DEBUG_MENU_CMD("renew",		NULL,	NULL, dbgRenew)
