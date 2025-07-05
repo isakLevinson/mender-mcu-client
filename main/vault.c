@@ -307,8 +307,8 @@ static bool _vaultRenew(char* token)
 					INFO("CHAIN %d: %s\n", i, item->valuestring);
 				}
 			}
-			if (2 == size) {
-				cJSON *item = cJSON_GetArrayItem(chain, 1);
+			if (size >= 1) {
+				cJSON *item = cJSON_GetArrayItem(chain, 0);
 		        if (cJSON_IsString(item)) {
 					INFO("INTERMEDIATE:\n%s\n", item->valuestring);
 					ret = NVS_set(nvs_id_intermediate, item->valuestring);
@@ -414,12 +414,14 @@ static bool dbgVerify(uint8_t argc, char** argv)
     mbedtls_x509_crt_init(&ca_chain);
 
 	FACTORY_get(factory_id_ca_certificate, &ca_pem);
+	INFO("CA:\n%s", ca_pem);
     if (mbedtls_x509_crt_parse(&ca_chain, (const unsigned char *)ca_pem, strlen(ca_pem) + 1) != 0) {
         PRINT("Failed to parse root CA cert\n");
         return true;
     }
 
 	NVS_get(nvs_id_intermediate,  buf, sizeof(buf));
+	INFO("INTERMEDIATE:\n%s", buf);
 	ret = mbedtls_x509_crt_parse(&ca_chain, (unsigned char*)buf, strlen(buf) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
@@ -427,6 +429,7 @@ static bool dbgVerify(uint8_t argc, char** argv)
 	}
 
 	NVS_get(nvs_id_certificate,  buf, sizeof(buf));
+	INFO("CERT:\n%s", buf);
 	if (mbedtls_x509_crt_parse(&cert, (const unsigned char *)buf, strlen(buf) + 1) != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
         return true;
