@@ -1,3 +1,3 @@
-#!/bin/bash 
+#!/bin/bash
 
-./r.sh < f1 | stdbuf --output=0 xxd -r -p | nc -u 192.168.1.9 5000 > f1
+openssl s_server -accept 4433 -cert server.crt -key server.key

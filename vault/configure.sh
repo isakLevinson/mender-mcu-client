@@ -13,4 +13,6 @@ vault auth enable approle
 ./create_device.sh
 ./fetch_device_role.sh
 ./updateFactory.sh
+../scripts/writeConfigPatition.sh
+
 

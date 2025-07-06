@@ -2,6 +2,10 @@
       capabilities = ["create", "update"]
     }
 
+    path "pki_int/sign/*" {
+      capabilities = ["create", "update"]
+    }
+
     path "pki_int/certs" {
       capabilities = ["list"]
     }

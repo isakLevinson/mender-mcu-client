@@ -758,18 +758,6 @@ bool wss_init(void)
 
 #if (HTTP_UNSECURE == 0)
 	httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
-
-	// Configure server certificate and private key
-	extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
-	extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
-	conf.servercert = server_cert_start;
-	conf.servercert_len = server_cert_end - server_cert_start;
-
-	extern const unsigned char prvtkey_pem_start[] asm("_binary_server_key_start");
-	extern const unsigned char prvtkey_pem_end[]   asm("_binary_server_key_end");
-	conf.prvtkey_pem = prvtkey_pem_start;
-	conf.prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
-
 #if 0
 	extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
 	extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
