@@ -94,7 +94,8 @@ static bool _set(char* key,  char* val)
 	INFO("storing %s\n", key);
 	err = nvs_set_str(handle, key, val);
 	if (err != ESP_OK) {
-		ERROR("nvs_set_str ssid failed %x\n", err);
+		ERROR("nvs_set_str failed %s(len:%d) %x\n", key, strlen(val), err);
+		ESP_printErr(err);
 		ret = false;
 	}
 
@@ -102,6 +103,7 @@ static bool _set(char* key,  char* val)
 	exit:
 #endif
 
+	nvs_commit(handle);
 	nvs_close(handle);
 	return ret;
 }
@@ -281,6 +283,20 @@ static bool dbgSet(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgDelete(uint8_t argc, char** argv)
+{
+	esp_err_t   err = ESP_OK;
+
+	if (argc < 2) {
+		return false;
+	}
+
+	err = nvs_erase_key(g_nvs.nvsHandle, argv[1]);
+	ESP_printErr(err);
+
+	return true;
+}
+
 static bool dbgList(uint8_t argc, char** argv)
 {
 	esp_err_t   err = ESP_OK;
@@ -390,14 +406,17 @@ static bool dbgStatus(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("nvs", NULL)
-		DEBUG_MENU_CMD("status",    NULL,		NULL, dbgStatus)
-		DEBUG_MENU_CMD("open",	    NULL,		NULL, dbgOpen)
-		DEBUG_MENU_CMD("close",	    NULL,		NULL, dbgClose)
-		DEBUG_MENU_CMD("commit",    NULL,		NULL, dbgCommit)
-		DEBUG_MENU_CMD("get",       NULL,		NULL, dbgGet)
-		DEBUG_MENU_CMD("set",       NULL,		NULL, dbgSet)
-		DEBUG_MENU_CMD("list",      NULL,		NULL, dbgList)
 		DEBUG_MENU_CMD("id",	    NULL,		NULL, dbgId)
+		DEBUG_MENU_DIR("debug", NULL)
+			DEBUG_MENU_CMD("status",    NULL,		NULL, dbgStatus)
+			DEBUG_MENU_CMD("open",	    NULL,		NULL, dbgOpen)
+			DEBUG_MENU_CMD("close",	    NULL,		NULL, dbgClose)
+			DEBUG_MENU_CMD("commit",    NULL,		NULL, dbgCommit)
+			DEBUG_MENU_CMD("get",       NULL,		NULL, dbgGet)
+			DEBUG_MENU_CMD("set",       NULL,		NULL, dbgSet)
+			DEBUG_MENU_CMD("del",       NULL,		NULL, dbgDelete)
+			DEBUG_MENU_CMD("list",      NULL,		NULL, dbgList)
+		DEBUG_MENU_DIR_END
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

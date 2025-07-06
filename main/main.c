@@ -89,6 +89,9 @@ void ESP_printErr(int err)
 		case ESP_ERR_NVS_READ_ONLY:
 			pStr = "ESP_ERR_NVS_READ_ONLY";
 			break;
+		case ESP_ERR_NVS_NOT_ENOUGH_SPACE:
+			pStr = "ESP_ERR_NVS_NOT_ENOUGH_SPACE";
+			break;
 	}
 
 	if (pStr) {

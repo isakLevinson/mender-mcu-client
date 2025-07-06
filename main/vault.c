@@ -181,6 +181,9 @@ static bool _vaultLogin(char* o_pToken)
 	sprintf(data, "{\"role_id\":\"%s\",\"secret_id\":\"%s\"}", role, secret);
 
 	http_result_size = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data), &http_result);
+	if (http_result_size < 0) {
+		return false;
+	}
 
 	cJSON *root = cJSON_Parse(http_result);
     if (root == NULL) {
@@ -209,23 +212,24 @@ static bool _vaultLogin(char* o_pToken)
 	return true;
 
 	err:
-	INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, http_result_size);
+	//INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, http_result_size);
 	cJSON *errors = cJSON_GetObjectItem(root, "errors");
-    if (cJSON_IsObject(errors)) {
-		if (cJSON_IsArray(errors)) {
-			int size = cJSON_GetArraySize(errors);
-			for (int i=0; i<size; i++) {
-				cJSON *item = cJSON_GetArrayItem(errors, i);
-		        if (cJSON_IsString(item)) {
-					ERROR(" <%s> ", item->valuestring);
-				}
+	if (cJSON_IsArray(errors)) {
+		int size = cJSON_GetArraySize(errors);
+		for (int i=0; i<size; i++) {
+			cJSON *item = cJSON_GetArrayItem(errors, i);
+			if (cJSON_IsString(item)) {
+				ERROR(" <%s> ", item->valuestring);
 			}
-			ERROR("\n%d\n", size);
-		} else {
-			ERROR("errors field is not an array\n");
 		}
+		//ERROR("\n%d\n", size);
 	} else {
-		ERROR("vault didn't return errors field\n");
+		ERROR("errors field is not an array\n");
+//		char *printed_json = cJSON_Print(root);  // Pretty print with indentation
+//			if (printed_json) {
+//				INFO("Full JSON Content:\n%s\n", printed_json);
+//				free(printed_json);
+//			}
 	}
 
 	cJSON_Delete(root);
@@ -267,6 +271,9 @@ static bool _vaultRenew(char* token)
 	//INFO("json:\n%s\n", json);
 
 	resultSize = TLS_curl(url, HTTP_METHOD_POST, "X-Vault-Token", token, json, strlen(json), &http_result);
+	if (resultSize < 0) {
+		return false;
+	}
 
 //	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
 

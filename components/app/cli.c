@@ -339,6 +339,20 @@ static bool dbgPs(uint8_t argc, char** argv)
 		PRINT("\n");
 	}
 
+	multi_heap_info_t heap_info;
+	size_t internal_ram_free	= heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+	size_t spi_ram_free			= heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+	heap_caps_get_info(&heap_info, MALLOC_CAP_DEFAULT);
+
+	PRINT("\n");
+	PRINT("SPI RAM free         : %d bytes\n", spi_ram_free);
+	PRINT("Internal RAM free    : %d bytes\n", internal_ram_free);
+	PRINT("Total free bytes     : %d\n", heap_info.total_free_bytes);
+	PRINT("Total allocated bytes: %d\n", heap_info.total_allocated_bytes);
+	PRINT("Largest free block   : %d\n", heap_info.largest_free_block);
+	PRINT("Free blocks          : %d\n", heap_info.free_blocks);
+	PRINT("Allocated blocks     : %d\n", heap_info.allocated_blocks);
+
 	return true;
 }
 
