@@ -12,9 +12,9 @@
 	cmd(mdns,		NULL)	\
 	cmd(ota_url,	CONFIG_MENDER_SERVER_HOST)	\
 	cmd(ota_token,	CONFIG_MENDER_SERVER_TENANT_TOKEN)	\
-	cmd(certificate,	NULL)	\
-	cmd(intermediate,	NULL)	\
-	cmd(key,			NULL)	\
+	cmd(cert_pem,	NULL)	\
+	cmd(inter_pem,	NULL)	\
+	cmd(key_pem,	NULL)	\
 	cmd(ota_updated,"0")\
 
 // *INDENT-ON*

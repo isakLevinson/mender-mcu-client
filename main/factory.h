@@ -10,7 +10,7 @@
 	cmd(sn)	\
 	cmd(hw_revision)	\
 	cmd(model)	\
-	cmd(ca_certificate)	\
+	cmd(ca_pem)	\
 	cmd(vault_url)	\
 	cmd(vault_role)	\
 	cmd(vault_secret)	\

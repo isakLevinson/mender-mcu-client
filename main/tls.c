@@ -419,7 +419,7 @@ static bool _storePrivateKey(mbedtls_pk_context* pkey)
 
 	INFO("key: %s\n", buf);
 
-	ret = NVS_set(nvs_id_key, buf);
+	ret = NVS_set(nvs_id_key_pem, buf);
 	if (!ret) {
 		ERROR("NVS_set failed\n");
 		return false;
@@ -471,7 +471,7 @@ static bool _tlsInit(void)
 
 	INFO("Loading CA cert\n");
 	char* cacert_pem;
-	FACTORY_get(factory_id_ca_certificate, buf0);
+	FACTORY_get(factory_id_ca_pem, buf0);
 	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (const unsigned char*) buf0, strlen(buf0) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
@@ -479,7 +479,7 @@ static bool _tlsInit(void)
 	}
 
 	INFO("Loading cert\n");
-	NVS_get(nvs_id_certificate,  buf0, sizeof(buf0));
+	NVS_get(nvs_id_cert_pem,  buf0, sizeof(buf0));
 
 	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf0, strlen(buf0) + 1);
 	if (ret != 0) {
@@ -488,7 +488,7 @@ static bool _tlsInit(void)
 	}
 
 	INFO("Loading intermediate cert\n");
-	NVS_get(nvs_id_intermediate,  buf0, sizeof(buf0));
+	NVS_get(nvs_id_inter_pem,  buf0, sizeof(buf0));
 
 	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf0, strlen(buf0) + 1);
 	if (ret != 0) {
@@ -498,7 +498,7 @@ static bool _tlsInit(void)
 
 
 	INFO("Loading key\n");
-	NVS_get(nvs_id_key,  buf0, sizeof(buf0));
+	NVS_get(nvs_id_key_pem,  buf0, sizeof(buf0));
 	uint32_t    key_len = strlen(buf0) + 1;
 
 	ret =  mbedtls_pk_parse_key(&g_tls.pkey, (unsigned char*)buf0, key_len, NULL, 0, mbedtls_ctr_drbg_random, &g_tls.ctr_drbg);

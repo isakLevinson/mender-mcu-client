@@ -319,7 +319,7 @@ static bool _vaultRenew(char* token)
 				cJSON *item = cJSON_GetArrayItem(chain, 0);
 		        if (cJSON_IsString(item)) {
 					INFO("INTERMEDIATE:\n%s\n", item->valuestring);
-					ret = NVS_set(nvs_id_intermediate, item->valuestring);
+					ret = NVS_set(nvs_id_inter_pem, item->valuestring);
 					if (!ret) {
 						ERROR("NVS_set failed\n");
 						goto err;
@@ -342,7 +342,7 @@ static bool _vaultRenew(char* token)
 
     // Print certificate (like jq -r)
     INFO("CERT:\n%s\n", cert->valuestring);
-	ret = NVS_set(nvs_id_certificate, cert->valuestring);
+	ret = NVS_set(nvs_id_cert_pem, cert->valuestring);
 	if (!ret) {
 		ERROR("NVS_set failed\n");
 		goto err;
@@ -375,7 +375,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	mbedtls_x509_crt* cert = TLS_getCert();
 	mbedtls_x509_crt_init(&ca_cert);
 
-	ret = FACTORY_get(factory_id_ca_certificate, ca_pem);
+	ret = FACTORY_get(factory_id_ca_pem, ca_pem);
 	if (ret) {
 		uint32_t len = strlen(ca_pem) + 1;
 
@@ -420,7 +420,7 @@ static bool dbgVerify(uint8_t argc, char** argv)
     mbedtls_x509_crt_init(&cert);
     mbedtls_x509_crt_init(&ca_chain);
 
-	ret = FACTORY_get(factory_id_ca_certificate, buf);
+	ret = FACTORY_get(factory_id_ca_pem, buf);
 	if (!ret) {
 		ERROR("CA not set\n");
 		return true;
@@ -432,7 +432,7 @@ static bool dbgVerify(uint8_t argc, char** argv)
         return true;
     }
 
-	NVS_get(nvs_id_intermediate,  buf, sizeof(buf));
+	NVS_get(nvs_id_inter_pem,  buf, sizeof(buf));
 	INFO("INTERMEDIATE:\n%s", buf);
 	ret = mbedtls_x509_crt_parse(&ca_chain, (unsigned char*)buf, strlen(buf) + 1);
 	if (ret != 0) {
@@ -440,7 +440,7 @@ static bool dbgVerify(uint8_t argc, char** argv)
 		return true;
 	}
 
-	NVS_get(nvs_id_certificate,  buf, sizeof(buf));
+	NVS_get(nvs_id_cert_pem,  buf, sizeof(buf));
 	INFO("CERT:\n%s", buf);
 	if (mbedtls_x509_crt_parse(&cert, (const unsigned char *)buf, strlen(buf) + 1) != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
