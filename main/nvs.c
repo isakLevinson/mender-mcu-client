@@ -12,7 +12,6 @@
 #include "nvs.h"
 
 #define	NVS_NAMESPACE      "cfg"
-//#define NVS_MAX_LENGTH    1024
 
 #define NVS_ARR(id, def)	[nvs_id_ ## id] = {.pId = #id, .pDefault = def},
 
@@ -299,10 +298,19 @@ static bool dbgDelete(uint8_t argc, char** argv)
 
 static bool dbgList(uint8_t argc, char** argv)
 {
-	esp_err_t   err = ESP_OK;
+	esp_err_t   err = ESP_FAIL;
 	nvs_iterator_t it;
+	nvs_handle_t handle;
 
-	err =  nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it);
+	if (argc >= 2) {
+		err = nvs_open(argv[1], NVS_READONLY, &handle);
+		if (err == ESP_OK) {
+			err = nvs_entry_find_in_handle(handle, NVS_TYPE_ANY, &it);
+		}
+	} else {
+		err =  nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it);
+	}
+
 	while (err == ESP_OK) {
 		nvs_entry_info_t info;
 		char* pTypeStr = "";
@@ -345,6 +353,10 @@ static bool dbgList(uint8_t argc, char** argv)
 		}
 		PRINT("%s\n", pTypeStr);
 		err = nvs_entry_next(&it);
+	}
+
+	if (handle) {
+		nvs_close(handle);
 	}
 
 	return true;
