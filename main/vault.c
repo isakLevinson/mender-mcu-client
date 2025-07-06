@@ -65,14 +65,14 @@ static bool _create_csr(mbedtls_pk_context* pKey, unsigned char* csr_buf, size_t
 	mbedtls_x509write_csr csr;
 	char    errStr[256];
 	char    subject[64];
-	char*   sn;
+	char	sn[64];
 	unsigned char san_ext[256];
 	uint8_t san_length;
 	char    sn_local[64];
 	mbedtls_pk_context*	pkey = TLS_getPkey();
 	mbedtls_ctr_drbg_context* drbg = TLS_getDrbg();
 
-	ret = FACTORY_get(factory_id_sn, &sn);
+	ret = FACTORY_get(factory_id_sn, sn);
 	if (!ret) {
 		ERROR("SN not set\n");
 		return false;
@@ -151,28 +151,29 @@ static void _print_cert_dates(const mbedtls_x509_crt* cert)
 
 static bool _vaultLogin(char* o_pToken)
 {
-	char url[128];
-	char data[1024];
-	char* baseUrl;
-	char* role;
-	char* secret;
-	char* http_result;
-	int	  http_result_size;
+	bool	ret;
+	char	url[128];
+	char	data[1024];
+	char	baseUrl[64];
+	char	role[64];
+	char	secret[64];
+	char*	http_result;
+	int		http_result_size;
 
-	FACTORY_get(factory_id_vault_url, &baseUrl);
-	if (!baseUrl) {
+	ret = FACTORY_get(factory_id_vault_url, baseUrl);
+	if (!ret) {
 		ERROR("vault url not set\n");
 		return false;
 	}
 
-	FACTORY_get(factory_id_vault_role, &role);
-	if (!role) {
+	ret = FACTORY_get(factory_id_vault_role, role);
+	if (!ret) {
 		ERROR("vault role not set\n");
 		return false;
 	}
 
-	FACTORY_get(factory_id_vault_secret, &secret);
-	if (!secret) {
+	ret = FACTORY_get(factory_id_vault_secret, secret);
+	if (!ret) {
 		ERROR("vault secret not set\n");
 		return false;
 	}
@@ -245,11 +246,11 @@ static bool _vaultRenew(char* token)
 	int		resultSize;
 	mbedtls_pk_context*	pkey = TLS_getPkey();
 	char*	http_result;
-	char*	baseUrl;
+	char	baseUrl[64];
 	char	url[256];
 
-	FACTORY_get(factory_id_vault_url, &baseUrl);
-	if (!baseUrl) {
+	ret = FACTORY_get(factory_id_vault_url, baseUrl);
+	if (!ret) {
 		ERROR("vault url not set\n");
 		return false;
 	}
@@ -365,18 +366,17 @@ static bool _vaultRenew(char* token)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-	int     ret;
-	char    errStr[256];
-	char*   ca_pem;
-	uint32_t flags;
+	int     	ret;
+	char    	errStr[256];
+	char		ca_pem[2048];
+	uint32_t	flags;
 	mbedtls_x509_crt ca_cert;
 
 	mbedtls_x509_crt* cert = TLS_getCert();
 	mbedtls_x509_crt_init(&ca_cert);
 
-	FACTORY_get(factory_id_ca_certificate, &ca_pem);
-
-	if (ca_pem) {
+	ret = FACTORY_get(factory_id_ca_certificate, ca_pem);
+	if (ret) {
 		uint32_t len = strlen(ca_pem) + 1;
 
 		ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)ca_pem, len);
@@ -420,9 +420,14 @@ static bool dbgVerify(uint8_t argc, char** argv)
     mbedtls_x509_crt_init(&cert);
     mbedtls_x509_crt_init(&ca_chain);
 
-	FACTORY_get(factory_id_ca_certificate, &ca_pem);
-	INFO("CA:\n%s", ca_pem);
-    if (mbedtls_x509_crt_parse(&ca_chain, (const unsigned char *)ca_pem, strlen(ca_pem) + 1) != 0) {
+	ret = FACTORY_get(factory_id_ca_certificate, buf);
+	if (!ret) {
+		ERROR("CA not set\n");
+		return true;
+	}
+
+	INFO("CA:\n%s", buf);
+    if (mbedtls_x509_crt_parse(&ca_chain, (const unsigned char *)buf, strlen(buf) + 1) != 0) {
         PRINT("Failed to parse root CA cert\n");
         return true;
     }

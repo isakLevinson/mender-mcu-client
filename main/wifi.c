@@ -71,7 +71,7 @@ static bool _mdnsInit(void)
 {
 	esp_err_t	err;
 	bool    	ret;
-	char*		sn;
+	char		sn[64];
 
 	INFO("mDNS init\n");
 	err = mdns_init();
@@ -80,7 +80,7 @@ static bool _mdnsInit(void)
 		return false;
 	}
 
-	ret = FACTORY_get(factory_id_sn, &sn);
+	ret = FACTORY_get(factory_id_sn, sn);
 	if (ret) {
 		INFO("setting MDNS to SN %s\n", sn);
 		err = mdns_hostname_set(sn);
@@ -368,7 +368,7 @@ static bool _startAp(void)
 {
 	bool	ret;
 	esp_err_t err;
-	char*	sn;
+	char	sn[64];
 
 	wifi_config_t wifi_ap_config = {
 		.ap = {
@@ -387,7 +387,7 @@ static bool _startAp(void)
 	g_server.netif_ap  = esp_netif_create_default_wifi_ap();
 	assert(g_server.netif_ap);
 
-	ret = FACTORY_get(factory_id_sn, &sn);
+	ret = FACTORY_get(factory_id_sn, sn);
 	if (ret) {
 		sprintf((char*)wifi_ap_config.ap.ssid, "%s", sn);
 		wifi_ap_config.ap.ssid_len = strlen((char*)wifi_ap_config.ap.ssid);

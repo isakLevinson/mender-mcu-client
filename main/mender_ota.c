@@ -629,10 +629,10 @@ static void _init(void)
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT */
 	char*	project_name;
 	char*	version;
-	char* sn;
+	char	sn[64];
 
 	MENDER_version(&project_name, &version);
-	FACTORY_get(factory_id_sn, &sn);
+	FACTORY_get(factory_id_sn, sn);
 
 	/* Retrieve running version of the device */
 	INFO("Running project '%s' version '%s'\n", project_name, version);

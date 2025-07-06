@@ -421,18 +421,19 @@ static bool	_req_VER_func(CMD_CONTEXT* i_pContext, CMD_REQBUF_VER* i_pReq, uint1
 
 	CMD_DECLARE_RSP_BUF(VER_STR, 128);
 
-	char*		sw_ver;
-	char*		hw_ver;
-	char*		pVer = pRsp->sw_hw_str;
+	bool	ret;
+	char*	sw_ver;
+	char	hw_ver[64];
+	char*	pVer = pRsp->sw_hw_str;
 
 	MENDER_version(NULL, &sw_ver);
-	FACTORY_get(factory_id_hw_revision, &hw_ver);
+	ret = FACTORY_get(factory_id_hw_revision, hw_ver);
 
 	pVer += sprintf(pVer, "%s\n", sw_ver); // include also the trailing '\0'
-	if (hw_ver) {
-		pVer += sprintf(pVer, "%s", hw_ver);
-	} else {
+	if (!ret) {
 		pVer += sprintf(pVer, "UNDEFINED");
+	} else {
+		pVer += sprintf(pVer, "%s", hw_ver);
 	}
 
 	_sendResp(i_pContext, CMD_RSP_VER_STR, pRsp, sizeof(*pRsp) + pVer - pRsp->sw_hw_str);

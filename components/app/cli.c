@@ -234,20 +234,17 @@ static bool dbgVer(uint8_t argc, char** argv)
 	int		err;
 	char*	proj;
 	char*	ver;
-	char*	hw_ver;
-	char*	sn;
+	char	hw_ver[64] = {0};
+	char	sn[64];
 
 	MENDER_version(&proj, &ver);
-	FACTORY_get(factory_id_sn, &sn);
-	FACTORY_get(factory_id_hw_revision, &hw_ver);
+	FACTORY_get(factory_id_sn, sn);
+	FACTORY_get(factory_id_hw_revision, hw_ver);
 
 	PRINT("sn: %s\n", sn);
 	PRINT("proj: %s\n", proj);
 	PRINT("sw: %s\n", ver);
-
-	if (hw_ver) {
-		PRINT("hw: %s\n", hw_ver);
-	}
+	PRINT("hw: %s\n", hw_ver);
 
 #if 0
 	uint8_t mac[6];
@@ -259,6 +256,15 @@ static bool dbgVer(uint8_t argc, char** argv)
 	}
 #endif
 	return true;
+}
+
+static void _printDiffs(char* prefix, int old, int new)
+{
+	if (old != new) {
+		PRINT("%s %d -> %d (%d)\n", prefix, old, new, new-old);
+	} else {
+		PRINT("%s %d\n", prefix, new);
+	}
 }
 
 static bool dbgPs(uint8_t argc, char** argv)
@@ -342,16 +348,22 @@ static bool dbgPs(uint8_t argc, char** argv)
 	multi_heap_info_t heap_info;
 	size_t internal_ram_free	= heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
 	size_t spi_ram_free			= heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+
+	static multi_heap_info_t heap_hist = {0};
+
 	heap_caps_get_info(&heap_info, MALLOC_CAP_DEFAULT);
 
 	PRINT("\n");
-	PRINT("SPI RAM free         : %d bytes\n", spi_ram_free);
-	PRINT("Internal RAM free    : %d bytes\n", internal_ram_free);
-	PRINT("Total free bytes     : %d\n", heap_info.total_free_bytes);
-	PRINT("Total allocated bytes: %d\n", heap_info.total_allocated_bytes);
-	PRINT("Largest free block   : %d\n", heap_info.largest_free_block);
-	PRINT("Free blocks          : %d\n", heap_info.free_blocks);
-	PRINT("Allocated blocks     : %d\n", heap_info.allocated_blocks);
+	PRINT("SPI RAM free         : %d\n", spi_ram_free);
+	PRINT("Internal RAM free    : %d\n", internal_ram_free);
+
+	_printDiffs("Total free bytes     :", heap_hist.total_free_bytes, heap_info.total_free_bytes);
+	_printDiffs("Total allocated bytes:", heap_hist.total_allocated_bytes, heap_info.total_allocated_bytes);
+	_printDiffs("Largest free block   :", heap_hist.largest_free_block, heap_info.largest_free_block);
+	_printDiffs("Free blocks          :", heap_hist.free_blocks, heap_info.free_blocks);
+	_printDiffs("Allocated blocks     :", heap_hist.allocated_blocks, heap_info.allocated_blocks);
+
+	memcpy(&heap_hist, &heap_info, sizeof(heap_hist));
 
 	return true;
 }

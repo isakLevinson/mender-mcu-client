@@ -471,8 +471,8 @@ static bool _tlsInit(void)
 
 	INFO("Loading CA cert\n");
 	char* cacert_pem;
-	FACTORY_get(factory_id_ca_certificate, &cacert_pem);
-	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (const unsigned char*) cacert_pem, strlen(cacert_pem) + 1);
+	FACTORY_get(factory_id_ca_certificate, buf0);
+	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (const unsigned char*) buf0, strlen(buf0) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return false;

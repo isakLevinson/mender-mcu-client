@@ -26,5 +26,5 @@ typedef enum {
 void FACTORY_init(void);
 bool parseFactoryPartition(void);
 
-bool FACTORY_get(factory_id id, char** o_ppStr);
-bool FACTORY_getByStr(char* idStr, char** o_ppStr);
+bool FACTORY_get(factory_id id, char* val);
+bool FACTORY_getByStr(char* idStr, char* val);

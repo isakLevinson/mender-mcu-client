@@ -50,7 +50,7 @@ static void _freeObject(void)
 	g_pBuf = NULL;
 }
 
-static const cJSON* _getFactoryObjectStr(char* pObject, char** ppVal)
+static const bool _getFactoryObjectStr(char* pObject, char* val)
 {
 	esp_err_t               err;
 	const cJSON*            json = NULL;
@@ -95,43 +95,42 @@ static const cJSON* _getFactoryObjectStr(char* pObject, char** ppVal)
 
 	TRACE("%s: %s\n", pObject, object->valuestring);
 
-	if (ppVal) {
-		*ppVal = object->valuestring;
+	if (val) {
+		strcpy(val, object->valuestring);
 	}
 
-	return object;
+	cJSON_Delete(json);
+	return true;
 
 error:
-	if (ppVal) {
-		*ppVal = NULL;
-	}
-	return NULL;
+	cJSON_Delete(json);
+	return false;
 }
 
-bool FACTORY_get(factory_id id, char** o_ppStr)
+bool FACTORY_get(factory_id id, char* val)
 {
-	const cJSON*  object;
+	bool ret;
 
 	if (id >= factory_id_last) {
 		return false;
 	}
 
 	if (g_override[id]) {
-		*o_ppStr = g_override[id];
+		strcpy(val, g_override[id]);
 		return true;
 	}
 
-	object = _getFactoryObjectStr(g_str[id], o_ppStr);
-	if (!object) {
+	ret = _getFactoryObjectStr(g_str[id], val);
+	if (!ret) {
 		return false;
 	}
 
 	return true;
 }
 
-bool FACTORY_getByStr(char* idStr, char** o_ppStr)
+bool FACTORY_getByStr(char* idStr, char* val)
 {
-	const cJSON*  object;
+	bool	ret;
 	factory_id id = 0;
 
 	while (id < factory_id_last) {
@@ -145,9 +144,8 @@ bool FACTORY_getByStr(char* idStr, char** o_ppStr)
 		return false;
 	}
 
-	object = _getFactoryObjectStr(g_str[id], o_ppStr);
-	if (!object) {
-		*o_ppStr = NULL;
+	ret = _getFactoryObjectStr(g_str[id], val);
+	if (!ret) {
 		return false;
 	}
 
@@ -229,8 +227,8 @@ static bool dbgGetObject(uint8_t argc, char** argv)
 {
 	bool    ret;
 	bool    isAll	= false;
-	char*   pStr	= NULL;
 	char*	pIdStr	= NULL;
+	char  	str[2048];
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
@@ -248,9 +246,9 @@ static bool dbgGetObject(uint8_t argc, char** argv)
 		factory_id id;
 
 		for (id = 0; id < factory_id_last; id++) {
-			ret = FACTORY_get(id, &pStr);
+			ret = FACTORY_get(id, str);
 			if (ret) {
-				PRINT("%s: %s\n", g_str[id], pStr);
+				PRINT("%s: %s\n", g_str[id], str);
 			} else {
 				PRINT("%s: NULL\n", g_str[id]);
 			}
@@ -260,9 +258,9 @@ static bool dbgGetObject(uint8_t argc, char** argv)
 	}
 
 	if (pIdStr) {
-		ret = FACTORY_getByStr(pIdStr, &pStr);
+		ret = FACTORY_getByStr(pIdStr, str);
 		if (ret) {
-			PRINT("%s: %s\n", pIdStr, pStr);
+			PRINT("%s: %s\n", pIdStr, str);
 		}
 	}
 
