@@ -2,9 +2,9 @@
 
 export VAULT_ADDR=http://127.0.0.1:8200
 
-ROLE_ID=$(cat ./role_id)
-SECRET_ID=$(cat ./secret_id)
-APP_TOKEN_FILE="./app_token"
+ROLE_ID=$(cat ./role.id)
+SECRET_ID=$(cat ./secret.id)
+APP_TOKEN_FILE="./token.id"
 
 # Make sure ROLE_ID and SECRET_ID are already exported or defined above this
 

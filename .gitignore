@@ -4,5 +4,14 @@ managed_components/
 *.old
 *.swp
 *.lock
+*.pem
+*.csr
+
+vault/*.id
+vault/certs/*.pem
+vault/certs/*.csr
+vault/certs/*.key
+vault/pki-ca-root.json
 scripts/*.pem
+scripts/*.key
 

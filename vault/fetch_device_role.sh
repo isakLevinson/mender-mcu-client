@@ -1,7 +1,7 @@
 export VAULT_ADDR=http://127.0.0.1:8200
 
-ROLE_FILE="./role_id"
-SECRET_FILE="./secret_id"
+ROLE_FILE="./role.id"
+SECRET_FILE="./secret.id"
 
 # Role ID (static)
 ROLE_ID=$(vault read -format=json auth/approle/role/my-app-role/role-id | jq -r .data.role_id)

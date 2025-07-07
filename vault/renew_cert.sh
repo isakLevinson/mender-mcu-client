@@ -9,7 +9,7 @@ ROLE_NAME="brain-space"
 CSR_FILE="$1.csr"
 TTL="720h"
 OUT_CERT="$1.pem"
-VAULT_TOKEN=$(cat app_token)
+VAULT_TOKEN=$(cat token.id)
 
 
 # --- VALIDATION ---
