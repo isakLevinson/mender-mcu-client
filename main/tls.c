@@ -162,7 +162,7 @@ reset:
 			name = name->next;
 		}
 
-		mbedtls_x509_time *exp = &client_cert->valid_to;
+		mbedtls_x509_time* exp = &client_cert->valid_to;
 		INFO("Certificate expires on: %04d-%02d-%02d %02d:%02d:%02d\n", exp->year, exp->mon, exp->day, exp->hour, exp->min, exp->sec);
 	} else {
 		WARN("no client certificate received\n");
@@ -675,25 +675,25 @@ void TLS_getCerts(mbedtls_x509_crt** cert, mbedtls_x509_crt** ca)
 int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char* header_value, char* content, size_t contentSize, char** result)
 {
 	int		ret = true;
-    esp_err_t err;
-    int     read_len;
+	esp_err_t err;
+	int     read_len;
 	int		i;
 
-    esp_http_client_config_t config = {
-        .url = url,
+	esp_http_client_config_t config = {
+		.url = url,
 		.method = method,
 		.event_handler = _http_event_handler,
 		.user_data = http_client_result,
 		.buffer_size = sizeof(http_client_result),
 	};
 
-    esp_http_client_handle_t client = esp_http_client_init(&config);
+	esp_http_client_handle_t client = esp_http_client_init(&config);
 	if (!client) {
 		ERROR("esp_http_client_init failed\n");
 		return -1;
 	}
 
-	if ( header_key && header_value) {
+	if (header_key && header_value) {
 		err = esp_http_client_set_header(client, header_key, header_value);
 		if (err != ESP_OK) {
 			ERROR("esp_http_client_set_header %x\n", err);
@@ -712,12 +712,12 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	}
 
 	http_client_result_size = 0;
-    err = esp_http_client_perform(client);
-    if (err != ESP_OK) {
-        ERROR("esp_http_client_perform %x\n", err);
+	err = esp_http_client_perform(client);
+	if (err != ESP_OK) {
+		ERROR("esp_http_client_perform %x\n", err);
 		ret = -1;
 		goto end;
-    }
+	}
 
 	bool complete;
 	i = 0;
@@ -744,8 +744,8 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	TRACE_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
 	TRACE("response:\n%s\n", http_client_result);
 
-	end:
-    esp_http_client_cleanup(client);
+end:
+	esp_http_client_cleanup(client);
 
 	*result = http_client_result;
 	ret = http_client_result_size;

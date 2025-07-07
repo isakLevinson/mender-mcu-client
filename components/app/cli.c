@@ -261,7 +261,7 @@ static bool dbgVer(uint8_t argc, char** argv)
 static void _printDiffs(char* prefix, int old, int new)
 {
 	if (old != new) {
-		PRINT("%s %d -> %d (%d)\n", prefix, old, new, new-old);
+		PRINT("%s %d -> %d (%d)\n", prefix, old, new, new - old);
 	} else {
 		PRINT("%s %d\n", prefix, new);
 	}

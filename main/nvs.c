@@ -87,7 +87,7 @@ static bool _set(char* key,  char* val)
 	INFO("no need to store <%s>\n", key);
 	goto exit;
 
-	store:
+store:
 #endif
 
 	INFO("storing %s\n", key);
@@ -99,7 +99,7 @@ static bool _set(char* key,  char* val)
 	}
 
 #ifdef 	NVS_MAX_LENGTH
-	exit:
+exit:
 #endif
 
 	nvs_commit(handle);

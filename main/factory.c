@@ -292,8 +292,8 @@ static bool dbgSet(uint8_t argc, char** argv)
 	if (g_override[id]) {
 		free(g_override[id]);
 	}
-	
-	g_override[id] = malloc(strlen(argv[2])+1);
+
+	g_override[id] = malloc(strlen(argv[2]) + 1);
 	if (!g_override[id]) {
 		ERROR("failed to allocate %d\n", strlen(argv[2]));
 		return true;

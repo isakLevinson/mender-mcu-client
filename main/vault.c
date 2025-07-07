@@ -117,26 +117,26 @@ static bool _create_csr(mbedtls_pk_context* pKey, unsigned char* csr_buf, size_t
 
 static bool _voultCreateCsrJson(char* csr, char* ttl, char* json)
 {
-    char* pJson = json;
+	char* pJson = json;
 
-    pJson += sprintf(pJson, "{\"csr\":\"");
+	pJson += sprintf(pJson, "{\"csr\":\"");
 
-    while ('\0' != *csr) {
-        switch (*csr) {
-            case '\n':
-                *pJson++ = '\\';
-                *pJson++ = 'n';
-                break;
+	while ('\0' != *csr) {
+		switch (*csr) {
+			case '\n':
+				*pJson++ = '\\';
+				*pJson++ = 'n';
+				break;
 
-            default:
-                *pJson++ = *csr;
-        }
-        csr++;
-    }
+			default:
+				*pJson++ = *csr;
+		}
+		csr++;
+	}
 
-    pJson += sprintf(pJson, "\",\"ttl\":\"%s\"}", ttl);
+	pJson += sprintf(pJson, "\",\"ttl\":\"%s\"}", ttl);
 
-    return true;
+	return true;
 }
 
 static void _print_cert_dates(const mbedtls_x509_crt* cert)
@@ -186,24 +186,24 @@ static bool _vaultLogin(char* o_pToken)
 		return false;
 	}
 
-	cJSON *root = cJSON_Parse(http_result);
-    if (root == NULL) {
-        ERROR("Failed to parse JSON\n");
-        return false;
-    }
+	cJSON* root = cJSON_Parse(http_result);
+	if (root == NULL) {
+		ERROR("Failed to parse JSON\n");
+		return false;
+	}
 
-    cJSON *auth = cJSON_GetObjectItem(root, "auth");
-    if (!cJSON_IsObject(auth)) {
-        ERROR("Missing or invalid 'auth' field\n");
-        goto err;
-    }
+	cJSON* auth = cJSON_GetObjectItem(root, "auth");
+	if (!cJSON_IsObject(auth)) {
+		ERROR("Missing or invalid 'auth' field\n");
+		goto err;
+	}
 
-    // Access .certificate
-    cJSON *token = cJSON_GetObjectItem(auth, "client_token");
-    if (!cJSON_IsString(token)) {
-        ERROR("Missing or invalid 'client_token' field\n");
-        goto err;
-    }
+	// Access .certificate
+	cJSON* token = cJSON_GetObjectItem(auth, "client_token");
+	if (!cJSON_IsString(token)) {
+		ERROR("Missing or invalid 'client_token' field\n");
+		goto err;
+	}
 	INFO("TOKEN: %s\n", token->valuestring);
 	if (o_pToken) {
 		strcpy(o_pToken, token->valuestring);
@@ -212,13 +212,13 @@ static bool _vaultLogin(char* o_pToken)
 	cJSON_Delete(root);
 	return true;
 
-	err:
+err:
 	//INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, http_result_size);
-	cJSON *errors = cJSON_GetObjectItem(root, "errors");
+	cJSON* errors = cJSON_GetObjectItem(root, "errors");
 	if (cJSON_IsArray(errors)) {
 		int size = cJSON_GetArraySize(errors);
-		for (int i=0; i<size; i++) {
-			cJSON *item = cJSON_GetArrayItem(errors, i);
+		for (int i = 0; i < size; i++) {
+			cJSON* item = cJSON_GetArrayItem(errors, i);
 			if (cJSON_IsString(item)) {
 				ERROR(" <%s> ", item->valuestring);
 			}
@@ -226,11 +226,11 @@ static bool _vaultLogin(char* o_pToken)
 		//ERROR("\n%d\n", size);
 	} else {
 		ERROR("errors field is not an array\n");
-//		char *printed_json = cJSON_Print(root);  // Pretty print with indentation
-//			if (printed_json) {
-//				INFO("Full JSON Content:\n%s\n", printed_json);
-//				free(printed_json);
-//			}
+		//		char *printed_json = cJSON_Print(root);  // Pretty print with indentation
+		//			if (printed_json) {
+		//				INFO("Full JSON Content:\n%s\n", printed_json);
+		//				free(printed_json);
+		//			}
 	}
 
 	cJSON_Delete(root);
@@ -239,10 +239,10 @@ static bool _vaultLogin(char* o_pToken)
 
 static bool _vaultRenew(char* token)
 {
-    bool    ret;
-    esp_err_t err;
-    char    csr_buf[2048];
-    char    json[2048];
+	bool    ret;
+	esp_err_t err;
+	char    csr_buf[2048];
+	char    json[2048];
 	int		resultSize;
 	mbedtls_pk_context*	pkey = TLS_getPkey();
 	char*	http_result;
@@ -258,15 +258,15 @@ static bool _vaultRenew(char* token)
 	sprintf(url, "%s%s", baseUrl, VAULT_URL_RENEW);
 	INFO("url: %s\n", url);
 
-    ret = _create_csr(pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
-    if (!ret) {
-        ERROR("_create_csr failed\n");
-        return true;
-    }
+	ret = _create_csr(pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
+	if (!ret) {
+		ERROR("_create_csr failed\n");
+		return true;
+	}
 
 	INFO("csr:\n%s\n", csr_buf);
 
-    _voultCreateCsrJson(csr_buf, "720h", json);
+	_voultCreateCsrJson(csr_buf, "720h", json);
 
 	INFO("token: %s\n", token);
 	//INFO("json:\n%s\n", json);
@@ -276,48 +276,48 @@ static bool _vaultRenew(char* token)
 		return false;
 	}
 
-//	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
+	//	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
 
-    cJSON *root = cJSON_Parse(http_result);
-    if (root == NULL) {
-        ERROR("Failed to parse JSON\n");
-        return false;
-    }
+	cJSON* root = cJSON_Parse(http_result);
+	if (root == NULL) {
+		ERROR("Failed to parse JSON\n");
+		return false;
+	}
 
 	INFO_BUF("result",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
 
-    cJSON *data = cJSON_GetObjectItem(root, "data");
-    if (!cJSON_IsObject(data)) {
-        ERROR("Missing or invalid 'data' field\n");
-        goto err;
-    }
+	cJSON* data = cJSON_GetObjectItem(root, "data");
+	if (!cJSON_IsObject(data)) {
+		ERROR("Missing or invalid 'data' field\n");
+		goto err;
+	}
 
-    // Access .certificate
-    cJSON *cert = cJSON_GetObjectItem(data, "certificate");
-    if (!cJSON_IsString(cert)) {
-        ERROR("Missing or invalid 'certificate' field\n");
-        goto err;
-    }
+	// Access .certificate
+	cJSON* cert = cJSON_GetObjectItem(data, "certificate");
+	if (!cJSON_IsString(cert)) {
+		ERROR("Missing or invalid 'certificate' field\n");
+		goto err;
+	}
 
-	cJSON *ca = cJSON_GetObjectItem(data, "issuing_ca");
+	cJSON* ca = cJSON_GetObjectItem(data, "issuing_ca");
 	if (ca) {
 		INFO("CA:\n%s\n", ca->valuestring);
 	}
-	cJSON *chain = cJSON_GetObjectItem(data, "ca_chain");
+	cJSON* chain = cJSON_GetObjectItem(data, "ca_chain");
 	if (chain) {
 		INFO("CHAIN\n");
 		if (cJSON_IsArray(chain)) {
 			int size = cJSON_GetArraySize(chain);
 			INFO("CHAIN ARR size:%d\n", size);
-			for (int i=0; i<size; i++) {
-				cJSON *item = cJSON_GetArrayItem(chain, i);
-		        if (cJSON_IsString(item)) {
+			for (int i = 0; i < size; i++) {
+				cJSON* item = cJSON_GetArrayItem(chain, i);
+				if (cJSON_IsString(item)) {
 					INFO("CHAIN %d: %s\n", i, item->valuestring);
 				}
 			}
 			if (size >= 1) {
-				cJSON *item = cJSON_GetArrayItem(chain, 0);
-		        if (cJSON_IsString(item)) {
+				cJSON* item = cJSON_GetArrayItem(chain, 0);
+				if (cJSON_IsString(item)) {
 					INFO("INTERMEDIATE:\n%s\n", item->valuestring);
 					ret = NVS_set(nvs_id_inter_pem, item->valuestring);
 					if (!ret) {
@@ -331,24 +331,24 @@ static bool _vaultRenew(char* token)
 			}
 		}
 		//INFO_BUF("CHAIN",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, chain->valuestring, strlen(chain->valuestring));
-//		INFO("CHAIN:\n%s\n", chain->valuestring);
+		//		INFO("CHAIN:\n%s\n", chain->valuestring);
 	}
-	cJSON *key = cJSON_GetObjectItem(data, "private_key");
+	cJSON* key = cJSON_GetObjectItem(data, "private_key");
 	if (key) {
 		INFO("PKEY\n");
 		INFO_BUF("PKEY",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, key->valuestring, strlen(key->valuestring));
-//		INFO("PKEY:\n%s\n", key->valuestring);
+		//		INFO("PKEY:\n%s\n", key->valuestring);
 	}
 
-    // Print certificate (like jq -r)
-    INFO("CERT:\n%s\n", cert->valuestring);
+	// Print certificate (like jq -r)
+	INFO("CERT:\n%s\n", cert->valuestring);
 	ret = NVS_set(nvs_id_cert_pem, cert->valuestring);
 	if (!ret) {
 		ERROR("NVS_set failed\n");
 		goto err;
 	}
 
-    cJSON_Delete(root);
+	cJSON_Delete(root);
 
 	ret = TLS_reload();
 	if (!ret) {
@@ -358,8 +358,8 @@ static bool _vaultRenew(char* token)
 
 	return true;
 
-	err:
-    cJSON_Delete(root);
+err:
+	cJSON_Delete(root);
 
 	return false;
 }
@@ -373,11 +373,13 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 	mbedtls_x509_crt* cert;
 	mbedtls_x509_crt* ca_cert;
-	
+
 	TLS_getCerts(&cert, &ca_cert);
 
-	INFO("CA  : ");	_print_cert_dates(ca_cert);
-	INFO("cert: ");	_print_cert_dates(cert);
+	INFO("CA  : ");
+	_print_cert_dates(ca_cert);
+	INFO("cert: ");
+	_print_cert_dates(cert);
 
 	ret = mbedtls_x509_crt_verify(cert, ca_cert, NULL, NULL, &flags, NULL, NULL);
 
@@ -396,13 +398,13 @@ static bool dbgVerify(uint8_t argc, char** argv)
 {
 	int     ret;
 	mbedtls_x509_crt cert;
-    mbedtls_x509_crt ca_chain;
-    char	buf[2048];
+	mbedtls_x509_crt ca_chain;
+	char	buf[2048];
 	char*	ca_pem;
-    uint32_t flags;
+	uint32_t flags;
 
-    mbedtls_x509_crt_init(&cert);
-    mbedtls_x509_crt_init(&ca_chain);
+	mbedtls_x509_crt_init(&cert);
+	mbedtls_x509_crt_init(&ca_chain);
 
 	ret = FACTORY_get(factory_id_ca_pem, buf);
 	if (!ret) {
@@ -411,10 +413,10 @@ static bool dbgVerify(uint8_t argc, char** argv)
 	}
 
 	INFO("CA:\n%s", buf);
-    if (mbedtls_x509_crt_parse(&ca_chain, (const unsigned char *)buf, strlen(buf) + 1) != 0) {
-        PRINT("Failed to parse root CA cert\n");
-        return true;
-    }
+	if (mbedtls_x509_crt_parse(&ca_chain, (const unsigned char*)buf, strlen(buf) + 1) != 0) {
+		PRINT("Failed to parse root CA cert\n");
+		return true;
+	}
 
 	NVS_get(nvs_id_inter_pem,  buf, sizeof(buf));
 	INFO("INTERMEDIATE:\n%s", buf);
@@ -426,42 +428,42 @@ static bool dbgVerify(uint8_t argc, char** argv)
 
 	NVS_get(nvs_id_cert_pem,  buf, sizeof(buf));
 	INFO("CERT:\n%s", buf);
-	if (mbedtls_x509_crt_parse(&cert, (const unsigned char *)buf, strlen(buf) + 1) != 0) {
+	if (mbedtls_x509_crt_parse(&cert, (const unsigned char*)buf, strlen(buf) + 1) != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
-        return true;
-    }
+		return true;
+	}
 
-    ret = mbedtls_x509_crt_verify(&cert, &ca_chain, NULL, NULL, &flags, NULL, NULL);
+	ret = mbedtls_x509_crt_verify(&cert, &ca_chain, NULL, NULL, &flags, NULL, NULL);
 
-    if (ret == 0) {
-        PRINT("Certificate is valid and correctly signed.\n");
-    } else {
-        mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
-        PRINT("Certificate verification failed: %s\n", buf);
-    }
+	if (ret == 0) {
+		PRINT("Certificate is valid and correctly signed.\n");
+	} else {
+		mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
+		PRINT("Certificate verification failed: %s\n", buf);
+	}
 
-    mbedtls_x509_crt_free(&cert);
-    mbedtls_x509_crt_free(&ca_chain);
+	mbedtls_x509_crt_free(&cert);
+	mbedtls_x509_crt_free(&ca_chain);
 
 	return true;
 }
 
 static bool dbgCreateCsr(uint8_t argc, char** argv)
 {
-    bool    ret;
-    char    csr_buf[2048];
-    char    json[2048];
+	bool    ret;
+	char    csr_buf[2048];
+	char    json[2048];
 	mbedtls_pk_context*	pkey = TLS_getPkey();
 
 	ret = _create_csr(pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
-    if (!ret) {
-        ERROR("_create_csr failed\n");
-        return true;
-    }
+	if (!ret) {
+		ERROR("_create_csr failed\n");
+		return true;
+	}
 
 	PRINT("csr:\n%s\n", csr_buf);
 
-    _voultCreateCsrJson(csr_buf, "720h", json);
+	_voultCreateCsrJson(csr_buf, "720h", json);
 
 	PRINT("json:\n%s\n", json);
 
@@ -473,19 +475,19 @@ static bool dbgRenew(uint8_t argc, char** argv)
 	bool	ret;
 	char	token[256];
 
-    if (argc < 2) {
-        ret = _vaultLogin(token);
+	if (argc < 2) {
+		ret = _vaultLogin(token);
 		if (!ret) {
 			PRINT("login failed\n");
 			return true;
 		}
-    } else {
-        strcpy(token, argv[2]);
+	} else {
+		strcpy(token, argv[2]);
 	}
 
 	PRINT("using token: %s\n", token);
 
-    ret = _vaultRenew(token);
+	ret = _vaultRenew(token);
 	if (!ret) {
 		PRINT("reniew failed\n");
 		return true;
