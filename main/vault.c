@@ -370,30 +370,16 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	char    	errStr[256];
 	char		ca_pem[2048];
 	uint32_t	flags;
-	mbedtls_x509_crt ca_cert;
 
-	mbedtls_x509_crt* cert = TLS_getCert();
-	mbedtls_x509_crt_init(&ca_cert);
+	mbedtls_x509_crt* cert;
+	mbedtls_x509_crt* ca_cert;
+	
+	TLS_getCerts(&cert, &ca_cert);
 
-	ret = FACTORY_get(factory_id_ca_pem, ca_pem);
-	if (ret) {
-		uint32_t len = strlen(ca_pem) + 1;
+	INFO("CA  : ");	_print_cert_dates(ca_cert);
+	INFO("cert: ");	_print_cert_dates(cert);
 
-		ret = mbedtls_x509_crt_parse(&ca_cert, (unsigned char*)ca_pem, len);
-		if (ret < 0) {
-			mbedtls_strerror(ret, errStr, sizeof(errStr));
-			ERROR("Failed to parse CA cert: -0x%04x %s\n", -ret, errStr);
-			INFO_BUF("CA",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, ca_pem, len);
-		} else {
-			INFO("CA  : ");
-			_print_cert_dates(&ca_cert);
-		}
-	}
-
-	INFO("cert: ");
-	_print_cert_dates(cert);
-
-	ret = mbedtls_x509_crt_verify(cert, &ca_cert, NULL, NULL, &flags, NULL, NULL);
+	ret = mbedtls_x509_crt_verify(cert, ca_cert, NULL, NULL, &flags, NULL, NULL);
 
 	if (ret) {
 		char buf[256];
@@ -402,8 +388,6 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	} else {
 		INFO("Certificate verification SUCCESS.\n");
 	}
-
-	mbedtls_x509_crt_free(&ca_cert);
 
 	return true;
 }

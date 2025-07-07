@@ -16,7 +16,7 @@ bool	TLS_reload(void);
 
 mbedtls_pk_context*			TLS_getPkey(void);
 mbedtls_ctr_drbg_context*	TLS_getDrbg(void);
-mbedtls_x509_crt*			TLS_getCert(void);
+void            			TLS_getCerts(mbedtls_x509_crt** cert, mbedtls_x509_crt** ca);
 
 #else
 #define TLS_init()  		true

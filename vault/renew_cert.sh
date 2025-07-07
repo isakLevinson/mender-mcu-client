@@ -9,6 +9,8 @@ ROLE_NAME="brain-space"
 CSR_FILE="$1.csr"
 TTL="720h"
 OUT_CERT="$1.pem"
+VAULT_TOKEN=$(cat app_token)
+
 
 # --- VALIDATION ---
 echo "📄 CSR file: $CSR_FILE"
@@ -28,7 +30,7 @@ RESPONSE=$(curl -sS \
   --header "X-Vault-Token: $VAULT_TOKEN" \
   --request PUT \
   --data "$JSON_PAYLOAD" \
-  "$VAULT_ADDR/v1/pki_int/issue/$ROLE_NAME")
+  "$VAULT_ADDR/v1/pki_int/sign/$ROLE_NAME")
 
 # --- PARSE RESULT ---
 CERT=$(echo "$RESPONSE" | jq -r .data.certificate)

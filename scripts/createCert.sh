@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CA_PEM=""
+CA_PEM="../vault/certs/ca.pem"
 
 # create CA cert
 # Will be created by Vault
@@ -21,6 +21,6 @@ CA_PEM=""
 openssl genpkey -algorithm RSA -out client.key -pkeyopt rsa_keygen_bits:2048
 openssl req -new -key client.key -out client.csr -subj "/CN=client"
 # sign
-openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt -days 365
-rm client.csr
+#openssl x509 -req -in client.csr -CA $CA_PEM -CAkey ca.key -CAcreateserial -out client.crt -days 365
+#rm client.csr
 

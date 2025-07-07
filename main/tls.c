@@ -129,10 +129,29 @@ reset:
 	}
 
 	const mbedtls_x509_crt* client_cert = mbedtls_ssl_get_peer_cert(ssl);
-	char cn[256];
-	const mbedtls_x509_name* name = &client_cert->subject;
-#if 1
+
 	if (client_cert) {
+		char cn[256];
+		const mbedtls_x509_name* name = &client_cert->subject;
+
+		uint32_t flags = mbedtls_ssl_get_verify_result(ssl);
+		if (flags != 0) {
+			char vrfy_buf[512];
+			mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), "", flags);
+			ERROR("Certificate verification failed:\n%s", vrfy_buf);
+
+			ret = mbedtls_x509_crt_verify(client_cert, &g_tls.ca_cert, NULL, NULL, &flags, NULL, NULL);
+			if (ret != 0) {
+				char vrfy_buf[512];
+				mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), "", flags);
+				ERROR("Manual cert verification failed:\n%s", vrfy_buf);
+			} else {
+				INFO("But manual cert verification successful\n");
+			}
+		} else {
+			INFO("Certificate verified successfully!\n");
+		}
+
 		while (name) {
 			if (MBEDTLS_OID_CMP(MBEDTLS_OID_AT_CN, &name->oid) == 0) {
 				memcpy(cn, name->val.p, name->val.len);
@@ -142,10 +161,13 @@ reset:
 			}
 			name = name->next;
 		}
+
+		mbedtls_x509_time *exp = &client_cert->valid_to;
+		INFO("Certificate expires on: %04d-%02d-%02d %02d:%02d:%02d\n", exp->year, exp->mon, exp->day, exp->hour, exp->min, exp->sec);
 	} else {
 		WARN("no client certificate received\n");
 	}
-#endif
+
 	//	INFO("cert:%x\n", client_cert);
 	//INFO("len: %d\n", name->oid.len);
 	//	while (name) {
@@ -478,6 +500,14 @@ static bool _tlsInit(void)
 		return false;
 	}
 
+	INFO("Loading intermediate cert\n");
+	NVS_get(nvs_id_inter_pem,  buf0, sizeof(buf0));
+	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (unsigned char*)buf0, strlen(buf0) + 1);
+	if (ret != 0) {
+		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
+		return false;
+	}
+
 	INFO("Loading cert\n");
 	NVS_get(nvs_id_cert_pem,  buf0, sizeof(buf0));
 
@@ -486,16 +516,6 @@ static bool _tlsInit(void)
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return false;
 	}
-
-	INFO("Loading intermediate cert\n");
-	NVS_get(nvs_id_inter_pem,  buf0, sizeof(buf0));
-
-	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf0, strlen(buf0) + 1);
-	if (ret != 0) {
-		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
-		return false;
-	}
-
 
 	INFO("Loading key\n");
 	NVS_get(nvs_id_key_pem,  buf0, sizeof(buf0));
@@ -507,12 +527,9 @@ static bool _tlsInit(void)
 		return false;
 	}
 
-	INFO("ok\n");
+	INFO("Certs loaded\n");
 
-	if ((ret = mbedtls_ssl_config_defaults(&g_tls.conf,
-	                MBEDTLS_SSL_IS_SERVER,
-	                MBEDTLS_SSL_TRANSPORT_STREAM,
-	                MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
+	if ((ret = mbedtls_ssl_config_defaults(&g_tls.conf, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
 		ERROR("mbedtls_ssl_config_defaults %d\n", ret);
 		return false;
 	}
@@ -534,6 +551,7 @@ static bool _tlsInit(void)
 	}
 
 	mbedtls_ssl_conf_authmode(&g_tls.conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
+	//mbedtls_ssl_conf_authmode(&g_tls.conf, MBEDTLS_SSL_VERIFY_REQUIRED);
 
 	return true;
 }
@@ -643,9 +661,15 @@ mbedtls_ctr_drbg_context* TLS_getDrbg(void)
 	return &g_tls.ctr_drbg;
 }
 
-mbedtls_x509_crt* TLS_getCert(void)
+void TLS_getCerts(mbedtls_x509_crt** cert, mbedtls_x509_crt** ca)
 {
-	return &g_tls.cert;
+	if (cert) {
+		*cert = &g_tls.cert;
+	}
+
+	if (ca) {
+		*ca = &g_tls.ca_cert;
+	}
 }
 
 int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char* header_value, char* content, size_t contentSize, char** result)
