@@ -122,7 +122,8 @@ reset:
 
 	while ((ret = mbedtls_ssl_handshake(ssl)) != 0) {
 		if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-			ERROR("mbedtls_ssl_handshake -%x\n", -ret);
+			char* str = mbedtls_high_level_strerr(ret);
+			ERROR("mbedtls_ssl_handshake -%x %s\n", -ret, str);
 			xSemaphoreGive(g_tls.mutex);
 			goto reset;
 		}
@@ -218,6 +219,85 @@ static bool _cmdWrite(void* pArg, void* i_pBuf, uint16_t size)
 	return ret;
 }
 
+
+static bool _genPrivateKey(void)
+{
+	int     ret;
+	char    errStr[256];
+
+	memset(&g_tls.pkey, 0, sizeof(g_tls.pkey));
+
+	ret = mbedtls_pk_setup(&g_tls.pkey, mbedtls_pk_info_from_type(MBEDTLS_PK_RSA));
+	if (ret != 0) {
+		mbedtls_strerror(ret, errStr, sizeof(errStr));
+		ERROR("mbedtls_pk_setup -0x%04x %s", -ret, errStr);
+		return false;
+	}
+	INFO("mbedtls_pk_setup ok\n");
+
+	ret = mbedtls_rsa_gen_key(mbedtls_pk_rsa(g_tls.pkey), mbedtls_ctr_drbg_random, &g_tls.ctr_drbg, 2048, 65537);
+	if (ret != 0) {
+		mbedtls_strerror(ret, errStr, sizeof(errStr));
+		ERROR("mbedtls_rsa_gen_key -0x%04x %s", -ret, errStr);
+		return false;
+	}
+	INFO("mbedtls_rsa_gen_key ok\n");
+
+	return true;
+}
+
+static bool _storePrivateKey(mbedtls_pk_context* pkey)
+{
+	int     ret;
+	char    errStr[256];
+	char    buf[2048];
+
+	ret = mbedtls_pk_write_key_pem(&g_tls.pkey, (unsigned char*)buf, sizeof(buf));
+	if (ret != 0) {
+		mbedtls_strerror(ret, errStr, sizeof(errStr));
+		ERROR("mbedtls_pk_write_key_pem -0x%04x %s", -ret, errStr);
+		return false;
+	}
+
+	INFO("key: %s\n", buf);
+
+	ret = NVS_set(nvs_id_key_pem, buf);
+	if (!ret) {
+		ERROR("NVS_set failed\n");
+		return false;
+	}
+
+	return true;
+}
+
+static bool _genAndStorePrivateKey(void)
+{
+	bool	ret;
+	char    buf[2048];
+
+	ret = NVS_get(nvs_id_key_pem, buf, sizeof(buf));
+	if (ret) {
+		INFO("key present. no need to generate\n");
+		return true;
+	}
+
+	ret = _genPrivateKey();
+	if (!ret) {
+		ERROR("_genPrivateKey failed\n");
+		return false;
+	}
+
+	ret = _storePrivateKey(&g_tls.pkey);
+	if (!ret) {
+		ERROR("_storePrivateKey failed\n");
+		return false;
+	}
+
+	INFO("stored new key\n");
+
+	return true;
+}
+
 static bool _taskInit(mbedtls_ssl_context* ssl, mbedtls_net_context* listen_fd, mbedtls_net_context* client_fd, char* port)
 {
 	int ret;
@@ -226,12 +306,15 @@ static bool _taskInit(mbedtls_ssl_context* ssl, mbedtls_net_context* listen_fd, 
 
 	mbedtls_ssl_init(ssl);
 	if ((ret = mbedtls_ssl_setup(ssl, &g_tls.conf)) != 0) {
-		ERROR("mbedtls_ssl_setup %d\n", ret);
+		char* str = mbedtls_high_level_strerr(ret);
+		ERROR("mbedtls_ssl_setup %x %s\n", -ret, str);
+		INFO("exiting task\n");
 		return false;
 	}
 
 	if ((ret = mbedtls_net_bind(listen_fd, NULL, port, MBEDTLS_NET_PROTO_TCP)) != 0) {
-		ERROR("mbedtls_net_bind %d\n", ret);
+		char* str = mbedtls_high_level_strerr(ret);
+		ERROR("mbedtls_net_bind %d %s\n", ret, str);
 		return false;
 	}
 
@@ -259,6 +342,8 @@ static void _taskCmd(void* arg)
 		.p_cbKa		= _cmdKa,
 		.pArg       = &ctxarg,
 	};
+
+	_genAndStorePrivateKey();
 
 	ret = _taskInit(&ssl, &listen_fd, &g_tls.fd_cmd, TLS_CMD_PORT);
 	if (!ret) {
@@ -400,56 +485,6 @@ static void _kaTimerCb(TimerHandle_t pxTimer)
 	mbedtls_net_free(&g_tls.fd_stream);
 }
 
-static bool _genPrivateKey(void)
-{
-	int     ret;
-	char    errStr[256];
-
-	memset(&g_tls.pkey, 0, sizeof(g_tls.pkey));
-
-	ret = mbedtls_pk_setup(&g_tls.pkey, mbedtls_pk_info_from_type(MBEDTLS_PK_RSA));
-	if (ret != 0) {
-		mbedtls_strerror(ret, errStr, sizeof(errStr));
-		ERROR("mbedtls_pk_setup -0x%04x %s", -ret, errStr);
-		return false;
-	}
-	INFO("mbedtls_pk_setup ok\n");
-
-	ret = mbedtls_rsa_gen_key(mbedtls_pk_rsa(g_tls.pkey), mbedtls_ctr_drbg_random, &g_tls.ctr_drbg, 2048, 65537);
-	if (ret != 0) {
-		mbedtls_strerror(ret, errStr, sizeof(errStr));
-		ERROR("mbedtls_rsa_gen_key -0x%04x %s", -ret, errStr);
-		return false;
-	}
-	INFO("mbedtls_rsa_gen_key ok\n");
-
-	return true;
-}
-
-static bool _storePrivateKey(mbedtls_pk_context* pkey)
-{
-	int     ret;
-	char    errStr[256];
-	char    buf[2048];
-
-	ret = mbedtls_pk_write_key_pem(&g_tls.pkey, (unsigned char*)buf, sizeof(buf));
-	if (ret != 0) {
-		mbedtls_strerror(ret, errStr, sizeof(errStr));
-		ERROR("mbedtls_pk_write_key_pem -0x%04x %s", -ret, errStr);
-		return false;
-	}
-
-	INFO("key: %s\n", buf);
-
-	ret = NVS_set(nvs_id_key_pem, buf);
-	if (!ret) {
-		ERROR("NVS_set failed\n");
-		return false;
-	}
-
-	return true;
-}
-
 static bool _tlsInit(void)
 {
 	int			ret;
@@ -491,34 +526,12 @@ static bool _tlsInit(void)
 		return false;
 	}
 
-	INFO("Loading CA cert\n");
-	char* cacert_pem;
-	FACTORY_get(factory_id_ca_pem, buf0);
-	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (const unsigned char*) buf0, strlen(buf0) + 1);
-	if (ret != 0) {
-		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
+	INFO("Loading private key\n");
+	ret = NVS_get(nvs_id_key_pem,  buf0, sizeof(buf0));
+	if (!ret) {
+		ERROR("key not present. will generate later\n");
 		return false;
 	}
-
-	INFO("Loading intermediate cert\n");
-	NVS_get(nvs_id_inter_pem,  buf0, sizeof(buf0));
-	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (unsigned char*)buf0, strlen(buf0) + 1);
-	if (ret != 0) {
-		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
-		return false;
-	}
-
-	INFO("Loading cert\n");
-	NVS_get(nvs_id_cert_pem,  buf0, sizeof(buf0));
-
-	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf0, strlen(buf0) + 1);
-	if (ret != 0) {
-		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
-		return false;
-	}
-
-	INFO("Loading key\n");
-	NVS_get(nvs_id_key_pem,  buf0, sizeof(buf0));
 	uint32_t    key_len = strlen(buf0) + 1;
 
 	ret =  mbedtls_pk_parse_key(&g_tls.pkey, (unsigned char*)buf0, key_len, NULL, 0, mbedtls_ctr_drbg_random, &g_tls.ctr_drbg);
@@ -527,7 +540,45 @@ static bool _tlsInit(void)
 		return false;
 	}
 
-	INFO("Certs loaded\n");
+	INFO("Loading CA cert\n");
+	char* cacert_pem;
+	ret = FACTORY_get(factory_id_ca_pem, buf0);
+	if (!ret) {
+		ERROR("CA not present. Fatal !!!\n");
+		return false;
+	}
+
+	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (const unsigned char*) buf0, strlen(buf0) + 1);
+	if (ret != 0) {
+		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
+		return false;
+	}
+
+	INFO("Loading intermediate cert\n");
+	ret = NVS_get(nvs_id_inter_pem,  buf0, sizeof(buf0));
+	if (!ret) {
+		ERROR("intermediate certificate not present. will request later\n");
+		return false;
+	}
+
+	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (unsigned char*)buf0, strlen(buf0) + 1);
+	if (ret != 0) {
+		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
+		return false;
+	}
+
+	INFO("Loading cert\n");
+	ret = NVS_get(nvs_id_cert_pem,  buf0, sizeof(buf0));
+	if (!ret) {
+		ERROR("certificate not present. will request later\n");
+		return false;
+	}
+
+	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf0, strlen(buf0) + 1);
+	if (ret != 0) {
+		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
+		return false;
+	}
 
 	if ((ret = mbedtls_ssl_config_defaults(&g_tls.conf, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
 		ERROR("mbedtls_ssl_config_defaults %d\n", ret);
@@ -552,6 +603,8 @@ static bool _tlsInit(void)
 
 	mbedtls_ssl_conf_authmode(&g_tls.conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
 	//mbedtls_ssl_conf_authmode(&g_tls.conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+
+	INFO("TLS initialized\n");
 
 	return true;
 }
@@ -625,13 +678,13 @@ static bool _init(void)
 
 	ret = xTaskCreate(_taskCmd, "tls_cmd", 8192, NULL, 3, NULL);
 	if (ret != pdPASS) {
-		ERROR("create task failed\n");
+		ERROR("create task tls_cmd failed\n");
 		return false;
 	}
 
 	ret = xTaskCreate(_taskStream, "tls_stream", 8192, NULL, 3, NULL);
 	if (ret != pdPASS) {
-		ERROR("create task failed\n");
+		ERROR("create task tls_stream failed\n");
 		return false;
 	}
 
@@ -866,31 +919,55 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	return true;
 }
 
+
+
 static bool dbgGenKey(uint8_t argc, char** argv)
 {
-	int ret;
+	int		ret;
+	bool	generate	= false;
+	bool	autoGen		= false;
+	bool	store		= false;
 
-	ret = _genPrivateKey();
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("g",		ARGS_TYPE_SWITCH,	0,	"force generate",				&generate)
+		ARGS_ENTRY("a",		ARGS_TYPE_SWITCH,	0,	"generate if not present",		&autoGen)
+		ARGS_ENTRY("s",		ARGS_TYPE_SWITCH,	0,	"store",						&store)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
 	if (!ret) {
-		PRINT("genkey failed\n");
 		return false;
+	}
+
+	if (autoGen) {
+		store = false;
+	}
+
+	if (generate) {
+		ret = _genPrivateKey();
+		if (!ret) {
+			PRINT("genkey failed\n");
+			return false;
+		}
+	}
+
+	if (autoGen) {
+		_genAndStorePrivateKey();
+	}
+
+	if (store) {
+		ret = _storePrivateKey(&g_tls.pkey);
+		if (!ret) {
+			PRINT("store key failed\n");
+			return false;
+		}
 	}
 
 	return true;
 }
 
-static bool dbgStoreKey(uint8_t argc, char** argv)
-{
-	int ret;
-
-	ret = _storePrivateKey(&g_tls.pkey);
-	if (!ret) {
-		PRINT("store key failed\n");
-		return false;
-	}
-
-	return true;
-}
 
 static bool dbgCurl(uint8_t argc, char** argv)
 {
@@ -956,7 +1033,6 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("close",  	NULL,	NULL, dbgClose)
 		DEBUG_MENU_CMD("timer",     NULL,	NULL, dbgTimer)
         DEBUG_MENU_CMD("genKey",    NULL,	NULL, dbgGenKey)
-        DEBUG_MENU_CMD("storeKey",  NULL,	NULL, dbgStoreKey)
 		DEBUG_MENU_CMD("curl",		NULL,	NULL, dbgCurl)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END

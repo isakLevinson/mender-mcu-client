@@ -54,11 +54,46 @@ exit:
 	return ret;
 }
 
-static bool _set(char* key,  char* val)
+bool NVS_isValidName(char* pName)
+{
+	uint8_t	i = 1 ; // first one is "INVALID"
+
+	while (g_id[i].pId) {
+		if (!strcmp(g_id[i].pId, pName)) {
+			return true;
+		}
+		i++;
+	}
+
+	return false;
+}
+
+bool NVS_get(nvs_id_t id,  char* val, size_t maxSize)
+{
+	bool	ret;
+
+	ret = _get(g_id[id].pId, val, maxSize);
+	if (!ret) {
+		TRACE("get failed id %d\n", id);
+		if (g_id[id].pDefault) {
+			TRACE("using default value\n");
+			strcpy(val, g_id[id].pDefault);
+			return true;
+		} else {
+			TRACE("no default value\n");
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool NVS_set(nvs_id_t id,  char* val)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
+	char*	key = g_id[id].pId;
 
 #ifdef 	NVS_MAX_LENGTH
 	char    str[NVS_MAX_LENGTH];
@@ -104,48 +139,33 @@ exit:
 
 	nvs_commit(handle);
 	nvs_close(handle);
+
 	return ret;
 }
 
-bool NVS_isValidName(char* pName)
+bool NVS_del(nvs_id_t id)
 {
-	uint8_t	i = 1 ; // first one is "INVALID"
+	bool    ret = true;
+	esp_err_t err = ESP_OK;
+	nvs_handle_t handle;
+	char*	key = g_id[id].pId;
 
-	while (g_id[i].pId) {
-		if (!strcmp(g_id[i].pId, pName)) {
-			return true;
-		}
-		i++;
+	err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+	if (err != ESP_OK) {
+		ERROR("nvs_open failed\n");
+		return false;
 	}
 
-	return false;
-}
-
-bool NVS_get(nvs_id_t id,  char* val, size_t maxSize)
-{
-	bool	ret;
-
-	ret = _get(g_id[id].pId, val, maxSize);
-	if (!ret) {
-		TRACE("get failed id %d\n", id);
-		if (g_id[id].pDefault) {
-			TRACE("using default value\n");
-			strcpy(val, g_id[id].pDefault);
-			return true;
-		} else {
-			TRACE("no default value\n");
-			return false;
-		}
+	INFO("deleting %s\n", key);
+	err = nvs_erase_key(handle, key);
+	if (err != ESP_OK) {
+		ERROR("nvs_erase_key %s %x\n", key, err);
+		ESP_printErr(err);
+		ret = false;
 	}
 
-	return true;
-}
-
-bool NVS_set(nvs_id_t id,  char* val)
-{
-	bool	ret;
-
-	ret = _set(g_id[id].pId, val);
+	nvs_commit(handle);
+	nvs_close(handle);
 
 	return ret;
 }
@@ -282,7 +302,7 @@ static bool dbgSet(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgDelete(uint8_t argc, char** argv)
+static bool dbgErase(uint8_t argc, char** argv)
 {
 	esp_err_t   err = ESP_OK;
 
@@ -396,6 +416,26 @@ static bool dbgId(uint8_t argc, char** argv)
 	return true;
 }
 
+
+static bool dbgDel(uint8_t argc, char** argv)
+{
+	bool	ret;
+	char	buf[2048];
+	uint8_t	id;
+
+	if (argc < 2) {
+		return false;
+	}
+
+	id = strtol(argv[1], NULL, 10);
+	ret = NVS_del(id);
+	if (!ret) {
+		PRINT("failed to delete\n");
+	}
+
+	return true;
+}
+
 static bool dbgStatus(uint8_t argc, char** argv)
 {
 	bool		ret;
@@ -419,6 +459,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("nvs", NULL)
 		DEBUG_MENU_CMD("id",	    NULL,		NULL, dbgId)
+		DEBUG_MENU_CMD("del",	    NULL,		NULL, dbgDel)
 		DEBUG_MENU_DIR("debug", NULL)
 			DEBUG_MENU_CMD("status",    NULL,		NULL, dbgStatus)
 			DEBUG_MENU_CMD("open",	    NULL,		NULL, dbgOpen)
@@ -426,7 +467,7 @@ DEBUG_MENU_START(g_menu)
 			DEBUG_MENU_CMD("commit",    NULL,		NULL, dbgCommit)
 			DEBUG_MENU_CMD("get",       NULL,		NULL, dbgGet)
 			DEBUG_MENU_CMD("set",       NULL,		NULL, dbgSet)
-			DEBUG_MENU_CMD("del",       NULL,		NULL, dbgDelete)
+			DEBUG_MENU_CMD("erase",		NULL,		NULL, dbgErase)
 			DEBUG_MENU_CMD("list",      NULL,		NULL, dbgList)
 		DEBUG_MENU_DIR_END
 	DEBUG_MENU_DIR_END

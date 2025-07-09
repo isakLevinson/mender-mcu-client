@@ -183,6 +183,7 @@ static bool _vaultLogin(char* o_pToken)
 
 	http_result_size = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data), &http_result);
 	if (http_result_size < 0) {
+		ERROR("TLS_curl failed\n");
 		return false;
 	}
 
@@ -273,6 +274,7 @@ static bool _vaultRenew(char* token)
 
 	resultSize = TLS_curl(url, HTTP_METHOD_POST, "X-Vault-Token", token, json, strlen(json), &http_result);
 	if (resultSize < 0) {
+		ERROR("TLS_curl failed\n");
 		return false;
 	}
 
@@ -412,22 +414,30 @@ static bool dbgVerify(uint8_t argc, char** argv)
 		return true;
 	}
 
-	INFO("CA:\n%s", buf);
+	INFO("CA:\n%s\n", buf);
 	if (mbedtls_x509_crt_parse(&ca_chain, (const unsigned char*)buf, strlen(buf) + 1) != 0) {
 		PRINT("Failed to parse root CA cert\n");
 		return true;
 	}
 
-	NVS_get(nvs_id_inter_pem,  buf, sizeof(buf));
-	INFO("INTERMEDIATE:\n%s", buf);
+	ret = NVS_get(nvs_id_inter_pem,  buf, sizeof(buf));
+	if (!ret) {
+		ERROR("intermediate certificate not present\n");
+		return false;
+	}
+	INFO("INTERMEDIATE:\n%s\n", buf);
 	ret = mbedtls_x509_crt_parse(&ca_chain, (unsigned char*)buf, strlen(buf) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return true;
 	}
 
-	NVS_get(nvs_id_cert_pem,  buf, sizeof(buf));
-	INFO("CERT:\n%s", buf);
+	ret = NVS_get(nvs_id_cert_pem,  buf, sizeof(buf));
+	if (!ret) {
+		ERROR("device's certificate not present\n");
+		return false;
+	}
+	INFO("CERT:\n%s\n", buf);
 	if (mbedtls_x509_crt_parse(&cert, (const unsigned char*)buf, strlen(buf) + 1) != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return true;

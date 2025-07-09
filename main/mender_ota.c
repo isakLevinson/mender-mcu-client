@@ -648,20 +648,22 @@ static void _init(void)
 
 	/* Initialize mender-client */
 	mender_keystore_t  identity[]              = { { .name = "sn", .value = sn }, { .name = NULL, .value = NULL } };
-	mender_client_config_t    mender_client_config    = { .identity                     = identity,
-	                              .artifact_name                = artifact_name,
-	                              .device_type                  = device_type,
-	                              .tenant_token                 = NULL,
-	                              .authentication_poll_interval = -1,
-	                              .update_poll_interval         = -1,	// only attempt once
-	                              .recommissioning              = false
+	mender_client_config_t    mender_client_config    = {
+								.identity                     = identity,
+								.artifact_name                = artifact_name,
+								.device_type                  = device_type,
+								.tenant_token                 = NULL,
+								.authentication_poll_interval = -1,
+								.update_poll_interval         = -1,	// only attempt once
+								.recommissioning              = false
 	                          };
-	mender_client_callbacks_t mender_client_callbacks = { .network_connect        = network_connect_cb,
-	                              .network_release        = network_release_cb,
-	                              .authentication_success = authentication_success_cb,
-	                              .authentication_failure = authentication_failure_cb,
-	                              .deployment_status      = deployment_status_cb,
-	                              .restart                = restart_cb
+	mender_client_callbacks_t mender_client_callbacks = {
+								.network_connect        = network_connect_cb,
+								.network_release        = network_release_cb,
+								.authentication_success = authentication_success_cb,
+								.authentication_failure = authentication_failure_cb,
+								.deployment_status      = deployment_status_cb,
+								.restart                = restart_cb
 	                          };
 
 	NVS_get(nvs_id_ota_url, g_mender.url, sizeof(g_mender.url));

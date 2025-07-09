@@ -39,5 +39,6 @@ bool NVS_eraseAll(void);
 bool NVS_isValidName(char* pName);
 bool NVS_set(nvs_id_t id,  char* val);
 bool NVS_get(nvs_id_t id,  char* val, size_t maxSize);
+bool NVS_del(nvs_id_t id);
 bool NVS_get_ssid(char* ssid, char* passwd, size_t maxSize);
 bool NVS_set_ssid(char* ssid, char* passwd);
