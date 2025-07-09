@@ -35,7 +35,7 @@ static const uint8_t g_valveGpios[] = {
 	GPIO_VALVE_3,
 };
 
-#define VALVE_COUNT     (sizeof(g_valveGpios)/sizeof(g_valveGpios[0]))
+#define CHANNEL_COUNT     (sizeof(g_valveGpios)/sizeof(g_valveGpios[0]))
 
 typedef enum {
 	PRESS_STATE_IDLE        = 0,
@@ -69,7 +69,7 @@ static struct {
 		int32_t valveTime;
 		bool    valveZeroDelay;
 		int32_t valveZeroTime;
-	} channels[4];
+	} channels[CHANNEL_COUNT];
 } g_app = {
 	.cfg = {
 		.pmpValveDelay  = 100,
@@ -86,7 +86,7 @@ static struct {
 
 bool _valveOn(uint8_t v, bool on)
 {
-	if (v >= VALVE_COUNT) {
+	if (v >= CHANNEL_COUNT) {
 		return false;
 	}
 
@@ -98,7 +98,7 @@ bool _valveOn(uint8_t v, bool on)
 
 bool _pumpOn(uint8_t v, bool on)
 {
-	if (v >= 4) {
+	if (v >= CHANNEL_COUNT) {
 		return false;
 	}
 	PMP_on(v, on);
@@ -170,16 +170,17 @@ static void _task(void* arg)
 	uint8_t i;
 	int32_t t;
 	int32_t timeTrace = TIME_get32();
+	int32_t	minPressure;
 
 	while (true) {
-		int16_t     pressure[4];
+		int16_t     pressure[CHANNEL_COUNT];
 
 		vTaskDelay(10);
 
 		t = TIME_get32();
 		ADC_getPressure(pressure);
 
-		for (i = 0; i < 4; i++) {
+		for (i = 0; i < CHANNEL_COUNT; i++) {
 			g_app.channels[i].press = pressure[i];
 
 			if (g_app.channels[i].valveDelay) {
@@ -211,9 +212,20 @@ static void _task(void* arg)
 		    g_app.channels[0].press, g_app.channels[1].press, g_app.channels[2].press, g_app.channels[3].press,
 		    g_app.channels[0].pressurizeState, g_app.channels[1].pressurizeState, g_app.channels[2].pressurizeState, g_app.channels[3].pressurizeState);
 
-		for (i = 0; i < 4; i++) {
-			g_app.channels[i].press = pressure[i];
+		minPressure = 1000;
+		for (i = 0; i < CHANNEL_COUNT; i++) {
+			if (g_app.channels[i].press < minPressure) {
+				minPressure = g_app.channels[i].press;
+			}
+		}
 
+		if (minPressure < PIEZO_CRTL_THRESHOLD) {
+			gpio_set_level(GPIO_PIEZO_CTRL, 1);
+		} else {
+			gpio_set_level(GPIO_PIEZO_CTRL, 0);
+		}
+
+		for (i = 0; i < CHANNEL_COUNT; i++) {
 			int delta = g_app.channels[i].press - g_app.channels[i].target;
 
 			switch (g_app.channels[i].pressurizeState) {
@@ -260,7 +272,7 @@ static void _init(void)
 	int i;
 	int ret;
 
-	for (i = 0; i < VALVE_COUNT; i++) {
+	for (i = 0; i < CHANNEL_COUNT; i++) {
 		gpio_set_direction(g_valveGpios[i], GPIO_MODE_OUTPUT);
 		gpio_set_level(g_valveGpios[i], 0);
 	}
@@ -287,7 +299,7 @@ bool CTRL_loopEnable(bool on)
 {
 	uint32_t    i;
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < CHANNEL_COUNT; i++) {
 		_clearFsm(i);
 	}
 
@@ -301,13 +313,13 @@ bool CTRL_setTarget(uint16_t* pPressure)
 
 	INFO("CTRL_setTarget %d %d %d %d\n", pPressure[0], pPressure[1], pPressure[2], pPressure[3]);
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < CHANNEL_COUNT; i++) {
 		if (pPressure[i] > MAX_PRESSURE_LIMIT) {
 			return false;
 		}
 	}
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < CHANNEL_COUNT; i++) {
 		if (pPressure[i] == g_app.channels[i].target) {
 			continue;
 		}
@@ -322,7 +334,7 @@ bool CTRL_getPressure(int16_t* pPressure)
 {
 	int i;
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < CHANNEL_COUNT; i++) {
 		pPressure[i] = g_app.channels[i].press;
 	}
 
@@ -333,7 +345,7 @@ bool CTRL_getValves(bool* pValves)
 {
 	int i;
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < CHANNEL_COUNT; i++) {
 		pValves[i] = g_app.channels[i].valveStatus;
 	}
 
@@ -344,7 +356,7 @@ bool CTRL_getPump(bool* pPumpsOn)
 {
 	int i;
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < CHANNEL_COUNT; i++) {
 		pPumpsOn[i] = g_app.channels[i].pumpStatus;
 	}
 
@@ -375,7 +387,7 @@ static bool dbgCuff(uint8_t argc, char** argv)
 	uint8_t cuff;
 	int8_t  op;
 	char    c;
-	int16_t press[4];
+	int16_t press[CHANNEL_COUNT];
 
 	if (argc < 3)  {
 		return false;
@@ -399,7 +411,7 @@ static bool dbgCuff(uint8_t argc, char** argv)
 
 static bool dbgTarget(uint8_t argc, char** argv)
 {
-	uint16_t   target[4];
+	uint16_t   target[CHANNEL_COUNT];
 	if (argc == 2) {
 		target[0] = strtol(argv[1], NULL, 10);
 		target[1] = strtol(argv[1], NULL, 10);
