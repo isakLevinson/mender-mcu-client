@@ -13,7 +13,7 @@
 
 #define	NVS_NAMESPACE      "cfg"
 
-#define NVS_ARR(id, def)	[nvs_id_ ## id] = {.pId = #id, .pDefault = def},
+#define NVS_ARR(id, def)	[nvs_id_ ## id] = {.key = #id, .pDefault = def},
 
 static struct {
 	nvs_handle_t nvsHandle;
@@ -22,7 +22,7 @@ static struct {
 nvs_arr_t g_id[] = {
 	NVS_LIST(NVS_ARR)
 	{
-		.pId = NULL, .pDefault = NULL
+		.key = NULL, .pDefault = NULL
 	}
 };
 
@@ -58,8 +58,8 @@ bool NVS_isValidName(char* pName)
 {
 	uint8_t	i = 1 ; // first one is "INVALID"
 
-	while (g_id[i].pId) {
-		if (!strcmp(g_id[i].pId, pName)) {
+	while (g_id[i].key) {
+		if (!strcmp(g_id[i].key, pName)) {
 			return true;
 		}
 		i++;
@@ -72,7 +72,7 @@ bool NVS_get(nvs_id_t id,  char* val, size_t maxSize)
 {
 	bool	ret;
 
-	ret = _get(g_id[id].pId, val, maxSize);
+	ret = _get(g_id[id].key, val, maxSize);
 	if (!ret) {
 		TRACE("get failed id %d\n", id);
 		if (g_id[id].pDefault) {
@@ -93,7 +93,7 @@ bool NVS_set(nvs_id_t id,  char* val)
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
-	char*	key = g_id[id].pId;
+	char*	key = g_id[id].key;
 
 #ifdef 	NVS_MAX_LENGTH
 	char    str[NVS_MAX_LENGTH];
@@ -148,7 +148,7 @@ bool NVS_del(nvs_id_t id)
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
-	char*	key = g_id[id].pId;
+	char*	key = g_id[id].key;
 
 	err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
 	if (err != ESP_OK) {
@@ -392,9 +392,9 @@ static bool dbgId(uint8_t argc, char** argv)
 		for (id = 1; id < nvs_id_last; id++) {
 			ret = NVS_get(id,  buf, sizeof(buf));
 			if (ret) {
-				PRINT("%d %s: %s\n", id, g_id[id].pId, buf);
+				PRINT("%d %s: %s\n", id, g_id[id].key, buf);
 			} else {
-				PRINT("%d %s: NULL\n", id, g_id[id].pId);
+				PRINT("%d %s: NULL\n", id, g_id[id].key);
 			}
 		}
 		return true;

@@ -16,15 +16,14 @@
 	cmd(inter_pem,	NULL)	\
 	cmd(key_pem,	NULL)	\
 	cmd(ota_updated,"0")\
-
 // *INDENT-ON*
 
+#define NVS_ENUM(id, def)	nvs_id_ ## id,
+
 typedef struct {
-	char*	pId;
+	char*	key;
 	char*	pDefault;
 } nvs_arr_t;
-
-#define NVS_ENUM(id, def)	nvs_id_ ## id,
 
 typedef enum {
 	nvs_id_invalid,
