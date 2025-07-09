@@ -32,7 +32,7 @@
 #include <protocol_examples_common.h>
 
 #include "main.h"
-#include "nvs.h"
+#include "config.h"
 #include "cmd.h"
 #include "factory.h"
 
@@ -158,7 +158,7 @@ static mender_err_t restart_cb(void)
 	INFO("restart_cb\n");
 	/* Application is responsible to shutdown and restart the system now */
 
-	NVS_set(nvs_id_ota_updated,  "1");
+	CFG_set(cfg_id_ota_updated,  "1");
 	//	CMD_sendVersionEvent();
 
 	// just give anogh time for the event to be sent
@@ -666,8 +666,8 @@ static void _init(void)
 								.restart                = restart_cb
 	                          };
 
-	NVS_get(nvs_id_ota_url, g_mender.url, sizeof(g_mender.url));
-	NVS_get(nvs_id_ota_token, g_mender.token, sizeof(g_mender.token));
+	CFG_get(cfg_id_ota_url, g_mender.url, sizeof(g_mender.url));
+	CFG_get(cfg_id_ota_token, g_mender.token, sizeof(g_mender.token));
 	mender_client_config.host 			= g_mender.url;
 	mender_client_config.tenant_token	= g_mender.token;
 

@@ -321,7 +321,7 @@ static bool _vaultRenew(char* token)
 				cJSON* item = cJSON_GetArrayItem(chain, 0);
 				if (cJSON_IsString(item)) {
 					INFO("INTERMEDIATE:\n%s\n", item->valuestring);
-					ret = NVS_set(nvs_id_inter_pem, item->valuestring);
+					ret = CFG_set(cfg_id_inter_pem, item->valuestring);
 					if (!ret) {
 						ERROR("NVS_set failed\n");
 						goto err;
@@ -344,7 +344,7 @@ static bool _vaultRenew(char* token)
 
 	// Print certificate (like jq -r)
 	INFO("CERT:\n%s\n", cert->valuestring);
-	ret = NVS_set(nvs_id_cert_pem, cert->valuestring);
+	ret = CFG_set(cfg_id_cert_pem, cert->valuestring);
 	if (!ret) {
 		ERROR("NVS_set failed\n");
 		goto err;
@@ -420,7 +420,7 @@ static bool dbgVerify(uint8_t argc, char** argv)
 		return true;
 	}
 
-	ret = NVS_get(nvs_id_inter_pem,  buf, sizeof(buf));
+	ret = CFG_get(cfg_id_inter_pem,  buf, sizeof(buf));
 	if (!ret) {
 		ERROR("intermediate certificate not present\n");
 		return false;
@@ -432,7 +432,7 @@ static bool dbgVerify(uint8_t argc, char** argv)
 		return true;
 	}
 
-	ret = NVS_get(nvs_id_cert_pem,  buf, sizeof(buf));
+	ret = CFG_get(cfg_id_cert_pem,  buf, sizeof(buf));
 	if (!ret) {
 		ERROR("device's certificate not present\n");
 		return false;

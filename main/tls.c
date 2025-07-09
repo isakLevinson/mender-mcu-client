@@ -261,9 +261,9 @@ static bool _storePrivateKey(mbedtls_pk_context* pkey)
 
 	INFO("key: %s\n", buf);
 
-	ret = NVS_set(nvs_id_key_pem, buf);
+	ret = CFG_set(cfg_id_key_pem, buf);
 	if (!ret) {
-		ERROR("NVS_set failed\n");
+		ERROR("CFG_set failed\n");
 		return false;
 	}
 
@@ -275,7 +275,7 @@ static bool _genAndStorePrivateKey(void)
 	bool	ret;
 	char    buf[2048];
 
-	ret = NVS_get(nvs_id_key_pem, buf, sizeof(buf));
+	ret = CFG_get(cfg_id_key_pem, buf, sizeof(buf));
 	if (ret) {
 		INFO("key present. no need to generate\n");
 		return true;
@@ -527,7 +527,7 @@ static bool _tlsInit(void)
 	}
 
 	INFO("Loading private key\n");
-	ret = NVS_get(nvs_id_key_pem,  buf0, sizeof(buf0));
+	ret = CFG_get(cfg_id_key_pem,  buf0, sizeof(buf0));
 	if (!ret) {
 		ERROR("key not present. will generate later\n");
 		return false;
@@ -555,7 +555,7 @@ static bool _tlsInit(void)
 	}
 
 	INFO("Loading intermediate cert\n");
-	ret = NVS_get(nvs_id_inter_pem,  buf0, sizeof(buf0));
+	ret = CFG_get(cfg_id_inter_pem,  buf0, sizeof(buf0));
 	if (!ret) {
 		ERROR("intermediate certificate not present. will request later\n");
 		return false;
@@ -568,7 +568,7 @@ static bool _tlsInit(void)
 	}
 
 	INFO("Loading cert\n");
-	ret = NVS_get(nvs_id_cert_pem,  buf0, sizeof(buf0));
+	ret = CFG_get(cfg_id_cert_pem,  buf0, sizeof(buf0));
 	if (!ret) {
 		ERROR("certificate not present. will request later\n");
 		return false;

@@ -136,7 +136,9 @@ static void got_ip_handler(void* arg, esp_event_base_t event_base,
 	xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_UDP);
 	xEventGroupSetBits(g_server.event_group, FLAG_GOT_IP_UDP_TIME_SYNC);
 
-	NVS_set_ssid(g_server.wifi.currentSsid, g_server.wifi.currentPasswd);
+	CFG_set(cfg_id_ssid, g_server.wifi.currentSsid);
+	CFG_set(cfg_id_passwd, g_server.wifi.currentPasswd);
+
 	MENDER_execute();
 	ntp_restart();
 }
@@ -454,7 +456,11 @@ static void _init(void)
 	wss_init();
 	_startServer();
 
-	ret = NVS_get_ssid(ssid, passwd, 32);
+	ret = CFG_get(cfg_id_ssid, ssid, sizeof(ssid));
+	if (ret) {
+		ret = CFG_get(cfg_id_passwd, passwd, sizeof(passwd));
+	}
+
 	if (ret) {
 		INFO("ssid  : %s\n", ssid);
 		INFO("passwd: %s\n", passwd);

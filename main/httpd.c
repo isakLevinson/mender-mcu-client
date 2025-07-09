@@ -20,7 +20,6 @@
 #include "httpd.h"
 #include "cmd.h"
 #include "wifi.h"
-#include "nvs.h"
 #include "mdns.h"
 #include "config.h"
 
@@ -449,7 +448,7 @@ static esp_err_t events_handler(httpd_req_t* req)
 			INFO("OTA was recently performed. Sending new version notification\n");
 			g_server.ota_new_restart = false;
 			CMD_sendOtaStatusEvent();
-			NVS_set(nvs_id_ota_updated,  "0");
+			CFG_set(cfg_id_ota_updated,  "0");
 		}
 
 		return ESP_OK;
@@ -739,7 +738,7 @@ bool wss_init(void)
 	// Start the httpd server
 	INFO("Starting server");
 
-	ret = NVS_get(nvs_id_ota_updated,  buf, sizeof(buf));
+	ret = CFG_get(cfg_id_ota_updated,  buf, sizeof(buf));
 	if (ret) {
 		if (!strcmp(buf, "1")) {
 			g_server.ota_new_restart = true;

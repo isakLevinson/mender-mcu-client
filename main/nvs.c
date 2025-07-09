@@ -11,38 +11,35 @@
 #include "main.h"
 #include "nvs.h"
 
-#define	NVS_NAMESPACE      "cfg"
-
-#define NVS_ARR(id, def)	[nvs_id_ ## id] = {.key = #id, .pDefault = def},
-
 static struct {
 	nvs_handle_t nvsHandle;
 } g_nvs;
 
-nvs_arr_t g_id[] = {
-	NVS_LIST(NVS_ARR)
-	{
-		.key = NULL, .pDefault = NULL
-	}
-};
-
-static bool _get(char* key,  char* val, size_t maxSize)
+bool NVS_get(char*namespace, char* key,  char* val, size_t maxSize)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
 	size_t length = maxSize;
 
-	err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
+	if (!namespace) {
+		return false;
+	}
+
+	if (!key) {
+		return false;
+	}
+
+	err = nvs_open(namespace, NVS_READONLY, &handle);
 	if (err != ESP_OK) {
-		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE, err);
+		ERROR("nvs_open <%s> failed %x\n", namespace, err);
 		ESP_printErr(err);
 		return false;
 	}
 
 	err =  nvs_get_str(handle, key, val, &length);
 	if (err != ESP_OK) {
-		TRACE("nvs_get_str <%s> failed 0x%X\n", key, err);
+		TRACE("nvs_get_str <%s,%s> failed 0x%X\n", namespace, key, err);
 		ret = false;
 		goto exit;
 	}
@@ -54,53 +51,18 @@ exit:
 	return ret;
 }
 
-bool NVS_isValidName(char* pName)
-{
-	uint8_t	i = 1 ; // first one is "INVALID"
-
-	while (g_id[i].key) {
-		if (!strcmp(g_id[i].key, pName)) {
-			return true;
-		}
-		i++;
-	}
-
-	return false;
-}
-
-bool NVS_get(nvs_id_t id,  char* val, size_t maxSize)
-{
-	bool	ret;
-
-	ret = _get(g_id[id].key, val, maxSize);
-	if (!ret) {
-		TRACE("get failed id %d\n", id);
-		if (g_id[id].pDefault) {
-			TRACE("using default value\n");
-			strcpy(val, g_id[id].pDefault);
-			return true;
-		} else {
-			TRACE("no default value\n");
-			return false;
-		}
-	}
-
-	return true;
-}
-
-bool NVS_set(nvs_id_t id,  char* val)
+bool NVS_set(char*namespace, char* key,  char* val)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
-	char*	key = g_id[id].key;
 
 #ifdef 	NVS_MAX_LENGTH
 	char    str[NVS_MAX_LENGTH];
 	size_t  length;
 #endif
 
-	err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+	err = nvs_open(namespace, NVS_READWRITE, &handle);
 	if (err != ESP_OK) {
 		ERROR("nvs_open failed\n");
 		return false;
@@ -143,14 +105,13 @@ exit:
 	return ret;
 }
 
-bool NVS_del(nvs_id_t id)
+bool NVS_del(char*namespace, char* key)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
-	char*	key = g_id[id].key;
 
-	err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+	err = nvs_open(namespace, NVS_READWRITE, &handle);
 	if (err != ESP_OK) {
 		ERROR("nvs_open failed\n");
 		return false;
@@ -166,49 +127,6 @@ bool NVS_del(nvs_id_t id)
 
 	nvs_commit(handle);
 	nvs_close(handle);
-
-	return ret;
-}
-
-bool NVS_get_ssid(char* ssid, char* passwd, size_t maxSize)
-{
-	bool    ret = true;
-
-	ret = NVS_get(nvs_id_ssid, ssid, maxSize);
-	if (!ret)  {
-		ERROR("get ssid failed\n");
-		return false;
-	}
-
-	if (ssid[0] == '\0') {
-		return false;
-	}
-
-	ret = NVS_get(nvs_id_passwd, passwd, maxSize);
-	if (!ret)  {
-		ERROR("get passwd failed\n");
-		return false;
-	}
-
-	if (passwd[0] == '\0') {
-		return false;
-	}
-
-	return true;
-}
-
-bool NVS_set_ssid(char* ssid, char* passwd)
-{
-	bool    ret = true;
-
-	ret = NVS_set(nvs_id_ssid, ssid);
-	if (!ret)  {
-		ERROR("set ssid failed\n");
-	}
-	ret &= NVS_set(nvs_id_passwd, passwd);
-	if (!ret)  {
-		ERROR("set passwd failed\n");
-	}
 
 	return ret;
 }
@@ -239,7 +157,7 @@ static bool dbgOpen(uint8_t argc, char** argv)
 	esp_err_t   err = ESP_OK;
 
 	if (argc < 2) {
-		err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &g_nvs.nvsHandle);
+		return false;
 	} else {
 		err = nvs_open(argv[1], NVS_READWRITE, &g_nvs.nvsHandle);
 	}
@@ -382,60 +300,6 @@ static bool dbgList(uint8_t argc, char** argv)
 	return true;
 }
 
-static bool dbgId(uint8_t argc, char** argv)
-{
-	bool	ret;
-	char	buf[2048];
-	uint8_t	id;
-
-	if (argc < 2) {
-		for (id = 1; id < nvs_id_last; id++) {
-			ret = NVS_get(id,  buf, sizeof(buf));
-			if (ret) {
-				PRINT("%d %s: %s\n", id, g_id[id].key, buf);
-			} else {
-				PRINT("%d %s: NULL\n", id, g_id[id].key);
-			}
-		}
-		return true;
-	}
-
-	id = strtol(argv[1], NULL, 10);
-	if (argc < 3) {
-		ret = NVS_get(id,  buf, sizeof(buf));
-		if (ret) {
-			PRINT("%s\n", buf);
-		} else {
-			PRINT("NULL\n");
-		}
-		return true;
-	}
-
-	ret = NVS_set(id,  argv[2]);
-
-	return true;
-}
-
-
-static bool dbgDel(uint8_t argc, char** argv)
-{
-	bool	ret;
-	char	buf[2048];
-	uint8_t	id;
-
-	if (argc < 2) {
-		return false;
-	}
-
-	id = strtol(argv[1], NULL, 10);
-	ret = NVS_del(id);
-	if (!ret) {
-		PRINT("failed to delete\n");
-	}
-
-	return true;
-}
-
 static bool dbgStatus(uint8_t argc, char** argv)
 {
 	bool		ret;
@@ -458,18 +322,14 @@ static bool dbgStatus(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("nvs", NULL)
-		DEBUG_MENU_CMD("id",	    NULL,		NULL, dbgId)
-		DEBUG_MENU_CMD("del",	    NULL,		NULL, dbgDel)
-		DEBUG_MENU_DIR("debug", NULL)
-			DEBUG_MENU_CMD("status",    NULL,		NULL, dbgStatus)
-			DEBUG_MENU_CMD("open",	    NULL,		NULL, dbgOpen)
-			DEBUG_MENU_CMD("close",	    NULL,		NULL, dbgClose)
-			DEBUG_MENU_CMD("commit",    NULL,		NULL, dbgCommit)
-			DEBUG_MENU_CMD("get",       NULL,		NULL, dbgGet)
-			DEBUG_MENU_CMD("set",       NULL,		NULL, dbgSet)
-			DEBUG_MENU_CMD("erase",		NULL,		NULL, dbgErase)
-			DEBUG_MENU_CMD("list",      NULL,		NULL, dbgList)
-		DEBUG_MENU_DIR_END
+		DEBUG_MENU_CMD("status",    NULL,		NULL, dbgStatus)
+		DEBUG_MENU_CMD("open",	    NULL,		NULL, dbgOpen)
+		DEBUG_MENU_CMD("close",	    NULL,		NULL, dbgClose)
+		DEBUG_MENU_CMD("commit",    NULL,		NULL, dbgCommit)
+		DEBUG_MENU_CMD("get",       NULL,		NULL, dbgGet)
+		DEBUG_MENU_CMD("set",       NULL,		NULL, dbgSet)
+		DEBUG_MENU_CMD("erase",		NULL,		NULL, dbgErase)
+		DEBUG_MENU_CMD("list",      NULL,		NULL, dbgList)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*

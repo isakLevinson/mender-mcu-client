@@ -21,6 +21,33 @@
 #include "max30001.h"
 #include "time.h"
 
+#define NS_CFG	"cfg"
+
+enum {
+	namespace_null,
+	namespace_cfg,
+} namespace_t;
+
+char* const g_namespaces[] = {
+	NULL,
+	"cfg",
+};
+
+typedef struct {
+	char*	key;
+	char*	namespace;
+	char*	def;
+} cfg_arr_t;
+
+#define CFG_ARR(id, ns, d)	[cfg_id_ ## id] = {.key = #id, .namespace = g_namespaces[namespace_ ## ns], .def = d},
+
+static cfg_arr_t g_id[] = {
+	CFG_LIST(CFG_ARR)
+	{
+		.key = NULL, .def = NULL
+	}
+};
+
 static struct {
 	TimerHandle_t		timer;
 } g_cfg;
@@ -30,6 +57,20 @@ static void _timer(TimerHandle_t pxTimer)
 	INFO("config _timer\n");
 	wss_config_stop();
 	WIFI_stopAp();
+}
+
+bool CFG_isValidName(char* pName)
+{
+	uint8_t	i = 1 ; // first one is "INVALID"
+
+	while (g_id[i].key) {
+		if (!strcmp(g_id[i].key, pName)) {
+			return true;
+		}
+		i++;
+	}
+
+	return false;
 }
 
 PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
@@ -53,7 +94,7 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 
 		while (child) {
 			if (child->string) {
-				bool isValidName = NVS_isValidName(child->string);
+				bool isValidName = CFG_isValidName(child->string);
 				INFO("name:%s %d\n", child->string, isValidName);
 				if (!isValidName) {
 					WARN("invalid name %s\n", child->string);
@@ -70,43 +111,43 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 	object = cJSON_GetObjectItemCaseSensitive(json, "cert");
 	if (object) {
 		INFO("cert: %s\n", object->valuestring);
-		NVS_set(nvs_id_cert,  object->valuestring);
+		CFG_set(cfg_id_cert,  object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "sync_dns");
 	if (object) {
 		INFO("sync_dns: %s\n", object->valuestring);
-		NVS_set(nvs_id_sync_dns, object->valuestring);
+		CFG_set(cfg_id_sync_dns, object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "sync_port");
 	if (object) {
 		INFO("sync_port: %s\n", object->valuestring);
-		NVS_set(nvs_id_sync_port, object->valuestring);
+		CFG_set(cfg_id_sync_port, object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "mender_url");
 	if (object) {
 		INFO("mender_url: %s\n", object->valuestring);
-		NVS_set(nvs_id_ota_url, object->valuestring);
+		CFG_set(cfg_id_ota_url, object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "mender_token");
 	if (object) {
 		INFO("mender_token: %s\n", object->valuestring);
-		NVS_set(nvs_id_ota_token, object->valuestring);
+		CFG_set(cfg_id_ota_token, object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "certificate");
 	if (object) {
 		INFO("certificate: %s\n", object->valuestring);
-		NVS_set(nvs_id_cert_pem, object->valuestring);
+		CFG_set(cfg_id_cert_pem, object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "key");
 	if (object) {
 		INFO("key: %s\n", object->valuestring);
-		NVS_set(nvs_id_key_pem, object->valuestring);
+		CFG_set(cfg_id_key_pem, object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");
@@ -183,6 +224,39 @@ bool CFG_default(void)
 	wss_config_start();
 	return true;
 }
+
+bool CFG_get(cfg_id_t id,  char* val, size_t maxSize)
+{
+	bool	ret;
+
+	if (id >= cfg_id_last) {
+		return false;
+	}
+
+	ret = NVS_get(g_id[id].namespace, g_id[id].key, val, maxSize);
+	if (ret) {
+		return true;
+	}
+
+	return false;
+}
+
+bool CFG_set(cfg_id_t id,  char* val)
+{
+	bool	ret;
+
+	if (id >= cfg_id_last) {
+		return false;
+	}
+
+	ret = NVS_set(g_id[id].namespace, g_id[id].key, val);
+	if (!ret) {
+		return false;
+	}
+
+	return true;
+}
+
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
@@ -295,6 +369,61 @@ static bool dbgStartServer(uint8_t argc, char** argv)
 	return true;
 }
 
+
+static bool dbgGet(uint8_t argc, char** argv)
+{
+	bool    	ret;
+	bool    	isAll	= false;
+	char*		pIdStr	= NULL;
+	char  		str[2048];
+	cfg_id_t	id;
+
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("a",			ARGS_TYPE_SWITCH,		0,	"all",	&isAll)
+		ARGS_ENTRY(NULL,	    ARGS_TYPE_UINT8,		0,	"id",	&id)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (!ret) {
+		return false;
+	}
+
+	if (isAll) {
+		for (id = 0; id < cfg_id_last; id++) {
+			ret = CFG_get(id, str, sizeof(str));
+			if (ret) {
+				PRINT("%2d %s %s: %s\n", id, g_id[id].namespace, g_id[id].key, str);
+			} else {
+				char* nsStr = "NULL";
+				char* keyStr = "NULL";
+
+				if (g_id[id].namespace) {
+					nsStr = g_id[id].namespace;
+				}
+
+				if (g_id[id].key) {
+					keyStr = g_id[id].key;
+				}
+
+				PRINT("%2d %s %s: NULL\n", id, nsStr, keyStr);
+			}
+		}
+
+		return true;
+	}
+
+	ret = CFG_get(id, str, sizeof(str));
+	if (ret) {
+		PRINT("%s\n", str);
+	} else {
+		PRINT("NULL\n");
+	}
+
+	return true;
+}
+
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("config", NULL)
@@ -303,6 +432,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("config",		"<json>",	NULL, dbgConfig)
 		DEBUG_MENU_CMD("default",		NULL,		NULL, dbgDefault)
 		DEBUG_MENU_CMD("startServer",	NULL,		NULL, dbgStartServer)
+		DEBUG_MENU_CMD("get",			NULL,		NULL, dbgGet)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
