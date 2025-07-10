@@ -542,7 +542,7 @@ static bool _tlsInit(void)
 
 	INFO("Loading CA cert\n");
 	char* cacert_pem;
-	ret = FACTORY_get(factory_id_ca_pem, buf0);
+	ret = CFG_get(cfg_id_ca_pem, buf0, sizeof(buf0));
 	if (!ret) {
 		ERROR("CA not present. Fatal !!!\n");
 		return false;

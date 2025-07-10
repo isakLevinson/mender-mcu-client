@@ -18,7 +18,7 @@
 #include "esp_timer.h"
 #include "esp_mac.h"
 #include "esp_partition.h"
-#include "factory.h"
+#include "config.h"
 
 #include "main.h"
 #include "cli.h"
@@ -238,8 +238,8 @@ static bool dbgVer(uint8_t argc, char** argv)
 	char	sn[64];
 
 	MENDER_version(&proj, &ver);
-	FACTORY_get(factory_id_sn, sn);
-	FACTORY_get(factory_id_hw_revision, hw_ver);
+	CFG_get(cfg_id_sn, sn, sizeof(sn));
+	CFG_get(cfg_id_hw_revision, hw_ver, sizeof(hw_ver));
 
 	PRINT("sn: %s\n", sn);
 	PRINT("proj: %s\n", proj);

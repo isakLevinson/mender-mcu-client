@@ -76,7 +76,7 @@ static void _task(void* arg)
 	bool    ret;
 	int32_t time;
 
-	ret = FACTORY_get(factory_id_sn, NULL);
+	ret = CFG_get(cfg_id_sn, NULL, 0);
 	if (!ret) {
 		ERROR("no SN in factory storage. Halting on error\n");
 		_updateRgb(100, 0, 0, 0, 0);

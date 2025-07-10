@@ -632,7 +632,7 @@ static void _init(void)
 	char	sn[64];
 
 	MENDER_version(&project_name, &version);
-	FACTORY_get(factory_id_sn, sn);
+	CFG_get(cfg_id_sn, sn, sizeof(sn));
 
 	/* Retrieve running version of the device */
 	INFO("Running project '%s' version '%s'\n", project_name, version);

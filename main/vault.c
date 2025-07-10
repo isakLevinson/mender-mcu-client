@@ -72,7 +72,7 @@ static bool _create_csr(mbedtls_pk_context* pKey, unsigned char* csr_buf, size_t
 	mbedtls_pk_context*	pkey = TLS_getPkey();
 	mbedtls_ctr_drbg_context* drbg = TLS_getDrbg();
 
-	ret = FACTORY_get(factory_id_sn, sn);
+	ret = CFG_get(cfg_id_sn, sn, sizeof(sn));
 	if (!ret) {
 		ERROR("SN not set\n");
 		return false;
@@ -160,19 +160,19 @@ static bool _vaultLogin(char* o_pToken)
 	char*	http_result;
 	int		http_result_size;
 
-	ret = FACTORY_get(factory_id_vault_url, baseUrl);
+	ret = CFG_get(cfg_id_vault_url, baseUrl, sizeof(baseUrl));
 	if (!ret) {
 		ERROR("vault url not set\n");
 		return false;
 	}
 
-	ret = FACTORY_get(factory_id_vault_role, role);
+	ret = CFG_get(cfg_id_vault_role, role, sizeof(role));
 	if (!ret) {
 		ERROR("vault role not set\n");
 		return false;
 	}
 
-	ret = FACTORY_get(factory_id_vault_secret, secret);
+	ret = CFG_get(cfg_id_vault_secret, secret, sizeof(secret));
 	if (!ret) {
 		ERROR("vault secret not set\n");
 		return false;
@@ -250,7 +250,7 @@ static bool _vaultRenew(char* token)
 	char	baseUrl[64];
 	char	url[256];
 
-	ret = FACTORY_get(factory_id_vault_url, baseUrl);
+	ret = CFG_get(cfg_id_vault_url, baseUrl, sizeof(baseUrl));
 	if (!ret) {
 		ERROR("vault url not set\n");
 		return false;
@@ -408,7 +408,7 @@ static bool dbgVerify(uint8_t argc, char** argv)
 	mbedtls_x509_crt_init(&cert);
 	mbedtls_x509_crt_init(&ca_chain);
 
-	ret = FACTORY_get(factory_id_ca_pem, buf);
+	ret = CFG_get(cfg_id_ca_pem, buf, sizeof(buf));
 	if (!ret) {
 		ERROR("CA not set\n");
 		return true;

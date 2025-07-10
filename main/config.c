@@ -13,13 +13,14 @@
 #include "driver/gpio.h"
 
 #include "cJSON.h"
-#include "config.h"
-#include "nvs.h"
 #include "mdns.h"
 #include "wifi.h"
 #include "httpd.h"
 #include "max30001.h"
 #include "time.h"
+#include "config.h"
+#include "nvs.h"
+#include "factory.h"
 
 #define NS_CFG	"cfg"
 
@@ -238,6 +239,11 @@ bool CFG_get(cfg_id_t id,  char* val, size_t maxSize)
 		return true;
 	}
 
+	ret = FACTORY_get(g_id[id].key, val, maxSize);
+	if (ret) {
+		return true;
+	}
+
 	return false;
 }
 
@@ -393,19 +399,19 @@ static bool dbgGet(uint8_t argc, char** argv)
 	if (isAll) {
 		for (id = 0; id < cfg_id_last; id++) {
 			ret = CFG_get(id, str, sizeof(str));
+			char* nsStr = "NULL";
+			char* keyStr = "NULL";
+			if (g_id[id].namespace) {
+				nsStr = g_id[id].namespace;
+			}
+
+			if (g_id[id].key) {
+				keyStr = g_id[id].key;
+			}
+
 			if (ret) {
-				PRINT("%2d %s %s: %s\n", id, g_id[id].namespace, g_id[id].key, str);
+				PRINT("%2d %s %s: %s\n", id, nsStr, keyStr, str);
 			} else {
-				char* nsStr = "NULL";
-				char* keyStr = "NULL";
-
-				if (g_id[id].namespace) {
-					nsStr = g_id[id].namespace;
-				}
-
-				if (g_id[id].key) {
-					keyStr = g_id[id].key;
-				}
 
 				PRINT("%2d %s %s: NULL\n", id, nsStr, keyStr);
 			}
@@ -416,13 +422,62 @@ static bool dbgGet(uint8_t argc, char** argv)
 
 	ret = CFG_get(id, str, sizeof(str));
 	if (ret) {
-		PRINT("%s\n", str);
+		char* nsStr = "NULL";
+		char* keyStr = "NULL";
+
+		if (g_id[id].namespace) {
+			nsStr = g_id[id].namespace;
+		}
+
+		if (g_id[id].key) {
+			keyStr = g_id[id].key;
+		}
+//		PRINT("%s\n", str);
+		PRINT("%2d %s %s: %s\n", id, g_id[id].namespace, g_id[id].key, str);
 	} else {
 		PRINT("NULL\n");
 	}
 
 	return true;
 }
+
+#if 0
+static bool dbgSet(uint8_t argc, char** argv)
+{
+	bool    ret;
+	factory_id id = 0;
+
+	if (argc < 3) {
+		return false;
+	}
+
+	while (id < factory_id_last) {
+		if (!strcmp(argv[1], g_str[id])) {
+			break;
+		}
+		id++;
+	}
+
+	if (id >= factory_id_last) {
+		ERROR("invalid id\n");
+		return false;
+	}
+
+	if (g_override[id]) {
+		free(g_override[id]);
+	}
+
+	g_override[id] = malloc(strlen(argv[2]) + 1);
+	if (!g_override[id]) {
+		ERROR("failed to allocate %d\n", strlen(argv[2]));
+		return true;
+	}
+
+	strcpy(g_override[id], argv[2]);
+
+	return true;
+}
+#endif
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
