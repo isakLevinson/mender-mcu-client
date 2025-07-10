@@ -2,6 +2,9 @@
 
 #include <sys_def.h>
 
+#define CONFIG_MENDER_SERVER_HOST "https://eu.hosted.mender.io"
+#define CONFIG_MENDER_SERVER_TENANT_TOKEN "RkxW6DPOFzxBWE2LR2o8muCbCQ2dRRQCDcmwXJRNuno"
+
 // *INDENT-OFF*
 #define CFG_LIST(cmd)	\
 	cmd(ssid,			cfg,	NULL)	\
@@ -47,4 +50,3 @@ bool		 CFG_default(void);
 
 bool CFG_get(cfg_id_t id,  char* val, size_t maxSize);
 bool CFG_set(cfg_id_t id,  char* val);
-

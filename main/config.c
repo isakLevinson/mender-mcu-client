@@ -244,6 +244,12 @@ bool CFG_get(cfg_id_t id,  char* val, size_t maxSize)
 		return true;
 	}
 
+	if (g_id[id].def) {
+		strncpy(val, g_id[id].def, maxSize);
+		return true;
+	}
+
+	val[0] = '\0';
 	return false;
 }
 

@@ -144,6 +144,9 @@
 #define NVS_KEY_MDNS       "mdns"
 #define NVS_KEY_OTA_URL    "ota_url"
 
+#define CONFIG_MENDER_SERVER_HOST "https://eu.hosted.mender.io"
+#define CONFIG_MENDER_SERVER_TENANT_TOKEN "RkxW6DPOFzxBWE2LR2o8muCbCQ2dRRQCDcmwXJRNuno"
+
 #define MENU_LOC      
 #define DBG_MENU_STORAGE    
 #define DBG_MENU_ROOT_STORAGE 
