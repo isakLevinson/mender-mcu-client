@@ -489,7 +489,7 @@ static bool _tlsInit(void)
 {
 	int			ret;
 	const char* pers = "ssl_server";
-	static char buf0[2048];
+	static char buf[2048];
 	uint32_t	len;
 
 	mbedtls_ssl_config_init(&g_tls.conf);
@@ -527,54 +527,52 @@ static bool _tlsInit(void)
 	}
 
 	INFO("Loading private key\n");
-	ret = CFG_get(cfg_id_key_pem,  buf0, sizeof(buf0));
+	ret = CFG_get(cfg_id_key_pem,  buf, sizeof(buf));
 	if (!ret) {
 		ERROR("key not present. will generate later\n");
 		return false;
 	}
-	uint32_t    key_len = strlen(buf0) + 1;
 
-	ret =  mbedtls_pk_parse_key(&g_tls.pkey, (unsigned char*)buf0, key_len, NULL, 0, mbedtls_ctr_drbg_random, &g_tls.ctr_drbg);
+	ret =  mbedtls_pk_parse_key(&g_tls.pkey, (unsigned char*)buf, strlen(buf) + 1, NULL, 0, mbedtls_ctr_drbg_random, &g_tls.ctr_drbg);
 	if (ret != 0) {
 		ERROR("mbedtls_pk_parse_key returned %d\n", ret);
 		return false;
 	}
 
 	INFO("Loading CA cert\n");
-	char* cacert_pem;
-	ret = CFG_get(cfg_id_ca_pem, buf0, sizeof(buf0));
+	ret = CFG_get(cfg_id_ca_pem, buf, sizeof(buf));
 	if (!ret) {
 		ERROR("CA not present. Fatal !!!\n");
 		return false;
 	}
 
-	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (const unsigned char*) buf0, strlen(buf0) + 1);
+	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (const unsigned char*) buf, strlen(buf) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return false;
 	}
 
 	INFO("Loading intermediate cert\n");
-	ret = CFG_get(cfg_id_inter_pem,  buf0, sizeof(buf0));
+	ret = CFG_get(cfg_id_inter_pem,  buf, sizeof(buf));
 	if (!ret) {
 		ERROR("intermediate certificate not present. will request later\n");
 		return false;
 	}
 
-	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (unsigned char*)buf0, strlen(buf0) + 1);
+	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (unsigned char*)buf, strlen(buf) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return false;
 	}
 
 	INFO("Loading cert\n");
-	ret = CFG_get(cfg_id_cert_pem,  buf0, sizeof(buf0));
+	ret = CFG_get(cfg_id_cert_pem,  buf, sizeof(buf));
 	if (!ret) {
 		ERROR("certificate not present. will request later\n");
 		return false;
 	}
 
-	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf0, strlen(buf0) + 1);
+	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf, strlen(buf) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return false;

@@ -358,7 +358,7 @@ static bool _startSta(void)
 
 	err = esp_wifi_set_config(WIFI_IF_STA, &wifi_sta_config);
 	if (ESP_OK != err) {
-		ERROR("esp_wifi_set_config WIFI_IF_STA %s\n", ESP_getErrStr(err));
+		ERROR("_startSta: esp_wifi_set_config WIFI_IF_STA %s\n", ESP_getErrStr(err));
 		return false;
 	}
 
@@ -397,7 +397,7 @@ static bool _startAp(void)
 
 	err = esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config);
 	if (ESP_OK != err) {
-		ERROR("esp_wifi_set_config WIFI_IF_AP %s\n", ESP_getErrStr(err));
+		ERROR("_startAp: esp_wifi_set_config WIFI_IF_AP %s\n", ESP_getErrStr(err));
 		return false;
 	}
 
@@ -525,7 +525,7 @@ bool WIFI_sta_connect(const char* ssid, const char* pass)
 	g_server.reconnect = true;
 	err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
 	if (ESP_OK != err) {
-		ERROR("esp_wifi_set_config WIFI_IF_STA %s\n", ESP_getErrStr(err));
+		ERROR("WIFI_sta_connect: esp_wifi_set_config WIFI_IF_STA %s\n", ESP_getErrStr(err));
 		return false;
 	}
 
