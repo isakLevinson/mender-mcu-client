@@ -759,21 +759,21 @@ bool wss_init(void)
 #if (HTTP_UNSECURE == 0)
 	httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
 
-	static char ca_pem[2048];
-	static char dev_pem[2048];
-	static char pkey[2048];
+	char*	ca_pem	= calloc(1, 2048);
+	char*	dev_pem	= calloc(1, 2048);
+	char*	pkey	= calloc(1, 2048);
 
-	ret = CFG_get(cfg_id_ca_pem, ca_pem, sizeof(ca_pem));
+	ret = CFG_get(cfg_id_ca_pem, ca_pem, 2048);
 	if (!ret) {
 		return false;
 	}
 
-	ret = CFG_get(cfg_id_cert_pem, dev_pem, sizeof(dev_pem));
+	ret = CFG_get(cfg_id_cert_pem, dev_pem, 2048);
 	if (!ret) {
 		return false;
 	}
 
-	ret = CFG_get(cfg_id_key_pem, pkey, sizeof(pkey));
+	ret = CFG_get(cfg_id_key_pem, pkey, 2048);
 	if (!ret) {
 		return false;
 	}
@@ -794,6 +794,10 @@ bool wss_init(void)
 	conf.httpd.max_open_sockets = max_clients;
 
 	err = httpd_ssl_start(&g_server.handle, &conf);
+	free(ca_pem);
+	free(dev_pem);
+	free(pkey);
+
 	if (ESP_OK != err) {
 		ERROR("httpd_ssl_start %s\n", ESP_getErrStr(err));
 		return false;
