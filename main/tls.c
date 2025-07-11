@@ -69,12 +69,10 @@ static struct {
 	mbedtls_net_context fd_cmd;
 	mbedtls_net_context fd_stream;
 
+	int  http_client_result_size;
+
 	TimerHandle_t		kaTimer;
 } g_tls;
-
-static char http_client_result[8192];
-static int  http_client_result_size;
-
 
 static void my_debug(void* ctx, int level, const char* file, int line, const char* str)
 {
@@ -645,9 +643,9 @@ static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 			if (evt->user_data) {
 				// The last byte in evt->user_data is kept for the NULL character in case of out-of-bound access.
 				if (evt->data_len) {
-					memcpy(evt->user_data + http_client_result_size, evt->data, evt->data_len);
+					memcpy(evt->user_data + g_tls.http_client_result_size, evt->data, evt->data_len);
 				}
-				http_client_result_size += evt->data_len;
+				g_tls.http_client_result_size += evt->data_len;
 			}
 		}
 		break;
@@ -732,7 +730,7 @@ void TLS_getCerts(mbedtls_x509_crt** cert, mbedtls_x509_crt** ca)
 	}
 }
 
-int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char* header_value, char* content, size_t contentSize, char** result)
+int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char* header_value, char* content, size_t contentSize, char* result, size_t maxResult)
 {
 	int		ret = true;
 	esp_err_t err;
@@ -743,8 +741,8 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 		.url = url,
 		.method = method,
 		.event_handler = _http_event_handler,
-		.user_data = http_client_result,
-		.buffer_size = sizeof(http_client_result),
+		.user_data = result,
+		.buffer_size = maxResult,
 	};
 
 	esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -771,7 +769,7 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 		}
 	}
 
-	http_client_result_size = 0;
+	g_tls.http_client_result_size = 0;
 	err = esp_http_client_perform(client);
 	if (err != ESP_OK) {
 		ERROR("esp_http_client_perform %x\n", err);
@@ -800,15 +798,14 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	esp_http_client_get_chunk_length(client, &chunk_len);
 
 	INFO("Status = %d chunked:%d content_len=%d chunk_len=%d\n", esp_http_client_get_status_code(client), chunked, content_len, chunk_len);
-	http_client_result[http_client_result_size] = '\0';
-	TRACE_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
-	TRACE("response:\n%s\n", http_client_result);
+	result[g_tls.http_client_result_size] = '\0';
+	TRACE_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, result, g_tls.http_client_result_size);
+	TRACE("response:\n%s\n", result);
 
 end:
 	esp_http_client_cleanup(client);
 
-	*result = http_client_result;
-	ret = http_client_result_size;
+	ret = g_tls.http_client_result_size;
 	return ret;
 }
 
@@ -987,7 +984,7 @@ static bool dbgCurl(uint8_t argc, char** argv)
 	char*	header_key		= NULL;
 	char*	header_value	= NULL;
 	bool	isPost			= false;
-	char*	http_result;
+	char	http_result[2048];
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
@@ -1017,7 +1014,7 @@ static bool dbgCurl(uint8_t argc, char** argv)
 		method = HTTP_METHOD_POST;
 	}
 
-	resultSize = TLS_curl(url, method, header_key, header_value,  data, data_len, &http_result);
+	resultSize = TLS_curl(url, method, header_key, header_value,  data, data_len, http_result, sizeof(http_result));
 
 	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
 	//PRINT("response:\n%s\n", http_client_result);

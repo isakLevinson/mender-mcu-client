@@ -157,7 +157,7 @@ static bool _vaultLogin(char* o_pToken)
 	char	baseUrl[64];
 	char	role[64];
 	char	secret[64];
-	char*	http_result;
+	char	http_result[2048];
 	int		http_result_size;
 
 	ret = CFG_get(cfg_id_vault_url, baseUrl, sizeof(baseUrl));
@@ -181,7 +181,7 @@ static bool _vaultLogin(char* o_pToken)
 	sprintf(url, "%s%s", baseUrl, VAULT_URL_LOGIN);
 	sprintf(data, "{\"role_id\":\"%s\",\"secret_id\":\"%s\"}", role, secret);
 
-	http_result_size = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data), &http_result);
+	http_result_size = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data), http_result, sizeof(http_result));
 	if (http_result_size < 0) {
 		ERROR("TLS_curl failed\n");
 		return false;
@@ -246,7 +246,7 @@ static bool _vaultRenew(char* token)
 	char    json[2048];
 	int		resultSize;
 	mbedtls_pk_context*	pkey = TLS_getPkey();
-	char*	http_result;
+	char	http_result[2048];
 	char	baseUrl[64];
 	char	url[256];
 
@@ -272,7 +272,7 @@ static bool _vaultRenew(char* token)
 	INFO("token: %s\n", token);
 	//INFO("json:\n%s\n", json);
 
-	resultSize = TLS_curl(url, HTTP_METHOD_POST, "X-Vault-Token", token, json, strlen(json), &http_result);
+	resultSize = TLS_curl(url, HTTP_METHOD_POST, "X-Vault-Token", token, json, strlen(json), http_result, sizeof(http_result));
 	if (resultSize < 0) {
 		ERROR("TLS_curl failed\n");
 		return false;
@@ -533,7 +533,7 @@ static bool dbgCurl(uint8_t argc, char** argv)
 	char*	header_key		= NULL;
 	char*	header_value	= NULL;
 	bool	isPost			= false;
-	char*	http_result;
+	char	http_result[2048];
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
@@ -563,7 +563,7 @@ static bool dbgCurl(uint8_t argc, char** argv)
 		method = HTTP_METHOD_POST;
 	}
 
-	resultSize = TLS_curl(url, method, header_key, header_value,  data, data_len, &http_result);
+	resultSize = TLS_curl(url, method, header_key, header_value,  data, data_len, http_result, sizeof(http_result));
 
 	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
 	//PRINT("response:\n%s\n", http_client_result);

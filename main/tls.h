@@ -11,7 +11,7 @@
 // Register WiFi functions
 bool	TLS_init(void);
 bool	TLS_isConnected(void);
-int		TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char* header_value, char* content, size_t contentSize, char** result);
+int     TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char* header_value, char* content, size_t contentSize, char* result, size_t maxResult);
 bool	TLS_reload(void);
 
 mbedtls_pk_context*			TLS_getPkey(void);
