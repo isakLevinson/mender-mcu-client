@@ -288,7 +288,7 @@ bool CFG_set(cfg_id_t id,  char* val)
 		return false;
 	}
 
-	INFO("CFG_set %d %s\n", id, val);
+	//INFO("CFG_set %d %s\n", id, val);
 
 	if (g_id[id].namespace) {
 		INFO("calling CFG_set\n");
@@ -300,6 +300,25 @@ bool CFG_set(cfg_id_t id,  char* val)
 	return true;
 }
 
+bool CFG_del(cfg_id_t id)
+{
+	bool	ret;
+
+	if (id >= cfg_id_last) {
+		return false;
+	}
+
+	if (g_id[id].namespace) {
+		NVS_del(g_id[id].namespace, g_id[id].key);
+	} else {
+		if (g_id[id].temp) {
+			free(g_id[id].temp);
+			g_id[id].temp = NULL;
+		}
+	}
+
+	return true;
+}
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
@@ -412,6 +431,35 @@ static bool dbgStartServer(uint8_t argc, char** argv)
 	return true;
 }
 
+static int32_t _findId(char* key)
+{
+	int32_t id = -1;
+	int32_t i;
+
+	for (i = 0; i < cfg_id_last; i++) {
+		if (strstr(g_id[i].key, key)) {
+			if (id >=0) {
+				INFO("more than one match\n");
+				return -1;
+			}
+			id = i;
+		}
+	}
+
+	INFO("found id %d\n", id);
+
+	if (id < 0) {
+		id = strtol(key, NULL, 10);
+		if (0 == id)  {
+			INFO("strtol failed\n");
+			return -1;
+		}
+		INFO("using explicit id %d\n", id);
+	}
+
+	INFO("id=%d\n", id);
+	return id;
+}
 
 static bool dbgGet(uint8_t argc, char** argv)
 {
@@ -478,20 +526,20 @@ static bool dbgGet(uint8_t argc, char** argv)
 	return true;
 }
 
-
 static bool dbgSet(uint8_t argc, char** argv)
 {
 	bool    ret;
 	bool	temp	= false;
 	bool	nvs		= false;
-	uint8_t	id = 0;
+	int32_t	id = -1;
+	char*	key = NULL;
 	char*	val = NULL;
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
 		ARGS_ENTRY("t",		ARGS_TYPE_SWITCH,	0,	"store in temporary",	&temp)
 		ARGS_ENTRY("n",		ARGS_TYPE_SWITCH,	0,	"store in nvs",			&nvs)
-		ARGS_ENTRY(NULL,	ARGS_TYPE_UINT8,	1,	"key",   				&id)
+		ARGS_ENTRY(NULL,	ARGS_TYPE_STRING,	1,	"key",   				&key)
 		ARGS_ENTRY(NULL,	ARGS_TYPE_STRING,	1,	"value",   				&val)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
@@ -510,7 +558,42 @@ static bool dbgSet(uint8_t argc, char** argv)
 		return false;
 	}
 
+	id = _findId(key);
+	if (id < 0) {
+		return false;	
+	}
+
 	CFG_set(id, val);
+
+	return true;
+}
+
+static bool dbgDel(uint8_t argc, char** argv)
+{
+	bool    ret;
+	bool	temp	= false;
+	bool	nvs		= false;
+	uint8_t	id = 0;
+
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("t",		ARGS_TYPE_SWITCH,	0,	"store in temporary",	&temp)
+		ARGS_ENTRY("n",		ARGS_TYPE_SWITCH,	0,	"store in nvs",			&nvs)
+		ARGS_ENTRY(NULL,	ARGS_TYPE_UINT8,	1,	"key",   				&id)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (!ret) {
+		return false;
+	}
+
+	if (id >= cfg_id_last) {
+		ERROR("invalid id\n");
+		return false;
+	}
+
+	CFG_del(id);
 
 	return true;
 }
@@ -525,6 +608,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("startServer",	NULL,		NULL, dbgStartServer)
 		DEBUG_MENU_CMD("get",			NULL,		NULL, dbgGet)
 		DEBUG_MENU_CMD("set",			NULL,		NULL, dbgSet)
+		DEBUG_MENU_CMD("del",			NULL,		NULL, dbgDel)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
