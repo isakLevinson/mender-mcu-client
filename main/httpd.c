@@ -22,6 +22,7 @@
 #include "wifi.h"
 #include "mdns.h"
 #include "config.h"
+#include "main.h"
 
 #if !CONFIG_HTTPD_WS_SUPPORT
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
@@ -774,7 +775,7 @@ bool wss_init(void)
 
 	err = httpd_ssl_start(&g_server.handle, &conf);
 	if (ESP_OK != err) {
-		ERROR("Error starting server %d\n", err);
+		ERROR("httpd_ssl_start %s\n", ESP_getErrStr(err));
 		return NULL;
 	}
 

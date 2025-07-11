@@ -874,7 +874,10 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	esp_ota_img_states_t   img_state;
 	const esp_partition_t* partition = esp_ota_get_running_partition();
 	err = esp_ota_get_state_partition(partition, &img_state);
-	ESP_printErr(err);
+	if (ESP_OK != err) {
+		ERROR("esp_ota_get_state_partition %s\n", ESP_getErrStr(err));
+	}
+
 	PRINT("label: %s\n", partition->label);
 	PRINT("type : %d / %d\n", partition->type, partition->subtype);
 	PRINT("addr : 0x%x size: 0x%x\n", partition->address, partition->size);

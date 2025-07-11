@@ -18,7 +18,7 @@ extern "C" {
 #define ECHO_UART_PORT_NUM      (2)
 #define ECHO_UART_BAUD_RATE     (115200)
 
-void ESP_printErr(int err);
+char* ESP_getErrStr(int err);
 
 
 #ifdef __cplusplus

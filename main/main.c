@@ -42,11 +42,13 @@
 
 #define BUF_SIZE    1024
 
-void ESP_printErr(int err)
+char* ESP_getErrStr(int err)
 {
 	char* pStr = NULL;
+	static char str[16];
+
 	if (err == ESP_OK) {
-		return;
+		return "";
 	}
 
 	switch (err) {
@@ -85,7 +87,6 @@ void ESP_printErr(int err)
 		case ESP_ERR_NVS_INVALID_HANDLE:
 			pStr = "ESP_ERR_NVS_INVALID_HANDLE";
 			break;
-
 		case ESP_ERR_NVS_READ_ONLY:
 			pStr = "ESP_ERR_NVS_READ_ONLY";
 			break;
@@ -95,10 +96,11 @@ void ESP_printErr(int err)
 	}
 
 	if (pStr) {
-		ERROR("failed %s\n", pStr);
-	} else {
-		ERROR("failed 0x%x\n", err);
+		return pStr;
 	}
+
+	sprintf(str, "%02x", err);
+	return str;
 }
 
 void uart_init(void)

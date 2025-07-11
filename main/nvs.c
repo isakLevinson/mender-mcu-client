@@ -32,8 +32,7 @@ bool NVS_get(char*namespace, char* key,  char* val, size_t maxSize)
 
 	err = nvs_open(namespace, NVS_READONLY, &handle);
 	if (err != ESP_OK) {
-		ERROR("nvs_open <%s> failed %x\n", namespace, err);
-		ESP_printErr(err);
+		ERROR("nvs_open <%s> failed %s\n", namespace, ESP_getErrStr(err));
 		return false;
 	}
 
@@ -90,8 +89,7 @@ store:
 	INFO("storing %s\n", key);
 	err = nvs_set_str(handle, key, val);
 	if (err != ESP_OK) {
-		ERROR("nvs_set_str failed %s(len:%d) %x\n", key, strlen(val), err);
-		ESP_printErr(err);
+		ERROR("nvs_set_str failed %s(len:%d) %s\n", key, strlen(val), ESP_getErrStr(err));
 		ret = false;
 	}
 
@@ -120,8 +118,7 @@ bool NVS_del(char*namespace, char* key)
 	INFO("deleting %s\n", key);
 	err = nvs_erase_key(handle, key);
 	if (err != ESP_OK) {
-		ERROR("nvs_erase_key %s %x\n", key, err);
-		ESP_printErr(err);
+		ERROR("nvs_erase_key %s %s\n", key, ESP_getErrStr(err));
 		ret = false;
 	}
 
@@ -144,8 +141,7 @@ bool NVS_eraseAll(void)
 
 	err = nvs_erase_all(handle);
 	if (err != ESP_OK) {
-		ERROR("nvs_erase_all failed %x\n",  err);
-		ESP_printErr(err);
+		ERROR("nvs_erase_all failed %s\n",  ESP_getErrStr(err));
 		return false;
 	}
 
@@ -162,7 +158,9 @@ static bool dbgOpen(uint8_t argc, char** argv)
 		err = nvs_open(argv[1], NVS_READWRITE, &g_nvs.nvsHandle);
 	}
 
-	ESP_printErr(err);
+	if (ESP_OK != err) {
+		ERROR("nvs_open %s\n", ESP_getErrStr(err));
+	}
 
 	return true;
 }
@@ -180,7 +178,9 @@ static bool dbgCommit(uint8_t argc, char** argv)
 	esp_err_t   err = ESP_OK;
 
 	err = nvs_commit(g_nvs.nvsHandle);
-	ESP_printErr(err);
+	if (ESP_OK != err) {
+		ERROR("nvs_commit %s\n", ESP_getErrStr(err));
+	}
 
 	return true;
 }
@@ -196,12 +196,13 @@ static bool dbgGet(uint8_t argc, char** argv)
 	}
 
 	err =  nvs_get_str(g_nvs.nvsHandle, argv[1], str, &length);
-	ESP_printErr(err);
-
-	if (err == ESP_OK) {
-		str[length] = '\0';
-		PRINT("str=<%s>\n", str);
+	if (ESP_OK != err) {
+		ERROR("nvs_get_str %s\n", ESP_getErrStr(err));
+		return true;
 	}
+
+	str[length] = '\0';
+	PRINT("str=<%s>\n", str);
 
 	return true;
 }
@@ -215,7 +216,9 @@ static bool dbgSet(uint8_t argc, char** argv)
 	}
 
 	err = nvs_set_str(g_nvs.nvsHandle, argv[1], argv[2]);
-	ESP_printErr(err);
+	if (ESP_OK != err) {
+		ERROR("nvs_set_str %s\n", ESP_getErrStr(err));
+	}
 
 	return true;
 }
@@ -229,7 +232,9 @@ static bool dbgErase(uint8_t argc, char** argv)
 	}
 
 	err = nvs_erase_key(g_nvs.nvsHandle, argv[1]);
-	ESP_printErr(err);
+	if (ESP_OK != err) {
+		ERROR("nvs_erase_key %s\n", ESP_getErrStr(err));
+	}
 
 	return true;
 }

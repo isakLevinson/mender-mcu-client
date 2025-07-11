@@ -47,8 +47,7 @@ static bool _read(uint8_t reg_addr, void* data, size_t len)
 
 	err = i2c_master_transmit_receive(g_fg.dev_handle, &reg_addr, 1,  data, len, I2C_MASTER_TIMEOUT_MS);
 	if (ESP_OK != err) {
-		ERROR("i2c_master_transmit_receive\n");
-		ESP_printErr(err);
+		ERROR("i2c_master_transmit_receive %s\n", ESP_getErrStr(err));
 		g_fg.failCount--;
 		if (!g_fg.failCount) {
 			ERROR("last attenp. will not try to use FG anymore\n");
@@ -74,8 +73,7 @@ static bool _write(uint8_t reg_addr, void* data, size_t len)
 	err = i2c_master_transmit(g_fg.dev_handle, write_buf, len + 1, I2C_MASTER_TIMEOUT_MS);
 
 	if (ESP_OK != err) {
-		ERROR("i2c_master_transmit\n");
-		ESP_printErr(err);
+		ERROR("i2c_master_transmit %s\n", ESP_getErrStr(err));
 		g_fg.failCount--;
 		if (!g_fg.failCount) {
 			ERROR("last attenp. will not try to use FG anymore\n");

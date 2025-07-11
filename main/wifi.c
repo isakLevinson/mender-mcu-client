@@ -85,8 +85,7 @@ static bool _mdnsInit(void)
 		INFO("setting MDNS to SN %s\n", sn);
 		err = mdns_hostname_set(sn);
 		if (ESP_OK != err) {
-			ERROR("failed to set mdns\n");
-			ESP_printErr(err);
+			ERROR("mdns_hostname_set %s\n", ESP_getErrStr(err));
 		}
 	} else {
 		ERROR("MDNS not defined, and no SN in configuration\n");

@@ -109,7 +109,9 @@ static void _flashRead(void* pArg, uint32_t addr, uint8_t* o_pData, uint16_t siz
 	}
 
 	err =  esp_partition_read(g_cli.logPartition, addr, o_pData, size);
-	ESP_printErr(err);
+	if (ESP_OK != err) {
+		ERROR("esp_partition_read %s\n", ESP_getErrStr(err));
+	}
 }
 
 static void _flashWrite(void* pArg, uint32_t addr, uint8_t* i_pData, uint16_t size)
@@ -127,11 +129,15 @@ static void _flashWrite(void* pArg, uint32_t addr, uint8_t* i_pData, uint16_t si
 		g_cli.erasedSector = ((addr + size) & ~eraseMask);
 
 		err = esp_partition_erase_range(g_cli.logPartition, g_cli.erasedSector, sectorSize);
-		ESP_printErr(err);
+		if (ESP_OK != err) {
+			ERROR("esp_partition_erase_range %s\n", ESP_getErrStr(err));
+		}
 	}
 
 	err = esp_partition_write(g_cli.logPartition, addr, i_pData, size);
-	ESP_printErr(err);
+	if (ESP_OK != err) {
+		ERROR("esp_partition_write %s\n", ESP_getErrStr(err));
+	}
 }
 
 static bool _logInit(void)
