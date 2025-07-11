@@ -75,6 +75,7 @@ static struct {
 static char http_client_result[8192];
 static int  http_client_result_size;
 
+
 static void my_debug(void* ctx, int level, const char* file, int line, const char* str)
 {
 	TRACE("SSLDBG: %s:%04d: %s", file, line, str);
@@ -489,7 +490,7 @@ static bool _tlsInit(void)
 {
 	int			ret;
 	const char* pers = "ssl_server";
-	static char buf[2048];
+	char*		buf = NULL;
 	uint32_t	len;
 
 	mbedtls_ssl_config_init(&g_tls.conf);
@@ -523,64 +524,65 @@ static bool _tlsInit(void)
 	                (const unsigned char*) pers,
 	                strlen(pers))) != 0) {
 		ERROR("mbedtls_ctr_drbg_seed returned %d\n", ret);
-		return false;
+		goto err;
 	}
 
+	buf = calloc(1, 2048);
 	INFO("Loading private key\n");
-	ret = CFG_get(cfg_id_key_pem,  buf, sizeof(buf));
+	ret = CFG_get(cfg_id_key_pem,  buf, 2048);
 	if (!ret) {
 		ERROR("key not present. will generate later\n");
-		return false;
+		goto err;
 	}
 
 	ret =  mbedtls_pk_parse_key(&g_tls.pkey, (unsigned char*)buf, strlen(buf) + 1, NULL, 0, mbedtls_ctr_drbg_random, &g_tls.ctr_drbg);
 	if (ret != 0) {
 		ERROR("mbedtls_pk_parse_key returned %d\n", ret);
-		return false;
+		goto err;
 	}
 
 	INFO("Loading CA cert\n");
-	ret = CFG_get(cfg_id_ca_pem, buf, sizeof(buf));
+	ret = CFG_get(cfg_id_ca_pem, buf, 2048);
 	if (!ret) {
 		ERROR("CA not present. Fatal !!!\n");
-		return false;
+		goto err;
 	}
 
 	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (const unsigned char*) buf, strlen(buf) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
-		return false;
+		goto err;
 	}
 
 	INFO("Loading intermediate cert\n");
-	ret = CFG_get(cfg_id_inter_pem,  buf, sizeof(buf));
+	ret = CFG_get(cfg_id_inter_pem,  buf, 2048);
 	if (!ret) {
 		ERROR("intermediate certificate not present. will request later\n");
-		return false;
+		goto err;
 	}
 
 	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (unsigned char*)buf, strlen(buf) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
-		return false;
+		goto err;
 	}
 
 	INFO("Loading cert\n");
-	ret = CFG_get(cfg_id_cert_pem,  buf, sizeof(buf));
+	ret = CFG_get(cfg_id_cert_pem,  buf, 2048);
 	if (!ret) {
 		ERROR("certificate not present. will request later\n");
-		return false;
+		goto err;
 	}
 
 	ret = mbedtls_x509_crt_parse(&g_tls.cert, (unsigned char*)buf, strlen(buf) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
-		return false;
+		goto err;
 	}
 
 	if ((ret = mbedtls_ssl_config_defaults(&g_tls.conf, MBEDTLS_SSL_IS_SERVER, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
 		ERROR("mbedtls_ssl_config_defaults %d\n", ret);
-		return false;
+		goto err;
 	}
 
 	//g_tls.conf.private_read_timeout = 1000;
@@ -596,15 +598,22 @@ static bool _tlsInit(void)
 	ret = mbedtls_ssl_conf_own_cert(&g_tls.conf, &g_tls.cert, &g_tls.pkey);
 	if (ret != 0) {
 		ERROR("mbedtls_ssl_conf_own_cert returned %d\n", ret);
-		return false;
+		goto err;
 	}
 
 	mbedtls_ssl_conf_authmode(&g_tls.conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
 	//mbedtls_ssl_conf_authmode(&g_tls.conf, MBEDTLS_SSL_VERIFY_REQUIRED);
 
-	INFO("TLS initialized\n");
+	free(buf);
 
+	INFO("TLS initialized\n");
 	return true;
+
+	err:
+	if (buf) {
+		free(buf);
+	}
+	return false;
 }
 
 static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
