@@ -38,6 +38,7 @@ typedef struct {
 	char*	key;
 	char*	namespace;
 	char*	def;
+	char*	temp;
 } cfg_arr_t;
 
 #define CFG_ARR(id, ns, d)	[cfg_id_ ## id] = {.key = #id, .namespace = g_namespaces[namespace_ ## ns], .def = d},
@@ -45,7 +46,7 @@ typedef struct {
 static cfg_arr_t g_id[] = {
 	CFG_LIST(CFG_ARR)
 	{
-		.key = NULL, .def = NULL
+		.key = NULL, .def = NULL, .temp = NULL,
 	}
 };
 
@@ -234,6 +235,11 @@ bool CFG_get(cfg_id_t id,  char* val, size_t maxSize)
 		return false;
 	}
 
+	if (g_id[id].temp) {
+		strncpy(val, g_id[id].temp, maxSize);
+		return true;
+	}
+
 	ret = NVS_get(g_id[id].namespace, g_id[id].key, val, maxSize);
 	if (ret) {
 		return true;
@@ -253,6 +259,27 @@ bool CFG_get(cfg_id_t id,  char* val, size_t maxSize)
 	return false;
 }
 
+static bool _setTemporary(cfg_id_t id,  char* val)
+{
+	if (g_id[id].temp) {
+		free(g_id[id].temp);
+	}
+
+	size_t len = strlen(val);
+
+	//INFO("allocating new temporary %d\n", len);
+	g_id[id].temp = malloc(len + 1);
+	if (!g_id[id].temp) {
+		ERROR("failed to allocate %d\n", len);
+		return true;
+	}
+
+	//INFO("strcpy to %x\n", g_id[id].temp);
+	strcpy(g_id[id].temp, val);
+
+	return true;
+}
+
 bool CFG_set(cfg_id_t id,  char* val)
 {
 	bool	ret;
@@ -261,9 +288,13 @@ bool CFG_set(cfg_id_t id,  char* val)
 		return false;
 	}
 
-	ret = NVS_set(g_id[id].namespace, g_id[id].key, val);
-	if (!ret) {
-		return false;
+	INFO("CFG_set %d %s\n", id, val);
+
+	if (g_id[id].namespace) {
+		INFO("calling CFG_set\n");
+		NVS_set(g_id[id].namespace, g_id[id].key, val);
+	} else {
+		_setTemporary(id, val);
 	}
 
 	return true;
@@ -447,43 +478,42 @@ static bool dbgGet(uint8_t argc, char** argv)
 	return true;
 }
 
-#if 0
+
 static bool dbgSet(uint8_t argc, char** argv)
 {
 	bool    ret;
-	factory_id id = 0;
+	bool	temp	= false;
+	bool	nvs		= false;
+	uint8_t	id = 0;
+	char*	val = NULL;
 
-	if (argc < 3) {
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("t",		ARGS_TYPE_SWITCH,	0,	"store in temporary",	&temp)
+		ARGS_ENTRY("n",		ARGS_TYPE_SWITCH,	0,	"store in nvs",			&nvs)
+		ARGS_ENTRY(NULL,	ARGS_TYPE_UINT8,	1,	"key",   				&id)
+		ARGS_ENTRY(NULL,	ARGS_TYPE_STRING,	1,	"value",   				&val)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (!ret) {
 		return false;
 	}
 
-	while (id < factory_id_last) {
-		if (!strcmp(argv[1], g_str[id])) {
-			break;
-		}
-		id++;
-	}
-
-	if (id >= factory_id_last) {
+	if (id >= cfg_id_last) {
 		ERROR("invalid id\n");
 		return false;
 	}
 
-	if (g_override[id]) {
-		free(g_override[id]);
+	if (!val) {
+		return false;
 	}
 
-	g_override[id] = malloc(strlen(argv[2]) + 1);
-	if (!g_override[id]) {
-		ERROR("failed to allocate %d\n", strlen(argv[2]));
-		return true;
-	}
-
-	strcpy(g_override[id], argv[2]);
+	CFG_set(id, val);
 
 	return true;
 }
-#endif
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
@@ -494,6 +524,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("default",		NULL,		NULL, dbgDefault)
 		DEBUG_MENU_CMD("startServer",	NULL,		NULL, dbgStartServer)
 		DEBUG_MENU_CMD("get",			NULL,		NULL, dbgGet)
+		DEBUG_MENU_CMD("set",			NULL,		NULL, dbgSet)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
