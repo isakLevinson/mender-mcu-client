@@ -22,6 +22,7 @@
 
 #include "driver/uart.h"
 #include "driver/gpio.h"
+#include "esp_wifi.h"
 #include "main.h"
 #include "cli.h"
 #include "cmd.h"
@@ -92,6 +93,9 @@ char* ESP_getErrStr(int err)
 			break;
 		case ESP_ERR_NVS_NOT_ENOUGH_SPACE:
 			pStr = "ESP_ERR_NVS_NOT_ENOUGH_SPACE";
+			break;
+		case ESP_ERR_WIFI_MODE:
+			pStr = "ESP_ERR_WIFI_MODE";
 			break;
 	}
 

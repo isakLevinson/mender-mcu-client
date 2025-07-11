@@ -358,7 +358,7 @@ static bool _startSta(void)
 
 	err = esp_wifi_set_config(WIFI_IF_STA, &wifi_sta_config);
 	if (ESP_OK != err) {
-		ERROR("esp_wifi_set_config WIFI_IF_STA %d 0x%x\n", err, err);
+		ERROR("esp_wifi_set_config WIFI_IF_STA %s\n", ESP_getErrStr(err));
 		return false;
 	}
 
@@ -397,7 +397,7 @@ static bool _startAp(void)
 
 	err = esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config);
 	if (ESP_OK != err) {
-		ERROR("esp_wifi_set_config WIFI_IF_AP %d 0x%x\n", err, err);
+		ERROR("esp_wifi_set_config WIFI_IF_AP %s\n", ESP_getErrStr(err));
 		return false;
 	}
 
@@ -505,6 +505,7 @@ bool WIFI_sta_disconnect(void)
 
 bool WIFI_sta_connect(const char* ssid, const char* pass)
 {
+	int err;
 	strcpy(g_server.wifi.currentSsid, ssid);
 	strcpy(g_server.wifi.currentPasswd, pass);
 
@@ -522,7 +523,12 @@ bool WIFI_sta_connect(const char* ssid, const char* pass)
 	}
 
 	g_server.reconnect = true;
-	ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+	err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+	if (ESP_OK != err) {
+		ERROR("esp_wifi_set_config WIFI_IF_STA %s\n", ESP_getErrStr(err));
+		return false;
+	}
+
 	esp_wifi_connect();
 
 	xEventGroupWaitBits(g_server.event_group, FLAG_DISCONNECT, 0, 1, 5000 / portTICK_PERIOD_MS);

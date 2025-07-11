@@ -758,13 +758,33 @@ bool wss_init(void)
 
 #if (HTTP_UNSECURE == 0)
 	httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
-#if 0
-	extern const unsigned char ca_cert_start[] asm("_binary_ca_crt_start");
-	extern const unsigned char ca_cert_end[]   asm("_binary_ca_crt_end");
-	conf.cacert_pem = ca_cert_start;
-	conf.cacert_len = ca_cert_end - ca_cert_start;
-#endif
 
+	static char ca_pem[2048];
+	static char dev_pem[2048];
+	static char pkey[2048];
+
+	ret = CFG_get(cfg_id_ca_pem, ca_pem, sizeof(ca_pem));
+	if (!ret) {
+		return false;
+	}
+
+	ret = CFG_get(cfg_id_cert_pem, dev_pem, sizeof(dev_pem));
+	if (!ret) {
+		return false;
+	}
+
+	ret = CFG_get(cfg_id_key_pem, pkey, sizeof(pkey));
+	if (!ret) {
+		return false;
+	}
+
+	conf.cacert_pem = (const uint8_t*)ca_pem;
+	conf.cacert_len = strlen(ca_pem);
+	conf.servercert = (const uint8_t*)dev_pem;
+	conf.servercert_len = strlen(dev_pem);
+    conf.prvtkey_pem	= (const uint8_t*)pkey;
+    conf.prvtkey_len	= strlen(pkey);
+	
 	conf.httpd.uri_match_fn = uri_match;
 	conf.httpd.open_fn = wss_open_fd;
 	conf.httpd.close_fn = wss_close_fd;
@@ -776,7 +796,7 @@ bool wss_init(void)
 	err = httpd_ssl_start(&g_server.handle, &conf);
 	if (ESP_OK != err) {
 		ERROR("httpd_ssl_start %s\n", ESP_getErrStr(err));
-		return NULL;
+		return false;
 	}
 
 #else
