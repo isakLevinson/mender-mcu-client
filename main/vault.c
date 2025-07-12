@@ -157,8 +157,9 @@ static bool _vaultLogin(char* o_pToken)
 	char	baseUrl[64];
 	char	role[64];
 	char	secret[64];
-	char	http_result[2048];
 	int		http_result_size;
+	char*	http_result = NULL;
+	cJSON*	root = NULL;
 
 	ret = CFG_get(cfg_id_vault_url, baseUrl, sizeof(baseUrl));
 	if (!ret) {
@@ -181,16 +182,22 @@ static bool _vaultLogin(char* o_pToken)
 	sprintf(url, "%s%s", baseUrl, VAULT_URL_LOGIN);
 	sprintf(data, "{\"role_id\":\"%s\",\"secret_id\":\"%s\"}", role, secret);
 
-	http_result_size = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data), http_result, sizeof(http_result));
-	if (http_result_size < 0) {
-		ERROR("TLS_curl failed\n");
+	http_result = calloc(1, 2048);
+	if (!http_result) {
+		ERROR("failed to alloc http_result\n");
 		return false;
 	}
 
-	cJSON* root = cJSON_Parse(http_result);
+	http_result_size = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data), http_result, 2048);
+	if (http_result_size < 0) {
+		ERROR("TLS_curl failed\n");
+		goto err;
+	}
+
+	root = cJSON_Parse(http_result);
 	if (root == NULL) {
 		ERROR("Failed to parse JSON\n");
-		return false;
+		goto err;
 	}
 
 	cJSON* auth = cJSON_GetObjectItem(root, "auth");
@@ -210,6 +217,7 @@ static bool _vaultLogin(char* o_pToken)
 		strcpy(o_pToken, token->valuestring);
 	}
 
+	free(http_result);
 	cJSON_Delete(root);
 	return true;
 
@@ -234,7 +242,13 @@ err:
 		//			}
 	}
 
-	cJSON_Delete(root);
+	if (root) {
+		cJSON_Delete(root);
+	}
+
+	if (http_result) {
+		free(http_result);
+	}
 	return false;
 }
 
@@ -247,11 +261,10 @@ static bool _vaultRenew(char* token)
 	char	baseUrl[64];
 	char	url[256];
 
-	static char	csr_buf[2048];
-	static char	json[2048];
-	static char	http_result[8192];
-	//char*	http_result = calloc(1,2048);
-	cJSON*	root	= NULL;
+	char*	csr_buf		= NULL;
+	char*	json		= NULL;
+	char*	http_result = NULL;
+	cJSON*	root		= NULL;
 
 	ret = CFG_get(cfg_id_vault_url, baseUrl, sizeof(baseUrl));
 	if (!ret) {
@@ -262,37 +275,45 @@ static bool _vaultRenew(char* token)
 	sprintf(url, "%s%s", baseUrl, VAULT_URL_RENEW);
 	INFO("url: %s\n", url);
 
-	ret = _create_csr(pkey, (unsigned char*)csr_buf, sizeof(csr_buf));
+	csr_buf = calloc(1, 2048);
+	ret = _create_csr(pkey, (unsigned char*)csr_buf, 2048);
 	if (!ret) {
 		ERROR("_create_csr failed\n");
-		return true;
+		goto err;
 	}
 
 	INFO("csr:\n%s\n", csr_buf);
 
+	json = calloc(1, 2048);
 	_voultCreateCsrJson(csr_buf, "720h", json);
+	free(csr_buf);
+	csr_buf = NULL;
 
 	INFO("token: %s\n", token);
 	INFO("json:\n%s\n", json);
 
-//	http_result	= calloc(1, 2048);
-//	if (!http_result) {
-//		return false;
-//	}
+	http_result	= calloc(1, 8192);
+	if (!http_result) {
+		return false;
+	}
 
 	resultSize = TLS_curl(url, HTTP_METHOD_POST, "X-Vault-Token", token, json, strlen(json), http_result, 8192);
 	if (resultSize < 0) {
 		ERROR("TLS_curl failed\n");
-		return false;
+		goto err;
 	}
+	free(json);
+	json = NULL;
 
 	INFO_BUF("result",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
 
 	root = cJSON_Parse(http_result);
 	if (root == NULL) {
 		ERROR("Failed to parse JSON\n");
-		return false;
+		goto err;
 	}
+
+	free(http_result);
 
 	cJSON* data = cJSON_GetObjectItem(root, "data");
 	if (!cJSON_IsObject(data)) {
@@ -357,7 +378,6 @@ static bool _vaultRenew(char* token)
 	}
 
 	cJSON_Delete(root);
-	//free(http_result);
 
 	ret = TLS_reload();
 	if (!ret) {
@@ -371,9 +391,9 @@ err:
 	if (root) {
 		cJSON_Delete(root);
 	}
-//	if (http_result) {
-//		free(http_result);
-//	}
+	if (http_result) {
+		free(http_result);
+	}
 
 	return false;
 }
