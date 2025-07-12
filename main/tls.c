@@ -53,6 +53,13 @@ typedef struct {
 	mbedtls_net_context* fd;
 } cmd_ctx_arg_t;
 
+
+typedef struct {
+	void* data;
+	size_t maxSize;
+	size_t size;
+} curl_data_t;
+
 static struct {
 	mbedtls_ssl_config conf;
 	mbedtls_entropy_context entropy;
@@ -68,9 +75,6 @@ static struct {
 
 	mbedtls_net_context fd_cmd;
 	mbedtls_net_context fd_stream;
-
-	int  http_client_result_size;
-
 	TimerHandle_t		kaTimer;
 } g_tls;
 
@@ -618,6 +622,19 @@ static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 {
 	TRACE("_http_event_handler: ");
 
+	curl_data_t*	userData = (curl_data_t*)evt->user_data;
+	if (!userData) {
+		return ESP_ERR_INVALID_ARG;
+	}
+
+	if (!userData->data) {
+		return ESP_ERR_INVALID_ARG;
+	}
+
+	if (!userData->maxSize) {
+		return ESP_ERR_INVALID_ARG;
+	}
+
 	switch (evt->event_id) {
 		case HTTP_EVENT_ERROR:
 			TRACE("HTTP_EVENT_ERROR");
@@ -639,13 +656,15 @@ static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 			INFO("chunked:%d complete:%d\n", chunked, complete);
 			TRACE_BUF("HTTP_EVENT_ON_DATA",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, evt->data, evt->data_len);
 
-			// If user_data buffer is configured, copy the response into the buffer
-			if (evt->user_data) {
-				// The last byte in evt->user_data is kept for the NULL character in case of out-of-bound access.
-				if (evt->data_len) {
-					memcpy(evt->user_data + g_tls.http_client_result_size, evt->data, evt->data_len);
+			// The last byte in evt->user_data is kept for the NULL character in case of out-of-bound access.
+			if (evt->data_len) {
+				if (userData->size + evt->data_len > userData->maxSize) {
+					WARN("no place to store %d bytes. stored %d/%d\n", evt->data_len, userData->size, userData->maxSize);
+					return ESP_ERR_NO_MEM;
 				}
-				g_tls.http_client_result_size += evt->data_len;
+
+				memcpy(userData->data + userData->size, evt->data, evt->data_len);
+				userData->size += evt->data_len;
 			}
 		}
 		break;
@@ -737,11 +756,17 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	int     read_len;
 	int		i;
 
+	curl_data_t	userData = {
+		.data = result,
+		.maxSize = maxResult,
+		.size = 0,
+	};
+
 	esp_http_client_config_t config = {
 		.url = url,
 		.method = method,
 		.event_handler = _http_event_handler,
-		.user_data = result,
+		.user_data = &userData,
 		.buffer_size = maxResult,
 	};
 
@@ -769,7 +794,6 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 		}
 	}
 
-	g_tls.http_client_result_size = 0;
 	err = esp_http_client_perform(client);
 	if (err != ESP_OK) {
 		ERROR("esp_http_client_perform %x\n", err);
@@ -798,14 +822,14 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	esp_http_client_get_chunk_length(client, &chunk_len);
 
 	INFO("Status = %d chunked:%d content_len=%d chunk_len=%d\n", esp_http_client_get_status_code(client), chunked, content_len, chunk_len);
-	result[g_tls.http_client_result_size] = '\0';
-	TRACE_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, result, g_tls.http_client_result_size);
+	result[userData.size] = '\0';
+	TRACE_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, result, userData.size);
 	TRACE("response:\n%s\n", result);
 
 end:
 	esp_http_client_cleanup(client);
 
-	ret = g_tls.http_client_result_size;
+	ret = userData.size;
 	return ret;
 }
 

@@ -242,13 +242,16 @@ static bool _vaultRenew(char* token)
 {
 	bool    ret;
 	esp_err_t err;
-	char    csr_buf[2048];
-	char    json[2048];
 	int		resultSize;
 	mbedtls_pk_context*	pkey = TLS_getPkey();
-	char	http_result[2048];
 	char	baseUrl[64];
 	char	url[256];
+
+	static char	csr_buf[2048];
+	static char	json[2048];
+	static char	http_result[8192];
+	//char*	http_result = calloc(1,2048);
+	cJSON*	root	= NULL;
 
 	ret = CFG_get(cfg_id_vault_url, baseUrl, sizeof(baseUrl));
 	if (!ret) {
@@ -270,23 +273,26 @@ static bool _vaultRenew(char* token)
 	_voultCreateCsrJson(csr_buf, "720h", json);
 
 	INFO("token: %s\n", token);
-	//INFO("json:\n%s\n", json);
+	INFO("json:\n%s\n", json);
 
-	resultSize = TLS_curl(url, HTTP_METHOD_POST, "X-Vault-Token", token, json, strlen(json), http_result, sizeof(http_result));
+//	http_result	= calloc(1, 2048);
+//	if (!http_result) {
+//		return false;
+//	}
+
+	resultSize = TLS_curl(url, HTTP_METHOD_POST, "X-Vault-Token", token, json, strlen(json), http_result, 8192);
 	if (resultSize < 0) {
 		ERROR("TLS_curl failed\n");
 		return false;
 	}
 
-	//	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_client_result, http_client_result_size);
+	INFO_BUF("result",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
 
-	cJSON* root = cJSON_Parse(http_result);
+	root = cJSON_Parse(http_result);
 	if (root == NULL) {
 		ERROR("Failed to parse JSON\n");
 		return false;
 	}
-
-	INFO_BUF("result",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
 
 	cJSON* data = cJSON_GetObjectItem(root, "data");
 	if (!cJSON_IsObject(data)) {
@@ -351,6 +357,7 @@ static bool _vaultRenew(char* token)
 	}
 
 	cJSON_Delete(root);
+	//free(http_result);
 
 	ret = TLS_reload();
 	if (!ret) {
@@ -361,7 +368,12 @@ static bool _vaultRenew(char* token)
 	return true;
 
 err:
-	cJSON_Delete(root);
+	if (root) {
+		cJSON_Delete(root);
+	}
+//	if (http_result) {
+//		free(http_result);
+//	}
 
 	return false;
 }
