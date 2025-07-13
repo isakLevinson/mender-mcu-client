@@ -32,13 +32,6 @@
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
 
 /**
- * @brief Default host
- */
-#ifndef CONFIG_MENDER_SERVER_HOST
-#define CONFIG_MENDER_SERVER_HOST "https://hosted.mender.io"
-#endif /* CONFIG_MENDER_SERVER_HOST */
-
-/**
  * @brief Default troubleshoot healthcheck interval (seconds)
  */
 #ifndef CONFIG_MENDER_CLIENT_TROUBLESHOOT_HEALTHCHECK_INTERVAL
@@ -85,7 +78,8 @@ mender_troubleshoot_init(void *config, void *callbacks) {
     if ((NULL != ((mender_troubleshoot_config_t *)config)->host) && (strlen(((mender_troubleshoot_config_t *)config)->host) > 0)) {
         mender_troubleshoot_config.host = ((mender_troubleshoot_config_t *)config)->host;
     } else {
-        mender_troubleshoot_config.host = CONFIG_MENDER_SERVER_HOST;
+		ret = MENDER_FAIL;
+		goto END;
     }
     if (0 != ((mender_troubleshoot_config_t *)config)->healthcheck_interval) {
         mender_troubleshoot_config.healthcheck_interval = ((mender_troubleshoot_config_t *)config)->healthcheck_interval;
