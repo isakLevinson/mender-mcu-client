@@ -2,9 +2,6 @@
 
 #include <sys_def.h>
 
-#define CONFIG_MENDER_SERVER_HOST "https://eu.hosted.mender.io"
-#define CONFIG_MENDER_SERVER_TENANT_TOKEN "RkxW6DPOFzxBWE2LR2o8muCbCQ2dRRQCDcmwXJRNuno"
-
 // *INDENT-OFF*
 #define CFG_LIST(cmd)	\
 	cmd(ssid,			cfg,	NULL)	\
