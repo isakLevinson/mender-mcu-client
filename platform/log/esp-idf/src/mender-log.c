@@ -27,33 +27,33 @@
 #include <esp_log.h>
 #include "mender-log.h"
 
-void mender_log_print(uint8_t level, const char *filename, const char *function, int line, char *format, ...)
+void mender_log_print(uint8_t level, const char* filename, const char* function, int line, char* format, ...)
 {
 
-    (void)function;
-    char log[256] = { 0 };
+	(void)function;
+	char log[256] = { 0 };
 
-    /* Format message */
-    va_list args;
-    va_start(args, format);
-    vsnprintf(log, sizeof(log), format, args);
-    va_end(args);
+	/* Format message */
+	va_list args;
+	va_start(args, format);
+	vsnprintf(log, sizeof(log), format, args);
+	va_end(args);
 
-    /* Switch depending log level */
-    switch (level) {
-        case MENDER_LOG_LEVEL_ERR:
-            ERROR("mender", "%s (%d): %s\n", filename, line, log);
-            break;
-        case MENDER_LOG_LEVEL_WRN:
-            WARN("mender", "%s (%d): %s\n", filename, line, log);
-            break;
-        case MENDER_LOG_LEVEL_INF:
-            INFO("mender", "%s (%d): %s\n", filename, line, log);
-            break;
-        case MENDER_LOG_LEVEL_DBG:
-            TRACE("mender", "%s (%d): %s\n", filename, line, log);
-            break;
-        default:
-            break;
-    }
+	/* Switch depending log level */
+	switch (level) {
+		case MENDER_LOG_LEVEL_ERR:
+			ERROR("mender", "%s (%d): %s\n", filename, line, log);
+			break;
+		case MENDER_LOG_LEVEL_WRN:
+			WARN("mender", "%s (%d): %s\n", filename, line, log);
+			break;
+		case MENDER_LOG_LEVEL_INF:
+			INFO("mender", "%s (%d): %s\n", filename, line, log);
+			break;
+		case MENDER_LOG_LEVEL_DBG:
+			TRACE("mender", "%s (%d): %s\n", filename, line, log);
+			break;
+		default:
+			break;
+	}
 }

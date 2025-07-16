@@ -20,44 +20,49 @@
 #include "mender-tls.h"
 
 __attribute__((weak)) mender_err_t
-mender_tls_init(void) {
+mender_tls_init(void)
+{
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }
 
 __attribute__((weak)) mender_err_t
-mender_tls_init_authentication_keys(bool recommissioning) {
+mender_tls_init_authentication_keys(bool recommissioning)
+{
 
-    (void)recommissioning;
+	(void)recommissioning;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_tls_get_public_key_pem(char **public_key) {
+mender_tls_get_public_key_pem(char** public_key)
+{
 
-    (void)public_key;
+	(void)public_key;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_tls_sign_payload(char *payload, char **signature, size_t *signature_length) {
+mender_tls_sign_payload(char* payload, char** signature, size_t* signature_length)
+{
 
-    (void)payload;
-    (void)signature;
-    (void)signature_length;
+	(void)payload;
+	(void)signature;
+	(void)signature_length;
 
-    /* Nothing to do */
-    return MENDER_NOT_IMPLEMENTED;
+	/* Nothing to do */
+	return MENDER_NOT_IMPLEMENTED;
 }
 
 __attribute__((weak)) mender_err_t
-mender_tls_exit(void) {
+mender_tls_exit(void)
+{
 
-    /* Nothing to do */
-    return MENDER_OK;
+	/* Nothing to do */
+	return MENDER_OK;
 }
