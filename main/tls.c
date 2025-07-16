@@ -611,7 +611,7 @@ static bool _tlsInit(void)
 	INFO("TLS initialized\n");
 	return true;
 
-	err:
+err:
 	if (buf) {
 		free(buf);
 	}

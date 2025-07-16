@@ -438,7 +438,7 @@ static int32_t _findId(char* key)
 
 	for (i = 0; i < cfg_id_last; i++) {
 		if (strstr(g_id[i].key, key)) {
-			if (id >=0) {
+			if (id >= 0) {
 				INFO("more than one match\n");
 				return -1;
 			}
@@ -517,7 +517,7 @@ static bool dbgGet(uint8_t argc, char** argv)
 		if (g_id[id].key) {
 			keyStr = g_id[id].key;
 		}
-//		PRINT("%s\n", str);
+		//		PRINT("%s\n", str);
 		PRINT("%2d %s %s: %s\n", id, g_id[id].namespace, g_id[id].key, str);
 	} else {
 		PRINT("NULL\n");
@@ -560,7 +560,7 @@ static bool dbgSet(uint8_t argc, char** argv)
 
 	id = _findId(key);
 	if (id < 0) {
-		return false;	
+		return false;
 	}
 
 	CFG_set(id, val);
@@ -573,13 +573,15 @@ static bool dbgDel(uint8_t argc, char** argv)
 	bool    ret;
 	bool	temp	= false;
 	bool	nvs		= false;
-	uint8_t	id = 0;
+	char*	key		= NULL;
+	int32_t	id 		= -1;
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
 		ARGS_ENTRY("t",		ARGS_TYPE_SWITCH,	0,	"store in temporary",	&temp)
 		ARGS_ENTRY("n",		ARGS_TYPE_SWITCH,	0,	"store in nvs",			&nvs)
-		ARGS_ENTRY(NULL,	ARGS_TYPE_UINT8,	1,	"key",   				&id)
+		ARGS_ENTRY(NULL,	ARGS_TYPE_STRING,	1,	"key",   				&key)
+
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
@@ -590,6 +592,11 @@ static bool dbgDel(uint8_t argc, char** argv)
 
 	if (id >= cfg_id_last) {
 		ERROR("invalid id\n");
+		return false;
+	}
+
+	id = _findId(key);
+	if (id < 0) {
 		return false;
 	}
 

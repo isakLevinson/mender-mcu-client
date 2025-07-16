@@ -15,7 +15,7 @@ static struct {
 	nvs_handle_t nvsHandle;
 } g_nvs;
 
-bool NVS_get(char*namespace, char* key,  char* val, size_t maxSize)
+bool NVS_get(char* namespace, char* key,  char* val, size_t maxSize)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
@@ -50,7 +50,7 @@ exit:
 	return ret;
 }
 
-bool NVS_set(char*namespace, char* key,  char* val)
+bool NVS_set(char* namespace, char* key,  char* val)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
@@ -103,7 +103,7 @@ exit:
 	return ret;
 }
 
-bool NVS_del(char*namespace, char* key)
+bool NVS_del(char* namespace, char* key)
 {
 	bool    ret = true;
 	esp_err_t err = ESP_OK;
