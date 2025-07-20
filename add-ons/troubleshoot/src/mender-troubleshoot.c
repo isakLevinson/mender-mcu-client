@@ -31,14 +31,7 @@
 
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
 
-/**
- * @brief Default host
- */
-#ifndef CONFIG_MENDER_SERVER_HOST
-#define CONFIG_MENDER_SERVER_HOST "https://hosted.mender.io"
-#endif /* CONFIG_MENDER_SERVER_HOST */
-
-/**
+**
  * @brief Default troubleshoot healthcheck interval (seconds)
  */
 #ifndef CONFIG_MENDER_CLIENT_TROUBLESHOOT_HEALTHCHECK_INTERVAL

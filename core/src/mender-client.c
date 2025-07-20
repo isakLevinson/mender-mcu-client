@@ -26,20 +26,6 @@
 #include "mender-tls.h"
 
 /**
- * @brief Default host
- */
-#ifndef CONFIG_MENDER_SERVER_HOST
-#define CONFIG_MENDER_SERVER_HOST "https://hosted.mender.io"
-#endif /* CONFIG_MENDER_SERVER_HOST */
-
-/**
- * @brief Default tenant token
- */
-#ifndef CONFIG_MENDER_SERVER_TENANT_TOKEN
-#define CONFIG_MENDER_SERVER_TENANT_TOKEN NULL
-#endif /* CONFIG_MENDER_SERVER_TENANT_TOKEN */
-
-/**
  * @brief Default authentication poll interval (seconds)
  */
 #ifndef CONFIG_MENDER_CLIENT_AUTHENTICATION_POLL_INTERVAL
@@ -226,8 +212,6 @@ mender_client_init(mender_client_config_t* config, mender_client_callbacks_t* ca
 	mender_client_config.device_type   = config->device_type;
 	if ((NULL != config->host) && (strlen(config->host) > 0)) {
 		mender_client_config.host = config->host;
-	} else {
-		mender_client_config.host = CONFIG_MENDER_SERVER_HOST;
 	}
 	if ((NULL == mender_client_config.host) || (0 == strlen(mender_client_config.host))) {
 		mender_log_error("Invalid server host configuration, can't be null or empty");
@@ -241,8 +225,6 @@ mender_client_init(mender_client_config_t* config, mender_client_callbacks_t* ca
 	}
 	if ((NULL != config->tenant_token) && (strlen(config->tenant_token) > 0)) {
 		mender_client_config.tenant_token = config->tenant_token;
-	} else {
-		mender_client_config.tenant_token = CONFIG_MENDER_SERVER_TENANT_TOKEN;
 	}
 	if ((NULL != mender_client_config.tenant_token) && (0 == strlen(mender_client_config.tenant_token))) {
 		mender_client_config.tenant_token = NULL;
