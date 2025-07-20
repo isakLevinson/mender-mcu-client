@@ -1,5 +1,5 @@
 
-#define DEF_DBG_MODULE	DBG_MODULE_NVS
+#define DEF_DBG_MODULE	DBG_MODULE_FACTORY
 
 #include <sys_def.h>
 #include "dbgMenus.h"

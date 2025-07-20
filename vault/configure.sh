@@ -10,9 +10,12 @@ export VAULT_NAMESPACE=
 #./07_userpass_create.sh
 ./08_generate_certificate.sh isa
 vault auth enable approle
+vault auth enable cert
+
 ./create_device.sh
 ./fetch_device_role.sh
 ./updateFactory.sh
-../scripts/writeConfigPatition.sh
+
+#../scripts/writeConfigPatition.sh
 
 

@@ -356,11 +356,13 @@ static bool _startSta(void)
 	g_server.netif_sta = esp_netif_create_default_wifi_sta();
 	assert(g_server.netif_sta);
 
+	//INFO("#1\n");
 	err = esp_wifi_set_config(WIFI_IF_STA, &wifi_sta_config);
 	if (ESP_OK != err) {
 		ERROR("_startSta: esp_wifi_set_config WIFI_IF_STA %s\n", ESP_getErrStr(err));
 		return false;
 	}
+	//INFO("#2\n");
 
 	return true;
 }
@@ -374,8 +376,8 @@ static bool _startAp(void)
 	wifi_config_t wifi_ap_config = {
 		.ap = {
 			//.ssid = "",
-			.ssid_len = 3,
-			.password = "",
+			//ssid_len = 0,
+			.password[0] = '\0',
 			.channel = 5,
 			.max_connection = 1,
 			.authmode = WIFI_AUTH_OPEN,
@@ -390,9 +392,14 @@ static bool _startAp(void)
 
 	ret = CFG_get(cfg_id_sn, sn, sizeof(sn));
 	if (ret) {
-		sprintf((char*)wifi_ap_config.ap.ssid, "%s", sn);
-		wifi_ap_config.ap.ssid_len = strlen((char*)wifi_ap_config.ap.ssid);
-		INFO_BUF("ssid", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.ssid, wifi_ap_config.ap.ssid_len);
+		int len = sprintf((char*)wifi_ap_config.ap.ssid, "%s", sn);
+		//sprintf((char*)wifi_ap_config.ap.password, "12345678");
+		INFO("using sn <%s>\n", sn);
+		INFO("authmode: %d\n", wifi_ap_config.ap.authmode);
+
+		//wifi_ap_config.ap.ssid_len = strlen((char*)wifi_ap_config.ap.ssid);
+		INFO_BUF("ssid", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.ssid, len);
+		INFO_BUF("passwd", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.password, sizeof(wifi_ap_config.ap.password));
 	}
 
 	err = esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config);

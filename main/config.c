@@ -75,6 +75,27 @@ bool CFG_isValidName(char* pName)
 	return false;
 }
 
+static bool _setTemporary(cfg_id_t id,  char* val)
+{
+	if (g_id[id].temp) {
+		free(g_id[id].temp);
+	}
+
+	size_t len = strlen(val);
+
+	//INFO("allocating new temporary %d\n", len);
+	g_id[id].temp = malloc(len + 1);
+	if (!g_id[id].temp) {
+		ERROR("failed to allocate %d\n", len);
+		return true;
+	}
+
+	//INFO("strcpy to %x\n", g_id[id].temp);
+	strcpy(g_id[id].temp, val);
+
+	return true;
+}
+
 PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 {
 	int ret;
@@ -237,47 +258,30 @@ bool CFG_get(cfg_id_t id,  char* val, size_t maxSize)
 
 	if (g_id[id].temp) {
 		strncpy(val, g_id[id].temp, maxSize);
+		INFO("found temp\n");
 		return true;
 	}
 
 	ret = NVS_get(g_id[id].namespace, g_id[id].key, val, maxSize);
 	if (ret) {
+		INFO("found nvs\n");
 		return true;
 	}
 
 	ret = FACTORY_get(g_id[id].key, val, maxSize);
 	if (ret) {
+		INFO("found factory\n");
 		return true;
 	}
 
 	if (g_id[id].def) {
+		INFO("found default\n");
 		strncpy(val, g_id[id].def, maxSize);
 		return true;
 	}
 
 	val[0] = '\0';
 	return false;
-}
-
-static bool _setTemporary(cfg_id_t id,  char* val)
-{
-	if (g_id[id].temp) {
-		free(g_id[id].temp);
-	}
-
-	size_t len = strlen(val);
-
-	//INFO("allocating new temporary %d\n", len);
-	g_id[id].temp = malloc(len + 1);
-	if (!g_id[id].temp) {
-		ERROR("failed to allocate %d\n", len);
-		return true;
-	}
-
-	//INFO("strcpy to %x\n", g_id[id].temp);
-	strcpy(g_id[id].temp, val);
-
-	return true;
 }
 
 bool CFG_set(cfg_id_t id,  char* val)
@@ -467,12 +471,13 @@ static bool dbgGet(uint8_t argc, char** argv)
 	bool    	isAll	= false;
 	char*		pIdStr	= NULL;
 	char  		str[2048];
-	cfg_id_t	id;
+	int32_t		id = -1;
+	char*		key = NULL;
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
 		ARGS_ENTRY("a",			ARGS_TYPE_SWITCH,		0,	"all",	&isAll)
-		ARGS_ENTRY(NULL,	    ARGS_TYPE_UINT8,		0,	"id",	&id)
+		ARGS_ENTRY(NULL,	    ARGS_TYPE_STRING,		0,	"key",	&key)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
@@ -503,6 +508,11 @@ static bool dbgGet(uint8_t argc, char** argv)
 		}
 
 		return true;
+	}
+
+	id = _findId(key);
+	if (id < 0) {
+		return false;	
 	}
 
 	ret = CFG_get(id, str, sizeof(str));
