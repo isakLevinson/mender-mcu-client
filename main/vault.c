@@ -157,9 +157,20 @@ static bool _vaultLogin(char* o_pToken)
 	char	baseUrl[64];
 	char	role[64];
 	char	secret[64];
+	char	t[256];
 	int		http_result_size;
 	char*	http_result = NULL;
 	cJSON*	root = NULL;
+
+	// TODO: fix size
+	ret = CFG_get(cfg_id_vault_token, t, sizeof(t));
+	if (ret) {
+		if (t[0] != '\0') {
+			INFO("skipping login. using token %s\n", t);
+			strcpy(o_pToken, t);
+			return true;
+		}
+	}
 
 	ret = CFG_get(cfg_id_vault_url, baseUrl, sizeof(baseUrl));
 	if (!ret) {

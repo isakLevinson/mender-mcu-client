@@ -24,6 +24,7 @@
 	cmd(vault_url,		cfg,	NULL)	\
 	cmd(vault_role,		cfg,	NULL)	\
 	cmd(vault_secret,	cfg,	NULL)	\
+	cmd(vault_token,	null,	NULL)	\
 // *INDENT-ON*
 
 #define CFG_ENUM(id, ns, def)	cfg_id_ ## id,

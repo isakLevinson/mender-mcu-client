@@ -264,18 +264,18 @@ bool CFG_get(cfg_id_t id,  char* val, size_t maxSize)
 
 	ret = NVS_get(g_id[id].namespace, g_id[id].key, val, maxSize);
 	if (ret) {
-		INFO("found nvs\n");
+		INFO("found nvs %s\n", g_id[id].key);
 		return true;
 	}
 
 	ret = FACTORY_get(g_id[id].key, val, maxSize);
 	if (ret) {
-		INFO("found factory\n");
+		INFO("found factory %s\n", g_id[id].key);
 		return true;
 	}
 
 	if (g_id[id].def) {
-		INFO("found default\n");
+		INFO("found default %s\n", g_id[id].key);
 		strncpy(val, g_id[id].def, maxSize);
 		return true;
 	}
