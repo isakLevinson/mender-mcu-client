@@ -150,6 +150,26 @@ static void _print_cert_dates(const mbedtls_x509_crt* cert)
 	INFO("%04d-%02d-%02d %02d:%02d:%02d\n", to->year, to->mon, to->day, to->hour, to->min, to->sec);
 }
 
+static void _printErrors(cJSON* root)
+{
+	cJSON* errors = cJSON_GetObjectItem(root, "errors");
+	if (!errors) {
+		return;
+	}
+
+	if (!cJSON_IsArray(errors)) {
+		return;
+	}
+
+	int size = cJSON_GetArraySize(errors);
+	for (int i = 0; i < size; i++) {
+		cJSON* item = cJSON_GetArrayItem(errors, i);
+		if (cJSON_IsString(item)) {
+			ERROR(" <%s> ", item->valuestring);
+		}
+	}
+}
+
 static bool _vaultLoginRoleSecret(char* o_pToken)
 {
 	bool	ret;
@@ -234,27 +254,10 @@ static bool _vaultLoginRoleSecret(char* o_pToken)
 	return true;
 
 err:
-	//INFO_BUF("response",	PRINT_BUF_STYLE_ASC_SIZE_NL, http_result, http_result_size);
-	cJSON* errors = cJSON_GetObjectItem(root, "errors");
-	if (cJSON_IsArray(errors)) {
-		int size = cJSON_GetArraySize(errors);
-		for (int i = 0; i < size; i++) {
-			cJSON* item = cJSON_GetArrayItem(errors, i);
-			if (cJSON_IsString(item)) {
-				ERROR(" <%s> ", item->valuestring);
-			}
-		}
-		//ERROR("\n%d\n", size);
-	} else {
-		ERROR("errors field is not an array\n");
-		//		char *printed_json = cJSON_Print(root);  // Pretty print with indentation
-		//			if (printed_json) {
-		//				INFO("Full JSON Content:\n%s\n", printed_json);
-		//				free(printed_json);
-		//			}
-	}
+	//INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, http_result_size);
 
 	if (root) {
+		_printErrors(root);
 		cJSON_Delete(root);
 	}
 
@@ -318,6 +321,7 @@ static bool _vaultLoginCert(char* o_pToken)
 	}
 
 	free(http_result);
+
 	cJSON_Delete(root);
 	return true;
 
@@ -343,6 +347,7 @@ err:
 	}
 
 	if (root) {
+		_printErrors(root);
 		cJSON_Delete(root);
 	}
 
@@ -506,6 +511,7 @@ static bool _vaultRenew(char* token)
 
 err:
 	if (root) {
+		_printErrors(root);
 		cJSON_Delete(root);
 	}
 	if (http_result) {
