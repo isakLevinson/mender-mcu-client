@@ -75,6 +75,27 @@ bool CFG_isValidName(char* pName)
 	return false;
 }
 
+static bool _setTemporary(cfg_id_t id,  char* val)
+{
+	if (g_id[id].temp) {
+		free(g_id[id].temp);
+	}
+
+	size_t len = strlen(val);
+
+	//INFO("allocating new temporary %d\n", len);
+	g_id[id].temp = malloc(len + 1);
+	if (!g_id[id].temp) {
+		ERROR("failed to allocate %d\n", len);
+		return true;
+	}
+
+	//INFO("strcpy to %x\n", g_id[id].temp);
+	strcpy(g_id[id].temp, val);
+
+	return true;
+}
+
 PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 {
 	int ret;
@@ -277,27 +298,6 @@ bool CFG_get(cfg_id_t id,  char* val, size_t maxSize)
 	return CFG_getEx(id, val, maxSize, NULL);
 }
 
-static bool _setTemporary(cfg_id_t id,  char* val)
-{
-	if (g_id[id].temp) {
-		free(g_id[id].temp);
-	}
-
-	size_t len = strlen(val);
-
-	//INFO("allocating new temporary %d\n", len);
-	g_id[id].temp = malloc(len + 1);
-	if (!g_id[id].temp) {
-		ERROR("failed to allocate %d\n", len);
-		return true;
-	}
-
-	//INFO("strcpy to %x\n", g_id[id].temp);
-	strcpy(g_id[id].temp, val);
-
-	return true;
-}
-
 bool CFG_set(cfg_id_t id,  char* val)
 {
 	bool	ret;
@@ -487,11 +487,12 @@ static bool dbgGet(uint8_t argc, char** argv)
 	char  		str[2048];
 	cfg_id_t	id;
 	cfg_location_t	location;
+	char*		key = NULL;
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
 		ARGS_ENTRY("a",			ARGS_TYPE_SWITCH,		0,	"all",	&isAll)
-		ARGS_ENTRY(NULL,	    ARGS_TYPE_UINT8,		0,	"id",	&id)
+		ARGS_ENTRY(NULL,	    ARGS_TYPE_STRING,		0,	"key",	&key)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
@@ -532,6 +533,11 @@ static bool dbgGet(uint8_t argc, char** argv)
 		}
 
 		return true;
+	}
+
+	id = _findId(key);
+	if (id < 0) {
+		return false;	
 	}
 
 	ret = CFG_get(id, str, sizeof(str));

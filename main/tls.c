@@ -749,12 +749,18 @@ void TLS_getCerts(mbedtls_x509_crt** cert, mbedtls_x509_crt** ca)
 	}
 }
 
+#define CURL_USE_CERTIFICATE	1
+#define CURL_USE_CA				1
+
 int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char* header_value, char* content, size_t contentSize, char* result, size_t maxResult)
 {
 	int		ret = true;
 	esp_err_t err;
 	int     read_len;
 	int		i;
+	esp_http_client_handle_t client	= NULL;
+	char*	cert_pem				= NULL;
+	char*	ca_pem					= NULL;
 
 	curl_data_t	userData = {
 		.data = result,
@@ -770,7 +776,40 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 		.buffer_size = maxResult,
 	};
 
-	esp_http_client_handle_t client = esp_http_client_init(&config);
+#if CURL_USE_CERTIFICATE
+	cert_pem= malloc(2048);
+	if (!cert_pem) {
+		ret = -1;
+		goto end;
+	}
+
+	ret = CFG_get(cfg_id_cert_pem, cert_pem, 2048);
+	if (!ret) {
+		ret = -1;
+		goto end;
+	}
+	config.client_cert_pem = cert_pem;
+	config.client_cert_len = strlen(cert_pem);
+#endif
+
+#if CURL_USE_CA
+	ca_pem = malloc(2048);
+	if (!ca_pem) {
+		ret = -1;
+		goto end;
+	}
+
+	ret = CFG_get(cfg_id_ca_pem, ca_pem, 2048);
+	if (!ret) {
+		ret = -1;
+		goto end;
+	}
+
+	config.cert_pem = ca_pem;
+	config.cert_len = strlen(ca_pem);
+#endif
+
+	client = esp_http_client_init(&config);
 	if (!client) {
 		ERROR("esp_http_client_init failed\n");
 		return -1;
@@ -830,6 +869,15 @@ end:
 	esp_http_client_cleanup(client);
 
 	ret = userData.size;
+	
+	if (cert_pem) {
+		free(cert_pem);
+	}
+
+	if (ca_pem) {
+		free(ca_pem);
+	}
+
 	return ret;
 }
 
