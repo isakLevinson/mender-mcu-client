@@ -760,6 +760,7 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	int		i;
 	esp_http_client_handle_t client	= NULL;
 	char*	cert_pem				= NULL;
+	char*	key_pem					= NULL;
 	char*	ca_pem					= NULL;
 
 	curl_data_t	userData = {
@@ -777,6 +778,8 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	};
 
 #if CURL_USE_CERTIFICATE
+	config.skip_cert_common_name_check = true;
+
 	cert_pem= malloc(2048);
 	if (!cert_pem) {
 		ret = -1;
@@ -789,7 +792,19 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 		goto end;
 	}
 	config.client_cert_pem = cert_pem;
-	config.client_cert_len = strlen(cert_pem);
+
+	key_pem= malloc(2048);
+	if (!key_pem) {
+		ret = -1;
+		goto end;
+	}
+	ret = CFG_get(cfg_id_key_pem, key_pem, 2048);
+	if (!ret) {
+		ret = -1;
+		goto end;
+	}
+	config.client_key_pem = key_pem;
+
 #endif
 
 #if CURL_USE_CA
@@ -806,7 +821,6 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	}
 
 	config.cert_pem = ca_pem;
-	config.cert_len = strlen(ca_pem);
 #endif
 
 	client = esp_http_client_init(&config);
@@ -865,13 +879,16 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	TRACE_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, result, userData.size);
 	TRACE("response:\n%s\n", result);
 
+	ret = userData.size;
+
 end:
 	esp_http_client_cleanup(client);
 
-	ret = userData.size;
-	
 	if (cert_pem) {
 		free(cert_pem);
+	}
+	if (key_pem) {
+		free(key_pem);
 	}
 
 	if (ca_pem) {
