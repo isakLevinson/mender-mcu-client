@@ -110,11 +110,7 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 		object = object->next;
 	}
 
-	object = cJSON_GetObjectItemCaseSensitive(json, "cert");
-	if (object) {
-		INFO("cert: %s\n", object->valuestring);
-		CFG_set(cfg_id_cert,  object->valuestring);
-	}
+	// TODO: replace with generic config parser
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "sync_dns");
 	if (object) {
@@ -138,12 +134,6 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 	if (object) {
 		INFO("mender_token: %s\n", object->valuestring);
 		CFG_set(cfg_id_ota_token, object->valuestring);
-	}
-
-	object = cJSON_GetObjectItemCaseSensitive(json, "certificate");
-	if (object) {
-		INFO("certificate: %s\n", object->valuestring);
-		CFG_set(cfg_id_cert_pem, object->valuestring);
 	}
 
 	object = cJSON_GetObjectItemCaseSensitive(json, "key");
@@ -227,36 +217,64 @@ bool CFG_default(void)
 	return true;
 }
 
-bool CFG_get(cfg_id_t id,  char* val, size_t maxSize)
+bool CFG_getEx(cfg_id_t id,  char* val, size_t maxSize, cfg_location_t* location)
 {
 	bool	ret;
 
 	if (id >= cfg_id_last) {
+		ERROR("invalid id %d\n", id);
+		if (location) {
+			*location = cfg_location_invalid;
+		}
 		return false;
 	}
 
 	if (g_id[id].temp) {
 		strncpy(val, g_id[id].temp, maxSize);
+		if (location) {
+			*location = cfg_location_temporary;
+		}
 		return true;
 	}
 
 	ret = NVS_get(g_id[id].namespace, g_id[id].key, val, maxSize);
 	if (ret) {
+		if (location) {
+			*location = cfg_location_nvs;
+		}
 		return true;
 	}
 
 	ret = FACTORY_get(g_id[id].key, val, maxSize);
 	if (ret) {
+		if (location) {
+			*location = cfg_location_factory;
+		}
 		return true;
 	}
 
 	if (g_id[id].def) {
 		strncpy(val, g_id[id].def, maxSize);
+		if (location) {
+			*location = cfg_location_default;
+		}
 		return true;
 	}
 
-	val[0] = '\0';
+	if (location) {
+		*location = cfg_location_none;
+	}
+
+	TRACE("key %s not found\n", g_id[id].key);
+	if (val && maxSize) { 
+		val[0] = '\0';
+	}
 	return false;
+}
+
+bool CFG_get(cfg_id_t id,  char* val, size_t maxSize)
+{
+	return CFG_getEx(id, val, maxSize, NULL);
 }
 
 static bool _setTemporary(cfg_id_t id,  char* val)
@@ -468,6 +486,7 @@ static bool dbgGet(uint8_t argc, char** argv)
 	char*		pIdStr	= NULL;
 	char  		str[2048];
 	cfg_id_t	id;
+	cfg_location_t	location;
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
@@ -483,7 +502,7 @@ static bool dbgGet(uint8_t argc, char** argv)
 
 	if (isAll) {
 		for (id = 0; id < cfg_id_last; id++) {
-			ret = CFG_get(id, str, sizeof(str));
+			ret = CFG_getEx(id, str, sizeof(str), &location);
 			char* nsStr = "NULL";
 			char* keyStr = "NULL";
 			if (g_id[id].namespace) {
@@ -495,10 +514,20 @@ static bool dbgGet(uint8_t argc, char** argv)
 			}
 
 			if (ret) {
-				PRINT("%2d %s %s: %s\n", id, nsStr, keyStr, str);
-			} else {
+				char* locStr = "";
+				switch (location) {
+					case cfg_location_invalid:		locStr = "inv ";	break;
+					case cfg_location_none:			locStr = "none";	break;
+					case cfg_location_default:		locStr = "def ";	break;
+					case cfg_location_factory:		locStr = "fact";	break;
+					case cfg_location_nvs:			locStr = "nvs ";	break;
+					case cfg_location_temporary:	locStr = "temp";	break;
+				};
 
-				PRINT("%2d %s %s: NULL\n", id, nsStr, keyStr);
+				PRINT("%2d %s %s %s: ", id, nsStr, locStr, keyStr);
+				PRINT_BUF("",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, str, MIN(64, strlen(str)) );
+			} else {
+				PRINT("%2d %s none %s\n", id, nsStr, keyStr);
 			}
 		}
 

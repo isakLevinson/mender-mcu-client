@@ -393,6 +393,9 @@ static bool _startAp(void)
 		sprintf((char*)wifi_ap_config.ap.ssid, "%s", sn);
 		wifi_ap_config.ap.ssid_len = strlen((char*)wifi_ap_config.ap.ssid);
 		INFO_BUF("ssid", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.ssid, wifi_ap_config.ap.ssid_len);
+	} else {
+		ERROR("SN not set. Aborting AP startup\n");
+		return false;
 	}
 
 	err = esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config);
@@ -474,7 +477,7 @@ static void _init(void)
 			WIFI_startAp();
 			wss_config_start();
 		} else {
-			WARN("SN not set. will not start configuration mode\n");
+			ERROR("SN not set. will not start configuration mode\n");
 		}
 	}
 

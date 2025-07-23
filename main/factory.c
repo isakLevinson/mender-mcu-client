@@ -1,6 +1,5 @@
 
-#define DEF_DBG_MODULE	DBG_MODULE_NVS
-
+#define DEF_DBG_MODULE	DBG_MODULE_FACTORY
 #include <sys_def.h>
 #include "dbgMenus.h"
 #include "dbgPrint.h"
@@ -105,6 +104,7 @@ bool FACTORY_get(char* key,  char* val, size_t maxSize)
 
 	ret = _getFactoryObjectStr(key, val, maxSize);
 	if (!ret) {
+		TRACE("key %s not found\n", key);
 		return false;
 	}
 

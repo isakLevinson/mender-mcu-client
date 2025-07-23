@@ -591,9 +591,9 @@ bool MENDER_version(char** ppProjName, char** ppVer)
 }
 
 
-static void _init(void)
+static bool _init(void)
 {
-
+	bool	ret;
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_TROUBLESHOOT
 #ifdef CONFIG_MENDER_CLIENT_TROUBLESHOOT_FILE_TRANSFER
 
@@ -632,7 +632,11 @@ static void _init(void)
 	char	sn[64];
 
 	MENDER_version(&project_name, &version);
-	CFG_get(cfg_id_sn, sn, sizeof(sn));
+	ret = CFG_get(cfg_id_sn, sn, sizeof(sn));
+	if (!ret) {
+		ERROR("SN not set. aborting init\n");
+		return false;
+	}
 
 	/* Retrieve running version of the device */
 	INFO("Running project '%s' version '%s'\n", project_name, version);
@@ -748,6 +752,7 @@ static void _init(void)
 		INFO("mender_inventory_set ok\n");
 	}
 #endif /* CONFIG_MENDER_CLIENT_ADD_ON_INVENTORY */
+	return true;
 }
 
 static void _stop(void)
@@ -917,8 +922,13 @@ DEBUG_MENU_END
 
 void MENDER_init(void)
 {
+	bool	ret;
 	DBG_TREE_add("/",		g_menu);
 
-	_init();
+	ret = _init();
+	if (!ret) {
+		return;
+	}
+
 	_start();
 }

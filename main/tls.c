@@ -557,7 +557,7 @@ static bool _tlsInit(void)
 	}
 
 	INFO("Loading intermediate cert\n");
-	ret = CFG_get(cfg_id_inter_pem,  buf, 2048);
+	ret = CFG_get(cfg_id_ica_pem,  buf, 2048);
 	if (!ret) {
 		ERROR("intermediate certificate not present. will request later\n");
 		goto err;

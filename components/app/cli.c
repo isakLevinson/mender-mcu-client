@@ -237,6 +237,7 @@ bool CLI_getc(char* o_pChar)
 
 static bool dbgVer(uint8_t argc, char** argv)
 {
+	bool	ret;
 	int		err;
 	char*	proj;
 	char*	ver;
@@ -244,13 +245,21 @@ static bool dbgVer(uint8_t argc, char** argv)
 	char	sn[64];
 
 	MENDER_version(&proj, &ver);
-	CFG_get(cfg_id_sn, sn, sizeof(sn));
-	CFG_get(cfg_id_hw_revision, hw_ver, sizeof(hw_ver));
+	ret = CFG_get(cfg_id_sn, sn, sizeof(sn));
+	if (ret) {
+		PRINT("sn: %s\n", sn);
+	} else {
+		PRINT("SN not set\n");
+	}
 
-	PRINT("sn: %s\n", sn);
 	PRINT("proj: %s\n", proj);
 	PRINT("sw: %s\n", ver);
-	PRINT("hw: %s\n", hw_ver);
+	ret = CFG_get(cfg_id_hw_revision, hw_ver, sizeof(hw_ver));
+	if (ret) {
+		PRINT("hw: %s\n", hw_ver);
+	} else {
+		PRINT("HW version not set\n");
+	}
 
 #if 0
 	uint8_t mac[6];
