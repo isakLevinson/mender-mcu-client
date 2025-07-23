@@ -34,9 +34,10 @@
 #include "cJSON.h"
 
 
-#define VAULT_ROLE_NAME		"brain-space"
-#define VAULT_URL_LOGIN		"/v1/auth/approle/login"
-#define VAULT_URL_RENEW		"/v1/pki_int/sign/" VAULT_ROLE_NAME
+#define VAULT_ROLE_NAME			"brain-space"
+#define VAULT_URL_LOGIN			"/v1/auth/approle/login"
+#define VAULT_URL_LOGIN_CERT	"/v1/auth/cert/login"
+#define VAULT_URL_RENEW			"/v1/pki_int/sign/" VAULT_ROLE_NAME
 //#define VAULT_URL_RENEW		"/v1/pki_int/issue/" VAULT_ROLE_NAME
 
 static uint8_t _createSanExt(char* cn_list[], uint8_t size, uint8_t* buf)
@@ -148,8 +149,7 @@ static void _print_cert_dates(const mbedtls_x509_crt* cert)
 	INFO("%04d-%02d-%02d %02d:%02d:%02d\n", to->year, to->mon, to->day, to->hour, to->min, to->sec);
 }
 
-
-static bool _vaultLogin(char* o_pToken)
+static bool _vaultLoginRoleSecret(char* o_pToken)
 {
 	bool	ret;
 	char	url[128];
@@ -200,6 +200,93 @@ static bool _vaultLogin(char* o_pToken)
 	}
 
 	http_result_size = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL,  data, strlen(data), http_result, 2048);
+	if (http_result_size < 0) {
+		ERROR("TLS_curl failed\n");
+		goto err;
+	}
+
+	root = cJSON_Parse(http_result);
+	if (root == NULL) {
+		ERROR("Failed to parse JSON\n");
+		goto err;
+	}
+
+	cJSON* auth = cJSON_GetObjectItem(root, "auth");
+	if (!cJSON_IsObject(auth)) {
+		ERROR("Missing or invalid 'auth' field\n");
+		goto err;
+	}
+
+	// Access .certificate
+	cJSON* token = cJSON_GetObjectItem(auth, "client_token");
+	if (!cJSON_IsString(token)) {
+		ERROR("Missing or invalid 'client_token' field\n");
+		goto err;
+	}
+	INFO("TOKEN: %s\n", token->valuestring);
+	if (o_pToken) {
+		strcpy(o_pToken, token->valuestring);
+	}
+
+	free(http_result);
+	cJSON_Delete(root);
+	return true;
+
+err:
+	//INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, http_result_size);
+	cJSON* errors = cJSON_GetObjectItem(root, "errors");
+	if (cJSON_IsArray(errors)) {
+		int size = cJSON_GetArraySize(errors);
+		for (int i = 0; i < size; i++) {
+			cJSON* item = cJSON_GetArrayItem(errors, i);
+			if (cJSON_IsString(item)) {
+				ERROR(" <%s> ", item->valuestring);
+			}
+		}
+		//ERROR("\n%d\n", size);
+	} else {
+		ERROR("errors field is not an array\n");
+		//		char *printed_json = cJSON_Print(root);  // Pretty print with indentation
+		//			if (printed_json) {
+		//				INFO("Full JSON Content:\n%s\n", printed_json);
+		//				free(printed_json);
+		//			}
+	}
+
+	if (root) {
+		cJSON_Delete(root);
+	}
+
+	if (http_result) {
+		free(http_result);
+	}
+	return false;
+}
+
+static bool _vaultLoginCert(char* o_pToken)
+{
+	bool	ret;
+	char	url[128];
+	char	baseUrl[64];
+	int		http_result_size;
+	char*	http_result = NULL;
+	cJSON*	root = NULL;
+
+	ret = CFG_get(cfg_id_vault_url, baseUrl, sizeof(baseUrl));
+	if (!ret) {
+		ERROR("vault url not set\n");
+		return false;
+	}
+
+	sprintf(url, "%s%s", baseUrl, VAULT_URL_LOGIN_CERT);
+
+	http_result = calloc(1, 2048);
+	if (!http_result) {
+		ERROR("failed to alloc http_result\n");
+		return false;
+	}
+
+	http_result_size = TLS_curl(url, HTTP_METHOD_POST, NULL, NULL,  NULL, 0, http_result, 2048);
 	if (http_result_size < 0) {
 		ERROR("TLS_curl failed\n");
 		goto err;
@@ -529,7 +616,7 @@ static bool dbgRenew(uint8_t argc, char** argv)
 	char	token[256];
 
 	if (argc < 2) {
-		ret = _vaultLogin(token);
+		ret = _vaultLoginRoleSecret(token);
 		if (!ret) {
 			PRINT("login failed\n");
 			return true;
@@ -553,8 +640,25 @@ static bool dbgLogin(uint8_t argc, char** argv)
 {
 	bool	ret;
 	char	token[1024];
+	bool	isRole = false;
 
-	ret = _vaultLogin(token);
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("r",		ARGS_TYPE_SWITCH,	0,	"role and secret login",	&isRole)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (!ret) {
+		return false;
+	}
+
+	if (isRole) {
+		ret = _vaultLoginRoleSecret(token);
+	} else {
+		ret = _vaultLoginCert(token);
+	}
+
 	if (!ret) {
 		PRINT("login failed\n");
 		return true;
