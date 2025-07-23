@@ -3,7 +3,7 @@
 nvs,      data, nvs,     ,        64K,
 otadata,  data, ota,     ,        8K,
 phy_init, data, phy,     ,        4K,
-config,   0x40, 0x01,    ,        4K,          	
+config,   0x40, 0x01,    ,        8K,          	
 logs,     0x40, 0x02,    ,        1M,          	
 factory,  app,  factory, ,        1500K,
 ota_0,    app,  ota_0,   ,        1500K,

@@ -503,7 +503,7 @@ static bool dbgGet(uint8_t argc, char** argv)
 	if (isAll) {
 		for (id = 0; id < cfg_id_last; id++) {
 			ret = CFG_getEx(id, str, sizeof(str), &location);
-			char* nsStr = "NULL";
+			char* nsStr = "NUL";
 			char* keyStr = "NULL";
 			if (g_id[id].namespace) {
 				nsStr = g_id[id].namespace;
@@ -524,10 +524,10 @@ static bool dbgGet(uint8_t argc, char** argv)
 					case cfg_location_temporary:	locStr = "temp";	break;
 				};
 
-				PRINT("%2d %s %s %s: ", id, nsStr, locStr, keyStr);
+				PRINT("%2d %s %s %-16s: ", id, nsStr, locStr, keyStr);
 				PRINT_BUF("",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, str, MIN(64, strlen(str)) );
 			} else {
-				PRINT("%2d %s none %s\n", id, nsStr, keyStr);
+				PRINT("%2d %s none %-16s\n", id, nsStr, keyStr);
 			}
 		}
 
