@@ -773,7 +773,7 @@ bool wss_init(void)
 		return false;
 	}
 
-	ret = CFG_get(cfg_id_key_pem, pkey, 2048);
+	ret = CFG_get(cfg_id_cert_key, pkey, 2048);
 	if (!ret) {
 		return false;
 	}

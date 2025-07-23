@@ -446,7 +446,7 @@ static bool _vaultRenew(char* token)
 				cJSON* item = cJSON_GetArrayItem(chain, 0);
 				if (cJSON_IsString(item)) {
 					INFO("INTERMEDIATE:\n%s\n", item->valuestring);
-					ret = CFG_set(cfg_id_ica_pem, item->valuestring);
+					//ret = CFG_set(cfg_id_ica_pem, item->valuestring);
 					if (!ret) {
 						ERROR("NVS_set failed\n");
 						goto err;
@@ -547,18 +547,6 @@ static bool dbgVerify(uint8_t argc, char** argv)
 	INFO("CA:\n%s\n", buf);
 	if (mbedtls_x509_crt_parse(&ca_chain, (const unsigned char*)buf, strlen(buf) + 1) != 0) {
 		PRINT("Failed to parse root CA cert\n");
-		return true;
-	}
-
-	ret = CFG_get(cfg_id_ica_pem,  buf, sizeof(buf));
-	if (!ret) {
-		ERROR("intermediate certificate not present\n");
-		return false;
-	}
-	INFO("INTERMEDIATE:\n%s\n", buf);
-	ret = mbedtls_x509_crt_parse(&ca_chain, (unsigned char*)buf, strlen(buf) + 1);
-	if (ret != 0) {
-		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return true;
 	}
 

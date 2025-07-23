@@ -61,18 +61,48 @@ static void _timer(TimerHandle_t pxTimer)
 	WIFI_stopAp();
 }
 
-bool CFG_isValidName(char* pName)
+static int32_t _findPartialId(char* key)
+{
+	int32_t id = -1;
+	int32_t i;
+
+	for (i = 0; i < cfg_id_last; i++) {
+		if (strstr(g_id[i].key, key)) {
+			if (id >= 0) {
+				INFO("more than one match\n");
+				return -1;
+			}
+			id = i;
+		}
+	}
+
+	INFO("found id %d\n", id);
+
+	if (id < 0) {
+		id = strtol(key, NULL, 10);
+		if (0 == id)  {
+			INFO("strtol failed\n");
+			return -1;
+		}
+		INFO("using explicit id %d\n", id);
+	}
+
+	INFO("id=%d\n", id);
+	return id;
+}
+
+int32_t _findId(char* pName)
 {
 	uint8_t	i = 1 ; // first one is "INVALID"
 
 	while (g_id[i].key) {
 		if (!strcmp(g_id[i].key, pName)) {
-			return true;
+			return i;
 		}
 		i++;
 	}
 
-	return false;
+	return -1;
 }
 
 static bool _setTemporary(cfg_id_t id,  char* val)
@@ -99,70 +129,28 @@ static bool _setTemporary(cfg_id_t id,  char* val)
 PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 {
 	int ret;
-	cJSON* json = NULL;
+	cJSON* root = NULL;
+	const cJSON *item = NULL;
 	const cJSON* object = NULL;
-	const cJSON* objectSsid = NULL;
-	const cJSON* objectPasswd = NULL;
 
-	json = cJSON_ParseWithLength(pStr, size);
-	if (!json) {
+	root = cJSON_ParseWithLength(pStr, size);
+	if (!root) {
 		WARN("json parse error\n");
 		return PARSE_STATUS_SYNTAX_ERROR;
 	}
 
-	object = json;
-	while (object) {
-		const cJSON* child = object->child;
-		INFO("%x, child:%x\n", object, child);
-
-		while (child) {
-			if (child->string) {
-				bool isValidName = CFG_isValidName(child->string);
-				INFO("name:%s %d\n", child->string, isValidName);
-				if (!isValidName) {
-					WARN("invalid name %s\n", child->string);
-					return PARSE_STATUS_UNSUPPORTED_PARAM;
-				}
+	cJSON_ArrayForEach(item, root) {
+		if (cJSON_IsString(item)) {
+			INFO("%-16s: %s\n", item->string, item->valuestring);
+			ret = CFG_setByName(item->string, item->valuestring);
+			if (!ret) {
+				ERROR("unexpected key %s\n", item->string);
+				return PARSE_STATUS_UNSUPPORTED_PARAM;
 			}
-
-			child = child->next;
 		}
-
-		object = object->next;
 	}
 
-	// TODO: replace with generic config parser
-
-	object = cJSON_GetObjectItemCaseSensitive(json, "sync_dns");
-	if (object) {
-		INFO("sync_dns: %s\n", object->valuestring);
-		CFG_set(cfg_id_sync_dns, object->valuestring);
-	}
-
-	object = cJSON_GetObjectItemCaseSensitive(json, "sync_port");
-	if (object) {
-		INFO("sync_port: %s\n", object->valuestring);
-		CFG_set(cfg_id_sync_port, object->valuestring);
-	}
-
-	object = cJSON_GetObjectItemCaseSensitive(json, "mender_url");
-	if (object) {
-		INFO("mender_url: %s\n", object->valuestring);
-		CFG_set(cfg_id_ota_url, object->valuestring);
-	}
-
-	object = cJSON_GetObjectItemCaseSensitive(json, "mender_token");
-	if (object) {
-		INFO("mender_token: %s\n", object->valuestring);
-		CFG_set(cfg_id_ota_token, object->valuestring);
-	}
-
-	object = cJSON_GetObjectItemCaseSensitive(json, "key");
-	if (object) {
-		INFO("key: %s\n", object->valuestring);
-		CFG_set(cfg_id_key_pem, object->valuestring);
-	}
-
+#if 0
 	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");
 	if (object) {
 		if (cJSON_IsArray(object)) {
@@ -218,8 +206,11 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 			INFO("CFG_parseWssCommand connected\n");
 		}
 	}
+#endif
 
 	INFO("CFG_parseWssCommand: PARSE_STATUS_OK\n");
+
+	cJSON_Delete(root);
 
 	ret = xTimerStart(g_cfg.timer, 0);
 	if (pdPASS != ret) {
@@ -315,6 +306,21 @@ bool CFG_set(cfg_id_t id,  char* val)
 		_setTemporary(id, val);
 	}
 
+	return true;
+}
+
+bool CFG_setByName(char* key,  char* val)
+{
+	bool	ret;
+	int32_t id = _findId(key);
+
+	if (id < 0)  {
+		return false;
+	}
+	ret = CFG_set(id, val);
+	if (!ret) {
+		return false;
+	}
 	return true;
 }
 
@@ -449,36 +455,6 @@ static bool dbgStartServer(uint8_t argc, char** argv)
 	return true;
 }
 
-static int32_t _findId(char* key)
-{
-	int32_t id = -1;
-	int32_t i;
-
-	for (i = 0; i < cfg_id_last; i++) {
-		if (strstr(g_id[i].key, key)) {
-			if (id >= 0) {
-				INFO("more than one match\n");
-				return -1;
-			}
-			id = i;
-		}
-	}
-
-	INFO("found id %d\n", id);
-
-	if (id < 0) {
-		id = strtol(key, NULL, 10);
-		if (0 == id)  {
-			INFO("strtol failed\n");
-			return -1;
-		}
-		INFO("using explicit id %d\n", id);
-	}
-
-	INFO("id=%d\n", id);
-	return id;
-}
-
 static bool dbgGet(uint8_t argc, char** argv)
 {
 	bool    	ret;
@@ -535,7 +511,7 @@ static bool dbgGet(uint8_t argc, char** argv)
 		return true;
 	}
 
-	id = _findId(key);
+	id = _findPartialId(key);
 	if (id < 0) {
 		return false;	
 	}
@@ -593,7 +569,7 @@ static bool dbgSet(uint8_t argc, char** argv)
 		return false;
 	}
 
-	id = _findId(key);
+	id = _findPartialId(key);
 	if (id < 0) {
 		return false;
 	}
@@ -630,7 +606,7 @@ static bool dbgDel(uint8_t argc, char** argv)
 		return false;
 	}
 
-	id = _findId(key);
+	id = _findPartialId(key);
 	if (id < 0) {
 		return false;
 	}

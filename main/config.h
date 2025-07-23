@@ -12,8 +12,7 @@
 	cmd(ota_url,		cfg,	CONFIG_MENDER_SERVER_HOST)	\
 	cmd(ota_token,		cfg,	CONFIG_MENDER_SERVER_TENANT_TOKEN)	\
 	cmd(cert_pem,		cfg,	NULL)	\
-	cmd(key_pem,		cfg,	NULL)	\
-	cmd(ica_pem,		cfg,	NULL)	\
+	cmd(cert_key,		cfg,	NULL)	\
 	cmd(ota_updated,	cfg,	"0")	\
 	cmd(sn,				null,	NULL)	\
 	cmd(manufact_date,	null,	NULL)	\
@@ -57,4 +56,6 @@ bool		 CFG_default(void);
 bool CFG_get(cfg_id_t id,  char* val, size_t maxSize);
 bool CFG_getEx(cfg_id_t id,  char* val, size_t maxSize, cfg_location_t* location);
 bool CFG_set(cfg_id_t id,  char* val);
+bool CFG_setByName(char* key,  char* val);
+
 cfg_location_t CFG_getLocation(cfg_id_t id);

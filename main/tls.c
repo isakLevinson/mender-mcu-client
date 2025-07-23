@@ -264,7 +264,7 @@ static bool _storePrivateKey(mbedtls_pk_context* pkey)
 
 	INFO("key: %s\n", buf);
 
-	ret = CFG_set(cfg_id_key_pem, buf);
+	ret = CFG_set(cfg_id_cert_key, buf);
 	if (!ret) {
 		ERROR("CFG_set failed\n");
 		return false;
@@ -278,7 +278,7 @@ static bool _genAndStorePrivateKey(void)
 	bool	ret;
 	char    buf[2048];
 
-	ret = CFG_get(cfg_id_key_pem, buf, sizeof(buf));
+	ret = CFG_get(cfg_id_cert_key, buf, sizeof(buf));
 	if (ret) {
 		INFO("key present. no need to generate\n");
 		return true;
@@ -346,7 +346,7 @@ static void _taskCmd(void* arg)
 		.pArg       = &ctxarg,
 	};
 
-	_genAndStorePrivateKey();
+	//_genAndStorePrivateKey();
 
 	ret = _taskInit(&ssl, &listen_fd, &g_tls.fd_cmd, TLS_CMD_PORT);
 	if (!ret) {
@@ -531,7 +531,7 @@ static bool _tlsInit(void)
 
 	buf = calloc(1, 2048);
 	INFO("Loading private key\n");
-	ret = CFG_get(cfg_id_key_pem,  buf, 2048);
+	ret = CFG_get(cfg_id_cert_key,  buf, 2048);
 	if (!ret) {
 		ERROR("key not present. will generate later\n");
 		goto err;
@@ -551,19 +551,6 @@ static bool _tlsInit(void)
 	}
 
 	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (const unsigned char*) buf, strlen(buf) + 1);
-	if (ret != 0) {
-		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
-		goto err;
-	}
-
-	INFO("Loading intermediate cert\n");
-	ret = CFG_get(cfg_id_ica_pem,  buf, 2048);
-	if (!ret) {
-		ERROR("intermediate certificate not present. will request later\n");
-		goto err;
-	}
-
-	ret = mbedtls_x509_crt_parse(&g_tls.ca_cert, (unsigned char*)buf, strlen(buf) + 1);
 	if (ret != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		goto err;
@@ -798,7 +785,7 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 		ret = -1;
 		goto end;
 	}
-	ret = CFG_get(cfg_id_key_pem, key_pem, 2048);
+	ret = CFG_get(cfg_id_cert_key, key_pem, 2048);
 	if (!ret) {
 		ret = -1;
 		goto end;
