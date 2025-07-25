@@ -517,7 +517,7 @@ static bool _tlsInit(void)
 #endif /* MBEDTLS_USE_PSA_CRYPTO */
 
 #if defined(MBEDTLS_DEBUG_C)
-	mbedtls_debug_set_threshold(DEBUG_LEVEL);
+	//mbedtls_debug_set_threshold(4);
 #endif
 
 	INFO("Seeding the random number generator...\n");
@@ -529,9 +529,9 @@ static bool _tlsInit(void)
 		goto err;
 	}
 
-	buf = calloc(1, 2048);
+	buf = calloc(1, 4096);
 	INFO("Loading private key\n");
-	ret = CFG_get(cfg_id_cert_key,  buf, 2048);
+	ret = CFG_get(cfg_id_cert_key,  buf, 4096);
 	if (!ret) {
 		ERROR("key not present. will generate later\n");
 		goto err;
@@ -544,7 +544,7 @@ static bool _tlsInit(void)
 	}
 
 	INFO("Loading CA cert\n");
-	ret = CFG_get(cfg_id_ca_pem, buf, 2048);
+	ret = CFG_get(cfg_id_ca_pem, buf, 4096);
 	if (!ret) {
 		ERROR("CA not present. Fatal !!!\n");
 		goto err;
@@ -557,7 +557,7 @@ static bool _tlsInit(void)
 	}
 
 	INFO("Loading cert\n");
-	ret = CFG_get(cfg_id_cert_pem,  buf, 2048);
+	ret = CFG_get(cfg_id_cert_pem,  buf, 4096);
 	if (!ret) {
 		ERROR("certificate not present. will request later\n");
 		goto err;
@@ -641,7 +641,7 @@ static esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 			bool chunked = esp_http_client_is_chunked_response(evt->client);
 			bool complete = esp_http_client_is_complete_data_received(evt->client);
 			INFO("chunked:%d complete:%d\n", chunked, complete);
-			TRACE_BUF("HTTP_EVENT_ON_DATA",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, evt->data, evt->data_len);
+			TRACE_BUF("HTTP_EVENT_ON_DATA",	PRINT_BUF_STYLE_ASC_SIZE_NL, evt->data, evt->data_len);
 
 			// The last byte in evt->user_data is kept for the NULL character in case of out-of-bound access.
 			if (evt->data_len) {
@@ -750,6 +750,19 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 	char*	key_pem					= NULL;
 	char*	ca_pem					= NULL;
 
+	INFO("TLS_curl %s\n", url);
+	if (header_value) {
+		INFO("header key: %s\n", header_key);
+	}
+
+	if (header_value) {
+		INFO("header val: %s\n", header_value);
+	}
+
+	if (content) {
+		TRACE_BUF("content",	PRINT_BUF_STYLE_ASC_SIZE_NL, content, contentSize);
+	}
+
 	curl_data_t	userData = {
 		.data = result,
 		.maxSize = maxResult,
@@ -767,20 +780,20 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 #if CURL_USE_CERTIFICATE
 	config.skip_cert_common_name_check = true;
 
-	cert_pem= malloc(2048);
+	cert_pem = malloc(4096);
 	if (!cert_pem) {
 		ret = -1;
 		goto end;
 	}
 
-	ret = CFG_get(cfg_id_cert_pem, cert_pem, 2048);
+	ret = CFG_get(cfg_id_cert_pem, cert_pem, 4096);
 	if (!ret) {
 		ret = -1;
 		goto end;
 	}
 	config.client_cert_pem = cert_pem;
 
-	key_pem= malloc(2048);
+	key_pem = malloc(2048);
 	if (!key_pem) {
 		ret = -1;
 		goto end;
@@ -834,6 +847,10 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 		}
 	}
 
+	TRACE_BUF("CA",		PRINT_BUF_STYLE_ASC_SIZE_NL, config.cert_pem, strlen(config.cert_pem));
+	TRACE_BUF("CERT",	PRINT_BUF_STYLE_ASC_SIZE_NL, config.client_cert_pem, strlen(config.client_cert_pem));
+	TRACE_BUF("KEY",	PRINT_BUF_STYLE_ASC_SIZE_NL, config.client_key_pem, strlen(config.client_key_pem));
+
 	err = esp_http_client_perform(client);
 	if (err != ESP_OK) {
 		ERROR("esp_http_client_perform %x\n", err);
@@ -863,7 +880,7 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 
 	INFO("Status = %d chunked:%d content_len=%d chunk_len=%d\n", esp_http_client_get_status_code(client), chunked, content_len, chunk_len);
 	result[userData.size] = '\0';
-	TRACE_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, result, userData.size);
+	TRACE_BUF("response",	PRINT_BUF_STYLE_ASC_SIZE_NL, result, userData.size);
 	TRACE("response:\n%s\n", result);
 
 	ret = userData.size;
@@ -1092,7 +1109,7 @@ static bool dbgCurl(uint8_t argc, char** argv)
 
 	resultSize = TLS_curl(url, method, header_key, header_value,  data, data_len, http_result, sizeof(http_result));
 
-	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
+	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_SIZE_NL, http_result, resultSize);
 	//PRINT("response:\n%s\n", http_client_result);
 
 	return true;

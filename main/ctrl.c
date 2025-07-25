@@ -268,9 +268,9 @@ static void _init(void)
 	gpio_set_direction(GPIO_PIEZO_CTRL, GPIO_MODE_OUTPUT);
 	gpio_set_level(GPIO_PIEZO_CTRL, 0);
 
-	ret = xTaskCreate(_task, "app", 8192, NULL, 3, NULL);
+	ret = xTaskCreate(_task, "ctrl", 4096, NULL, 3, NULL);
 	if (ret != pdPASS) {
-		ERROR("create task %s failed\n", "app");
+		ERROR("create task %s failed\n", "ctrl");
 		return;
 	}
 }

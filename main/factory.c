@@ -86,6 +86,10 @@ static const bool _getFactoryObjectStr(char* pObject, char* val, size_t maxSize)
 
 	TRACE("%s: %s\n", pObject, object->valuestring);
 
+	if (strlen(object->valuestring) > maxSize) {
+		goto error;
+	}
+
 	if (val) {
 		strncpy(val, object->valuestring, maxSize);
 	}

@@ -460,7 +460,7 @@ static bool dbgGet(uint8_t argc, char** argv)
 	bool    	ret;
 	bool    	isAll	= false;
 	char*		pIdStr	= NULL;
-	char  		str[2048];
+	char  		str[3000];
 	cfg_id_t	id;
 	cfg_location_t	location;
 	char*		key = NULL;
@@ -501,14 +501,18 @@ static bool dbgGet(uint8_t argc, char** argv)
 					case cfg_location_temporary:	locStr = "temp";	break;
 				};
 
-				PRINT("%2d %s %s %-16s: ", id, nsStr, locStr, keyStr);
-				PRINT_BUF("",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, str, MIN(64, strlen(str)) );
+				PRINT("%2d %s %s %-16s: (%d)", id, nsStr, locStr, keyStr, strlen(str));
+				PRINT_BUF(NULL,	PRINT_BUF_STYLE_ASC_SIZE_NL, str, MIN(64, strlen(str)) );
 			} else {
 				PRINT("%2d %s none %-16s\n", id, nsStr, keyStr);
 			}
 		}
 
 		return true;
+	}
+
+	if (!key) {
+		return false;
 	}
 
 	id = _findPartialId(key);
@@ -529,7 +533,8 @@ static bool dbgGet(uint8_t argc, char** argv)
 			keyStr = g_id[id].key;
 		}
 		//		PRINT("%s\n", str);
-		PRINT("%2d %s %s: %s\n", id, g_id[id].namespace, g_id[id].key, str);
+		PRINT("%2d %s %s: \n", id, g_id[id].namespace, g_id[id].key);
+		PRINT_BUF("",	PRINT_BUF_STYLE_ASC_SIZE_NL | PRINT_BUF_STYLE_FORMAT_ASC, str, strlen(str));
 	} else {
 		PRINT("NULL\n");
 	}

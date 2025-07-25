@@ -609,7 +609,7 @@ bool	CLI_init(void)
 		return false;
 	}
 
-	ret = xTaskCreate(_taskLog, "log", 8192, NULL, 8, NULL);
+	ret = xTaskCreate(_taskLog, "log", 4096, NULL, 8, NULL);
 	if (ret != pdPASS) {
 		//ERROR
 		return false;
