@@ -494,11 +494,13 @@ static bool _vaultRenew(char* token)
 	free(certStr);
 	cJSON_Delete(root);
 
+#if 0	
 	ret = TLS_reload();
 	if (!ret) {
 		ERROR("TLS_reload failed\n");
 		return true;
 	}
+#endif
 
 	return true;
 
