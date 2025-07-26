@@ -28,7 +28,7 @@
 #error This example cannot be used unless HTTPD_WS_SUPPORT is enabled in esp-http-server component configuration
 #endif
 
-#define MAX_SOCKETS_COUNT	8
+#define MAX_SOCKETS_COUNT	3
 
 struct send_arg_t {
 	httpd_handle_t  	hd;

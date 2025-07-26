@@ -37,7 +37,7 @@ static struct {
 	FIFO			logRamFifo;
 	FIFO			logFlashFifo;
 
-	uint8_t			logBuf[8192];
+	uint8_t			logBuf[2048];
 	uint32_t		erasedSector;
 #endif
 } g_cli;
