@@ -135,7 +135,6 @@ reset:
 	const mbedtls_x509_crt* client_cert = mbedtls_ssl_get_peer_cert(ssl);
 
 	if (client_cert) {
-		char cn[256];
 		const mbedtls_x509_name* name = &client_cert->subject;
 
 		uint32_t flags = mbedtls_ssl_get_verify_result(ssl);
@@ -158,9 +157,22 @@ reset:
 
 		while (name) {
 			if (MBEDTLS_OID_CMP(MBEDTLS_OID_AT_CN, &name->oid) == 0) {
-				memcpy(cn, name->val.p, name->val.len);
-				cn[name->val.len] = '\0';
-				INFO("Client CN: %s\n", cn);
+				char 	cert_cn[256];
+				char	client_cn[256];
+
+				memcpy(cert_cn, name->val.p, name->val.len);
+				cert_cn[name->val.len] = '\0';
+				INFO("Client cert CN: %s\n", cert_cn);
+
+				ret = CFG_get(cfg_id_client_cn,  client_cn, sizeof(client_cn));
+				if (ret) {
+					INFO("client_cn: %s\n", client_cn);
+					//if(strcmp(client_cn, cert_cn)) {
+					//	WARN("CN does not match %s\n", cert_cn);
+					//	goto reset;
+					//}
+				}
+
 				break;
 			}
 			name = name->next;
