@@ -22,7 +22,6 @@ static struct {
 } g_timerDb;
 
 int is_leap(int year) {
-    year += 1900;  // Adjust to full year
     return ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0));
 }
 
@@ -41,12 +40,12 @@ int64_t TIME_mktime(tm_t *t)
     uint64_t days = 0;
 
     // Years since 1970
-    for (int year = 70; year < t->year; year++) {
+    for (int year = 1970; year < t->year; year++) {
         days += is_leap(year) ? 366 : 365;
     }
 
     // Months in current year
-    for (int month = 0; month < t->mon; month++) {
+    for (int month = 1; month < t->mon; month++) {
         days += days_in_month[month];
         if (month == 1 && is_leap(t->year)) {
             days += 1;  // February in leap year
