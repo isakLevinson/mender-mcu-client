@@ -34,7 +34,7 @@
 #include "cJSON.h"
 
 
-#define VAULT_ROLE_NAME			"brain-space"
+#define VAULT_ROLE_NAME			"brain-space-all"
 #define VAULT_URL_LOGIN			"/v1/auth/approle/login"
 #define VAULT_URL_LOGIN_CERT	"/v1/auth/cert/login"
 #define VAULT_URL_RENEW			"/v1/pki_int/sign/" VAULT_ROLE_NAME
@@ -87,7 +87,7 @@ static bool _create_csr(mbedtls_pk_context* pKey, unsigned char* csr_buf, size_t
 	};
 
 	san_length = _createSanExt(dns_list, 2, san_ext);
-	INFO_BUF("san_ext",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, san_ext, san_length);
+	TRACE_BUF("san_ext",	PRINT_BUF_STYLE_ASC_SIZE_NL, san_ext, san_length);
 
 	mbedtls_x509write_csr_init(&csr);
 
@@ -134,8 +134,9 @@ static bool _voultCreateCsrJson(char* csr, char* ttl, char* json)
 		}
 		csr++;
 	}
-
-	pJson += sprintf(pJson, "\",\"ttl\":\"%s\"}", ttl);
+	pJson += sprintf(pJson, "\"", ttl);
+	//pJson += sprintf(pJson, ",\"format\":\"pem_bundle\"", ttl);
+	pJson += sprintf(pJson, ",\"ttl\":\"%s\"}", ttl);
 
 	return true;
 }
@@ -233,7 +234,7 @@ static bool _vaultLoginRoleSecret(char* o_pToken)
 	return true;
 
 err:
-	//INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, http_result_size);
+	//INFO_BUF("response",	PRINT_BUF_STYLE_ASC_SIZE_NL, http_result, http_result_size);
 	cJSON* errors = cJSON_GetObjectItem(root, "errors");
 	if (cJSON_IsArray(errors)) {
 		int size = cJSON_GetArraySize(errors);
@@ -279,6 +280,7 @@ static bool _vaultLoginCert(char* o_pToken)
 	}
 
 	sprintf(url, "%s%s", baseUrl, VAULT_URL_LOGIN_CERT);
+	INFO("url: %s\n", url);
 
 	http_result = calloc(1, 2048);
 	if (!http_result) {
@@ -320,7 +322,7 @@ static bool _vaultLoginCert(char* o_pToken)
 	return true;
 
 err:
-	//INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, http_result_size);
+	//INFO_BUF("response",	PRINT_BUF_STYLE_ASC_SIZE_NL, http_result, http_result_size);
 	cJSON* errors = cJSON_GetObjectItem(root, "errors");
 	if (cJSON_IsArray(errors)) {
 		int size = cJSON_GetArraySize(errors);
@@ -363,6 +365,7 @@ static bool _vaultRenew(char* token)
 	char*	json		= NULL;
 	char*	http_result = NULL;
 	cJSON*	root		= NULL;
+	char*	certStr		= NULL;
 
 	ret = CFG_get(cfg_id_vault_url, baseUrl, sizeof(baseUrl));
 	if (!ret) {
@@ -380,7 +383,7 @@ static bool _vaultRenew(char* token)
 		goto err;
 	}
 
-	INFO("csr:\n%s\n", csr_buf);
+	INFO_BUF("CSR",	PRINT_BUF_STYLE_ASC_SIZE_NL, csr_buf, strlen(csr_buf));
 
 	json = calloc(1, 2048);
 	_voultCreateCsrJson(csr_buf, "720h", json);
@@ -388,14 +391,16 @@ static bool _vaultRenew(char* token)
 	csr_buf = NULL;
 
 	INFO("token: %s\n", token);
-	INFO("json:\n%s\n", json);
+	INFO_BUF("JSON",	PRINT_BUF_STYLE_ASC_SIZE_NL, json, strlen(json));
 
 	http_result	= calloc(1, 8192);
 	if (!http_result) {
+		ERROR("http_result alloc failed\n");
 		return false;
 	}
 
 	resultSize = TLS_curl(url, HTTP_METHOD_POST, "X-Vault-Token", token, json, strlen(json), http_result, 8192);
+
 	if (resultSize < 0) {
 		ERROR("TLS_curl failed\n");
 		goto err;
@@ -403,7 +408,7 @@ static bool _vaultRenew(char* token)
 	free(json);
 	json = NULL;
 
-	INFO_BUF("result",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
+	INFO_BUF("result",	PRINT_BUF_STYLE_ASC_SIZE_NL, http_result, resultSize);
 
 	root = cJSON_Parse(http_result);
 	if (root == NULL) {
@@ -412,6 +417,7 @@ static bool _vaultRenew(char* token)
 	}
 
 	free(http_result);
+	http_result = NULL;
 
 	cJSON* data = cJSON_GetObjectItem(root, "data");
 	if (!cJSON_IsObject(data)) {
@@ -426,10 +432,11 @@ static bool _vaultRenew(char* token)
 		goto err;
 	}
 
-	cJSON* ca = cJSON_GetObjectItem(data, "issuing_ca");
-	if (ca) {
-		INFO("CA:\n%s\n", ca->valuestring);
+	cJSON* ica = cJSON_GetObjectItem(data, "issuing_ca");
+	if (ica) {
+		INFO_BUF("ICA",	PRINT_BUF_STYLE_ASC_SIZE_NL | PRINT_BUF_STYLE_FORMAT_ASC, ica->valuestring, strlen(ica->valuestring));
 	}
+#if 0	
 	cJSON* chain = cJSON_GetObjectItem(data, "ca_chain");
 	if (chain) {
 		INFO("CHAIN\n");
@@ -439,13 +446,14 @@ static bool _vaultRenew(char* token)
 			for (int i = 0; i < size; i++) {
 				cJSON* item = cJSON_GetArrayItem(chain, i);
 				if (cJSON_IsString(item)) {
-					INFO("CHAIN %d: %s\n", i, item->valuestring);
+					INFO("CHAIN %d: ", i);
+					INFO_BUF("",	PRINT_BUF_STYLE_ASC_SIZE_NL | PRINT_BUF_STYLE_FORMAT_ASC, item->valuestring, strlen(item->valuestring));
 				}
 			}
 			if (size >= 1) {
 				cJSON* item = cJSON_GetArrayItem(chain, 0);
 				if (cJSON_IsString(item)) {
-					INFO("INTERMEDIATE:\n%s\n", item->valuestring);
+					INFO("ICA:\n%s\n", item->valuestring);
 					//ret = CFG_set(cfg_id_ica_pem, item->valuestring);
 					if (!ret) {
 						ERROR("NVS_set failed\n");
@@ -457,31 +465,42 @@ static bool _vaultRenew(char* token)
 				goto err;
 			}
 		}
-		//INFO_BUF("CHAIN",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, chain->valuestring, strlen(chain->valuestring));
+		//INFO_BUF("CHAIN",	PRINT_BUF_STYLE_ASC_SIZE_NL, chain->valuestring, strlen(chain->valuestring));
 		//		INFO("CHAIN:\n%s\n", chain->valuestring);
 	}
+#endif
+
 	cJSON* key = cJSON_GetObjectItem(data, "private_key");
 	if (key) {
-		INFO("PKEY\n");
-		INFO_BUF("PKEY",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, key->valuestring, strlen(key->valuestring));
-		//		INFO("PKEY:\n%s\n", key->valuestring);
+		INFO_BUF("PKEY",	PRINT_BUF_STYLE_ASC_SIZE_NL | PRINT_BUF_STYLE_FORMAT_ASC, key->valuestring, strlen(key->valuestring));
 	}
 
-	// Print certificate (like jq -r)
-	INFO("CERT:\n%s\n", cert->valuestring);
-	ret = CFG_set(cfg_id_cert_pem, cert->valuestring);
+	INFO_BUF("CERT",	PRINT_BUF_STYLE_ASC_SIZE_NL | PRINT_BUF_STYLE_FORMAT_ASC, cert->valuestring, strlen(cert->valuestring));
+
+	certStr = calloc(1, 4096);
+	if (!certStr) {
+		ERROR("failed to allocate cert buffer\n");
+		goto err;
+	}
+
+	snprintf(certStr, 4096, "%s\n%s", cert->valuestring, ica->valuestring);
+
+	ret = CFG_set(cfg_id_cert_pem, certStr);
 	if (!ret) {
 		ERROR("NVS_set failed\n");
 		goto err;
 	}
 
+	free(certStr);
 	cJSON_Delete(root);
 
+#if 0	
 	ret = TLS_reload();
 	if (!ret) {
 		ERROR("TLS_reload failed\n");
 		return true;
 	}
+#endif
 
 	return true;
 
@@ -491,6 +510,12 @@ err:
 	}
 	if (http_result) {
 		free(http_result);
+	}
+	if (json) {
+		free(json);
+	}
+	if (certStr) {
+		free(certStr);
 	}
 
 	return false;
@@ -531,7 +556,7 @@ static bool dbgVerify(uint8_t argc, char** argv)
 	int     ret;
 	mbedtls_x509_crt cert;
 	mbedtls_x509_crt ca_chain;
-	char	buf[2048];
+	char	buf[4096];
 	char*	ca_pem;
 	uint32_t flags;
 
@@ -544,7 +569,8 @@ static bool dbgVerify(uint8_t argc, char** argv)
 		return true;
 	}
 
-	INFO("CA:\n%s\n", buf);
+	PRINT_BUF("CA",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, strlen(buf));
+
 	if (mbedtls_x509_crt_parse(&ca_chain, (const unsigned char*)buf, strlen(buf) + 1) != 0) {
 		PRINT("Failed to parse root CA cert\n");
 		return true;
@@ -555,7 +581,9 @@ static bool dbgVerify(uint8_t argc, char** argv)
 		ERROR("device's certificate not present\n");
 		return false;
 	}
-	INFO("CERT:\n%s\n", buf);
+
+	PRINT_BUF("CERT",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, strlen(buf));
+
 	if (mbedtls_x509_crt_parse(&cert, (const unsigned char*)buf, strlen(buf) + 1) != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
 		return true;
@@ -568,6 +596,7 @@ static bool dbgVerify(uint8_t argc, char** argv)
 	} else {
 		mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
 		PRINT("Certificate verification failed: %s\n", buf);
+
 	}
 
 	mbedtls_x509_crt_free(&cert);
@@ -601,23 +630,34 @@ static bool dbgCreateCsr(uint8_t argc, char** argv)
 static bool dbgRenew(uint8_t argc, char** argv)
 {
 	bool	ret;
-	char	token[256];
+	char	t[256];
+	char*	token = NULL;
 
-	if (argc < 2) {
-		ret = _vaultLoginRoleSecret(token);
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("t",		ARGS_TYPE_STRING,	0,	"role and secret login",	&token)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (!ret) {
+		return false;
+	}
+
+	if (!token) {
+		token = t;
+		ret = _vaultLoginCert(token);
 		if (!ret) {
 			PRINT("login failed\n");
 			return true;
 		}
-	} else {
-		strcpy(token, argv[2]);
 	}
 
 	PRINT("using token: %s\n", token);
 
 	ret = _vaultRenew(token);
 	if (!ret) {
-		PRINT("reniew failed\n");
+		PRINT("renew failed\n");
 		return true;
 	}
 
@@ -668,7 +708,7 @@ static bool dbgCurl(uint8_t argc, char** argv)
 	char*	header_key		= NULL;
 	char*	header_value	= NULL;
 	bool	isPost			= false;
-	char	http_result[2048];
+	char*	http_result;
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
@@ -698,10 +738,17 @@ static bool dbgCurl(uint8_t argc, char** argv)
 		method = HTTP_METHOD_POST;
 	}
 
-	resultSize = TLS_curl(url, method, header_key, header_value,  data, data_len, http_result, sizeof(http_result));
+	http_result = malloc(8192);
+	if (!http_result) {
+		ERROR("http_result malloc failed\n");
+		return true;
+	}
 
-	PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, resultSize);
-	//PRINT("response:\n%s\n", http_client_result);
+	resultSize = TLS_curl(url, method, header_key, header_value,  data, data_len, http_result, 8192);
+	if (resultSize > 0) {
+		PRINT_BUF("response",	PRINT_BUF_STYLE_ASC_SIZE_NL, http_result, resultSize);
+	}
+	free(http_result);
 
 	return true;
 }

@@ -341,7 +341,7 @@ static bool _init(void)
 	xSemaphoreGive(g_cmd.semaphore);
 
 #if USE_STREAM
-	ret = xTaskCreate(_taskStreamer, "streamer", 8192, NULL, 3, NULL);
+	ret = xTaskCreate(_taskStreamer, "streamer", 4096, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task %s failed\n", "streamer");
 		return false;

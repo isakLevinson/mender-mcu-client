@@ -37,7 +37,7 @@ static struct {
 	FIFO			logRamFifo;
 	FIFO			logFlashFifo;
 
-	uint8_t			logBuf[8192];
+	uint8_t			logBuf[2048];
 	uint32_t		erasedSector;
 #endif
 } g_cli;
@@ -539,11 +539,12 @@ static bool dbgTime(uint8_t argc, char** argv)
 
 	uint32_t	us = t % 1000000;
 	t /= 1000000;
+	int32_t day = TIME_getSec() / 3600/24;
 
 	TIME_strftime(t, "%Y-%m-%d %H:%M:%S", str);
 	PRINT("time from start: %dmS\n", t32);
 	PRINT("%d.%06d\n", (int32_t)t, us);
-	PRINT("%s\n", str);
+	PRINT("%d %s\n", day, str);
 
 	return true;
 }
@@ -609,7 +610,7 @@ bool	CLI_init(void)
 		return false;
 	}
 
-	ret = xTaskCreate(_taskLog, "log", 8192, NULL, 8, NULL);
+	ret = xTaskCreate(_taskLog, "log", 4096, NULL, 8, NULL);
 	if (ret != pdPASS) {
 		//ERROR
 		return false;

@@ -45,7 +45,7 @@
 static struct {
 	esp_app_desc_t	running_app_info;
 	bool			active;
-	char			url[128];
+	char			url[64];
 	char			token[64];
 } g_mender;
 

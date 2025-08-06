@@ -13,6 +13,7 @@
 #include "esp_timer.h"
 #include "esp_system.h"
 
+#include "time.h"
 #include "main.h"
 
 static struct {
@@ -20,7 +21,50 @@ static struct {
 	int64_t	lastUpdated;
 } g_timerDb;
 
-uint64_t TIME_set64(int64_t time)
+int is_leap(int year) {
+    return ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0));
+}
+
+// Number of days in each month
+static const int days_in_month[] = {
+    31, 28, 31, 30, 31, 30,
+    31, 31, 30, 31, 30, 31
+};
+
+int64_t TIME_mktime(tm_t *t)
+{
+    static const int SECONDS_PER_MINUTE = 60;
+    static const int SECONDS_PER_HOUR = 3600;
+    static const int SECONDS_PER_DAY = 86400;
+
+    uint64_t days = 0;
+
+    // Years since 1970
+    for (int year = 1970; year < t->year; year++) {
+        days += is_leap(year) ? 366 : 365;
+    }
+
+    // Months in current year
+    for (int month = 1; month < t->mon; month++) {
+        days += days_in_month[month];
+        if (month == 1 && is_leap(t->year)) {
+            days += 1;  // February in leap year
+        }
+    }
+
+    // Days in current month
+    days += t->day - 1;
+
+    // Convert to seconds
+    uint64_t seconds = days * SECONDS_PER_DAY;
+    seconds += t->hour * SECONDS_PER_HOUR;
+    seconds += t->min * SECONDS_PER_MINUTE;
+    seconds += t->sec;
+
+    return seconds;
+}
+
+int64_t TIME_set64(int64_t time)
 {
 	int64_t t;
 
@@ -45,6 +89,14 @@ void TIME_get64(int64_t* o_pTime)
 	*o_pTime = t - g_timerDb.offset64;
 }
 
+int64_t TIME_getSec(void)
+{
+	int64_t t;
+	TIME_get64(&t);
+
+	return t / 1000000;
+}
+
 int32_t TIME_get32(void)
 {
 	int64_t t;
@@ -56,11 +108,6 @@ int32_t TIME_get32(void)
 
 void TIME_strftime(int64_t epoch, char* format, char* str)
 {
-	// Days per month, non-leap year
-	static const int days_in_month[12] = {
-		31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
-	};
-
 	int year = 1970;
 	int month = 0;
 	int day = 0;
