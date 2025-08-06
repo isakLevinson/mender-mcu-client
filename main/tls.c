@@ -24,6 +24,7 @@
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/x509_csr.h"
+#include "mbedtls/pem.h"
 #include "mbedtls/esp_debug.h"
 #include "mbedtls/error.h"
 #include "mbedtls/oid.h"
@@ -146,12 +147,27 @@ reset:
 
 			ret = mbedtls_x509_crt_verify(client_cert, &g_tls.ca_cert, NULL, NULL, &flags, NULL, NULL);
 			if (ret != 0) {
-				char vrfy_buf[512];
 				mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), "", flags);
 				ERROR("Manual cert verification failed:\n%s", vrfy_buf);
 			} else {
 				INFO("But manual cert verification successful\n");
 			}
+
+			unsigned char pem_buf[4096];
+			size_t pem_len = 0;
+
+			ret = mbedtls_pem_write_buffer(
+				"-----BEGIN CERTIFICATE-----\n",
+				"-----END CERTIFICATE-----\n",
+				client_cert->raw.p, client_cert->raw.len,
+				pem_buf, sizeof(pem_buf), &pem_len
+			);
+			if (ret!=0) {
+				WARN("mbedtls_pem_write_buffer failed -0x%04x\n", -ret);
+			} else {
+				INFO_BUF("Peer cert",	PRINT_BUF_STYLE_ASC_SIZE_NL, pem_buf, pem_len);
+			}
+
 		} else {
 			INFO("Certificate verified successfully!\n");
 		}
@@ -583,7 +599,7 @@ static bool _tlsInit(void)
 	mbedtls_ssl_conf_session_cache(&g_tls.conf, &g_tls.cache, mbedtls_ssl_cache_get, mbedtls_ssl_cache_set);
 #endif
 
-	mbedtls_ssl_conf_ca_chain(&g_tls.conf, g_tls.ca_cert.next, NULL);
+	mbedtls_ssl_conf_ca_chain(&g_tls.conf, &g_tls.ca_cert, NULL);
 	ret = mbedtls_ssl_conf_own_cert(&g_tls.conf, &g_tls.cert, &g_tls.pkey);
 	if (ret != 0) {
 		ERROR("mbedtls_ssl_conf_own_cert returned %d\n", ret);
@@ -687,7 +703,7 @@ static bool _init(void)
 		ERROR("xTimerCreate\n");
 	}
 
-	ret = xTaskCreate(_taskCmd, "tls_cmd", 8192, NULL, 3, NULL);
+	ret = xTaskCreate(_taskCmd, "tls_cmd", 16384, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task tls_cmd failed\n");
 		return false;
