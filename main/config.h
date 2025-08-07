@@ -4,25 +4,26 @@
 
 // *INDENT-OFF*
 #define CFG_LIST(cmd)	\
-	cmd(ssid,			cfg,	NULL)	\
-	cmd(passwd,			cfg,	NULL)	\
-	cmd(sync_dns,		cfg,	NULL)	\
-	cmd(sync_port,		cfg,	NULL)	\
-	cmd(mdns,			cfg,	NULL)	\
+	cmd(ssid,			cfg,	NULL)		\
+	cmd(passwd,			cfg,	NULL)		\
+	cmd(sync_dns,		cfg,	NULL)		\
+	cmd(sync_port,		cfg,	NULL)		\
+	cmd(mdns,			cfg,	NULL)		\
 	cmd(ota_url,		cfg,	CONFIG_MENDER_SERVER_HOST)	\
 	cmd(ota_token,		cfg,	CONFIG_MENDER_SERVER_TENANT_TOKEN)	\
-	cmd(cert_pem,		cfg,	NULL)	\
-	cmd(cert_key,		cfg,	NULL)	\
-	cmd(ota_updated,	cfg,	"0")	\
-	cmd(sn,				null,	NULL)	\
-	cmd(manufact_date,	null,	NULL)	\
-	cmd(hw_revision,	null,	NULL)	\
-	cmd(model,			null,	NULL)	\
-	cmd(ca_pem,			cfg,	NULL)	\
-	cmd(vault_url,		cfg,	NULL)	\
-	cmd(vault_role,		cfg,	NULL)	\
-	cmd(vault_secret,	cfg,	NULL)	\
-	cmd(vault_token,	null,	NULL)	\
+	cmd(cert_pem,		cfg,	NULL)		\
+	cmd(cert_key,		cfg,	NULL)		\
+	cmd(ota_updated,	cfg,	"0")		\
+	cmd(sn,				null,	NULL)		\
+	cmd(manufact_date,	null,	NULL)		\
+	cmd(hw_revision,	null,	NULL)		\
+	cmd(model,			null,	NULL)		\
+	cmd(ca_pem,			cfg,	NULL)		\
+	cmd(vault_url,		cfg,	NULL)		\
+	cmd(vault_role,		cfg,	NULL)		\
+	cmd(vault_secret,	cfg,	NULL)		\
+	cmd(vault_token,	null,	NULL)		\
+	cmd(client_cn,		null,	"client")	\	
 // *INDENT-ON*
 
 #define CFG_ENUM(id, ns, def)	cfg_id_ ## id,

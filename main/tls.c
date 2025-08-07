@@ -24,6 +24,7 @@
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/x509_csr.h"
+#include "mbedtls/pem.h"
 #include "mbedtls/esp_debug.h"
 #include "mbedtls/error.h"
 #include "mbedtls/oid.h"
@@ -135,7 +136,6 @@ reset:
 	const mbedtls_x509_crt* client_cert = mbedtls_ssl_get_peer_cert(ssl);
 
 	if (client_cert) {
-		char cn[256];
 		const mbedtls_x509_name* name = &client_cert->subject;
 
 		uint32_t flags = mbedtls_ssl_get_verify_result(ssl);
@@ -146,28 +146,81 @@ reset:
 
 			ret = mbedtls_x509_crt_verify(client_cert, &g_tls.ca_cert, NULL, NULL, &flags, NULL, NULL);
 			if (ret != 0) {
-				char vrfy_buf[512];
 				mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), "", flags);
 				ERROR("Manual cert verification failed:\n%s", vrfy_buf);
 			} else {
 				INFO("But manual cert verification successful\n");
 			}
+
+			unsigned char pem_buf[4096];
+			size_t pem_len = 0;
+
+			ret = mbedtls_pem_write_buffer(
+				"-----BEGIN CERTIFICATE-----\n",
+				"-----END CERTIFICATE-----\n",
+				client_cert->raw.p, client_cert->raw.len,
+				pem_buf, sizeof(pem_buf), &pem_len
+			);
+			if (ret!=0) {
+				WARN("mbedtls_pem_write_buffer failed -0x%04x\n", -ret);
+			} else {
+				INFO_BUF("Peer cert",	PRINT_BUF_STYLE_ASC_SIZE_NL, pem_buf, pem_len);
+			}
+
 		} else {
 			INFO("Certificate verified successfully!\n");
 		}
 
 		while (name) {
 			if (MBEDTLS_OID_CMP(MBEDTLS_OID_AT_CN, &name->oid) == 0) {
-				memcpy(cn, name->val.p, name->val.len);
-				cn[name->val.len] = '\0';
-				INFO("Client CN: %s\n", cn);
+				char 	cert_cn[256];
+				char	client_cn[256];
+
+				memcpy(cert_cn, name->val.p, name->val.len);
+				cert_cn[name->val.len] = '\0';
+				INFO("Client cert CN: %s\n", cert_cn);
+
+				ret = CFG_get(cfg_id_client_cn,  client_cn, sizeof(client_cn));
+				if (ret) {
+					//INFO("client_cn: %s\n", client_cn);
+					if(strcmp(client_cn, cert_cn)) {
+						WARN("CN does not match %s\n", client_cn);
+						xSemaphoreGive(g_tls.mutex);
+						goto reset;
+					}
+				}
+
 				break;
 			}
 			name = name->next;
 		}
 
 		mbedtls_x509_time* exp = &client_cert->valid_to;
+		tm_t t = {
+			.year	= exp->year,
+			.mon	= exp->mon,
+			.day	= exp->day,
+			.hour	= exp->hour,
+			.min	= exp->min,
+			.sec	= exp->sec,
+		};
+	
+		int32_t sec = TIME_mktime(&t);
+		INFO("cert sec: %d\n", sec);
+		int32_t cert_day = TIME_mktime(&t) / 3600/24;
+		int32_t day = TIME_getSec() / 3600/24;
+
 		INFO("Certificate expires on: %04d-%02d-%02d %02d:%02d:%02d\n", exp->year, exp->mon, exp->day, exp->hour, exp->min, exp->sec);
+
+		INFO("cert day: %d, local day: %d\n", cert_day, day);
+		if (day >= cert_day) {
+			WARN("Cert is expired\n");
+			xSemaphoreGive(g_tls.mutex);
+			goto reset;
+		} else {
+			INFO("remaining %d days\n", (cert_day-day));
+		}
+
 	} else {
 		WARN("no client certificate received\n");
 	}
@@ -583,7 +636,7 @@ static bool _tlsInit(void)
 	mbedtls_ssl_conf_session_cache(&g_tls.conf, &g_tls.cache, mbedtls_ssl_cache_get, mbedtls_ssl_cache_set);
 #endif
 
-	mbedtls_ssl_conf_ca_chain(&g_tls.conf, g_tls.ca_cert.next, NULL);
+	mbedtls_ssl_conf_ca_chain(&g_tls.conf, &g_tls.ca_cert, NULL);
 	ret = mbedtls_ssl_conf_own_cert(&g_tls.conf, &g_tls.cert, &g_tls.pkey);
 	if (ret != 0) {
 		ERROR("mbedtls_ssl_conf_own_cert returned %d\n", ret);
@@ -687,7 +740,7 @@ static bool _init(void)
 		ERROR("xTimerCreate\n");
 	}
 
-	ret = xTaskCreate(_taskCmd, "tls_cmd", 8192, NULL, 3, NULL);
+	ret = xTaskCreate(_taskCmd, "tls_cmd", 16384, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task tls_cmd failed\n");
 		return false;

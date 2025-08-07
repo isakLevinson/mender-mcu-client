@@ -749,7 +749,7 @@ DEBUG_MENU_START(g_menu)
 		DEBUG_MENU_CMD("wssSend",           NULL,		NULL, dbgWssSend)
 		DEBUG_MENU_CMD("broadcastUdpTime",	NULL,		NULL, dbgBroadcastTime)
 		DEBUG_MENU_CMD("ap",	          	"<0/1>",    NULL, dbgAp)
-		DEBUG_MENU_CMD("config",          	"<0/1>",    NULL, dbgConfig)
+		DEBUG_MENU_CMD("cfg", 	         	"<0/1>",    NULL, dbgConfig)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
