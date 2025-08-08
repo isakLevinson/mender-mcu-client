@@ -2,31 +2,35 @@
 
 #include <sys_def.h>
 
+typedef enum {
+	config_type_factory,
+	config_type_mandatory,
+	config_type_optional,
+	config_type_locked,
+} config_type_t;
+
 // *INDENT-OFF*
 #define CFG_LIST(cmd)	\
-	cmd(ssid,			cfg,	NULL)		\
-	cmd(passwd,			cfg,	NULL)		\
-	cmd(sync_dns,		cfg,	NULL)		\
-	cmd(sync_port,		cfg,	NULL)		\
-	cmd(mdns,			cfg,	NULL)		\
-	cmd(ota_url,		cfg,	CONFIG_MENDER_SERVER_HOST)	\
-	cmd(ota_token,		cfg,	CONFIG_MENDER_SERVER_TENANT_TOKEN)	\
-	cmd(cert_pem,		cfg,	NULL)		\
-	cmd(cert_key,		cfg,	NULL)		\
-	cmd(ota_updated,	cfg,	"0")		\
-	cmd(sn,				null,	NULL)		\
-	cmd(manufact_date,	null,	NULL)		\
-	cmd(hw_revision,	null,	NULL)		\
-	cmd(model,			null,	NULL)		\
-	cmd(ca_pem,			cfg,	NULL)		\
-	cmd(vault_url,		cfg,	NULL)		\
-	cmd(vault_role,		cfg,	NULL)		\
-	cmd(vault_secret,	cfg,	NULL)		\
-	cmd(vault_token,	null,	NULL)		\
-	cmd(client_cn,		null,	"client")	\	
+	cmd(ssid,			cfg,	mandatory,	NULL)	\
+	cmd(passwd,			cfg,	mandatory,	NULL)	\
+	cmd(sync_dns,		cfg,	optional,	NULL)	\
+	cmd(sync_port,		cfg,	optional,	NULL)	\
+	cmd(mdns,			cfg,	optional,	NULL)	\
+	cmd(ota_url,		cfg,	mandatory,	CONFIG_MENDER_SERVER_HOST)	\
+	cmd(ota_token,		cfg,	mandatory,	CONFIG_MENDER_SERVER_TENANT_TOKEN)	\
+	cmd(ota_updated,	cfg,	locked,		"0")		\
+	cmd(cert_pem,		cfg,	mandatory,	NULL)		\
+	cmd(cert_key,		cfg,	mandatory,	NULL)		\
+	cmd(sn,				null,	mandatory,	NULL)		\
+	cmd(manufact_date,	null,	mandatory,	NULL)		\
+	cmd(hw_revision,	null,	mandatory,	NULL)		\
+	cmd(model,			null,	mandatory,	NULL)		\
+	cmd(ca_pem,			cfg,	optional,	NULL)		\
+	cmd(vault_url,		cfg,	optional,	NULL)		\
+	cmd(client_cn,		null,	mandatory,	"client")	\	
 // *INDENT-ON*
 
-#define CFG_ENUM(id, ns, def)	cfg_id_ ## id,
+#define CFG_ENUM(id, ns, t, def)	cfg_id_ ## id,
 
 typedef enum {
 	CFG_LIST(CFG_ENUM)

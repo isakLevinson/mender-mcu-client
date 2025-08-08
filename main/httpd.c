@@ -737,7 +737,7 @@ bool wss_init(void)
 	DBG_TREE_add("/", g_menu);
 
 	// Start the httpd server
-	INFO("Starting server");
+	INFO("Starting HTTP server\n");
 
 	ret = CFG_get(cfg_id_ota_updated,  buf, sizeof(buf));
 	if (ret) {

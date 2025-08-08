@@ -24,6 +24,14 @@
 
 #define NS_CFG	"cfg"
 
+typedef struct {
+	char*	key;
+	char*	namespace;
+	char*	def;
+	char*	temp;
+	uint8_t	count;
+} cfg_item_t;
+
 enum {
 	namespace_null,
 	namespace_cfg,
@@ -34,16 +42,9 @@ char* const g_namespaces[] = {
 	"cfg",
 };
 
-typedef struct {
-	char*	key;
-	char*	namespace;
-	char*	def;
-	char*	temp;
-} cfg_arr_t;
+#define CFG_ARR(id, ns, t, d)	[cfg_id_ ## id] = {.key = #id, .namespace = g_namespaces[namespace_ ## ns], .def = d},
 
-#define CFG_ARR(id, ns, d)	[cfg_id_ ## id] = {.key = #id, .namespace = g_namespaces[namespace_ ## ns], .def = d},
-
-static cfg_arr_t g_id[] = {
+static cfg_item_t g_id[] = {
 	CFG_LIST(CFG_ARR)
 	{
 		.key = NULL, .def = NULL, .temp = NULL,
@@ -105,6 +106,15 @@ int32_t _findId(char* pName)
 	return -1;
 }
 
+cfg_item_t* _findEntry(char* pName)
+{
+	int32_t	id =  _findId(pName);
+	if (id < 0) {
+		return NULL;
+	}
+	return &g_id[id];
+}
+
 static bool _setTemporary(cfg_id_t id,  char* val)
 {
 	if (g_id[id].temp) {
@@ -126,6 +136,15 @@ static bool _setTemporary(cfg_id_t id,  char* val)
 	return true;
 }
 
+static void _clearCount(void)
+{
+	uint8_t i;
+
+	for (i=0; i<ARR_SIZE(g_id); i++) {
+		g_id[i].count = 0;
+	}
+}
+
 PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 {
 	int ret;
@@ -139,6 +158,15 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 		return PARSE_STATUS_SYNTAX_ERROR;
 	}
 
+	_clearCount();
+
+	INFO("scanning fiel;ds\n");
+	cJSON_ArrayForEach(item, root) {
+		if (cJSON_IsString(item)) {
+			INFO("%-16s: %s\n", item->string, item->valuestring);
+		}
+	}
+/*
 	cJSON_ArrayForEach(item, root) {
 		if (cJSON_IsString(item)) {
 			INFO("%-16s: %s\n", item->string, item->valuestring);
@@ -149,6 +177,7 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 			}
 		}
 	}
+*/
 
 #if 0
 	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");

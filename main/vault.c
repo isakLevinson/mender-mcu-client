@@ -150,6 +150,7 @@ static void _print_cert_dates(const mbedtls_x509_crt* cert)
 	INFO("%04d-%02d-%02d %02d:%02d:%02d\n", to->year, to->mon, to->day, to->hour, to->min, to->sec);
 }
 
+#if 0
 static bool _vaultLoginRoleSecret(char* o_pToken)
 {
 	bool	ret;
@@ -263,6 +264,7 @@ err:
 	}
 	return false;
 }
+#endif
 
 static bool _vaultLoginCert(char* o_pToken)
 {
@@ -682,7 +684,9 @@ static bool dbgLogin(uint8_t argc, char** argv)
 	}
 
 	if (isRole) {
-		ret = _vaultLoginRoleSecret(token);
+		ERROR("not supported\n");
+		return false;
+		//ret = _vaultLoginRoleSecret(token);
 	} else {
 		ret = _vaultLoginCert(token);
 	}
