@@ -720,6 +720,12 @@ bool wss_init(void)
 	esp_err_t	err;
 	char		buf[32];
 
+#if (HTTP_UNSECURE == 0)
+	char*	ca_pem	= NULL;
+	char*	dev_pem	= NULL;
+	char*	pkey	= NULL;
+#endif
+
 	httpd_uri_t uri_rest = {
 		.uri        = REST_HANDLER_BASE_URI "*",
 		.method     = HTTP_POST,
@@ -759,23 +765,40 @@ bool wss_init(void)
 #if (HTTP_UNSECURE == 0)
 	httpd_ssl_config_t conf = HTTPD_SSL_CONFIG_DEFAULT();
 
-	char*	ca_pem	= calloc(1, 2048);
-	char*	dev_pem	= calloc(1, 2048);
-	char*	pkey	= calloc(1, 2048);
+	ca_pem	= calloc(1, 2048);
+	if (!ca_pem) {
+		ERROR("failed to allocate ca_pem\n");
+		goto err;
+	}
+
+	dev_pem	= calloc(1, 4096);
+	if (!dev_pem) {
+		ERROR("failed to allocate dev_pem\n");
+		goto err;
+	}
+
+	pkey	= calloc(1, 2048);
+	if (!pkey) {
+		ERROR("failed to allocate pkey\n");
+		goto err;
+	}
 
 	ret = CFG_get(cfg_id_ca_pem, ca_pem, 2048);
 	if (!ret) {
-		return false;
+		WARN("CA not set\n");
+		goto err;
 	}
 
-	ret = CFG_get(cfg_id_cert_pem, dev_pem, 2048);
+	ret = CFG_get(cfg_id_cert_pem, dev_pem, 4096);
 	if (!ret) {
-		return false;
+		WARN("Cert not set\n");
+		goto err;
 	}
 
 	ret = CFG_get(cfg_id_cert_key, pkey, 2048);
 	if (!ret) {
-		return false;
+		WARN("KEY not set\n");
+		goto err;
 	}
 
 	conf.cacert_pem = (const uint8_t*)ca_pem;
@@ -793,14 +816,22 @@ bool wss_init(void)
 	conf.httpd.global_user_ctx = keep_alive;
 	conf.httpd.max_open_sockets = max_clients;
 
+	INFO("cacert_len    : %d\n", conf.cacert_len);
+	INFO("servercert_len: %d\n", conf.servercert_len);
+	INFO("prvtkey_len   : %d\n", conf.prvtkey_len);
+
 	err = httpd_ssl_start(&g_server.handle, &conf);
 	free(ca_pem);
 	free(dev_pem);
 	free(pkey);
 
+	ca_pem	= NULL;
+	dev_pem	= NULL;
+	pkey	= NULL;
+
 	if (ESP_OK != err) {
 		ERROR("httpd_ssl_start %s\n", ESP_getErrStr(err));
-		return false;
+		goto err;
 	}
 
 #else
@@ -809,16 +840,17 @@ bool wss_init(void)
 	conf.open_fn = wss_open_fd;
 	conf.close_fn = wss_close_fd;
 	conf.uri_match_fn = uri_match;
+	conf.stack_size = 8192;
 
 	err = httpd_start(&g_server.handle, &conf);
 	if (ESP_OK != err) {
 		ERROR("Error starting server!\n");
-		return NULL;
+		return false;
 	}
 #endif
 
 	// Set URI handlers
-	INFO("Registering URI handlers");
+	INFO("Registering URI handlers\n");
 #if USE_WSS
 	httpd_register_uri_handler(g_server.handle, &uri_ws);
 	httpd_register_uri_handler(g_server.handle, &uri_events);
@@ -829,6 +861,23 @@ bool wss_init(void)
 	httpd_register_uri_handler(g_server.handle, &uri_rest);
 #endif
 	return true;
+
+#if (HTTP_UNSECURE == 0)
+	err:
+	if (ca_pem) {
+		free(ca_pem);
+	}
+
+	if (dev_pem) {
+		free(dev_pem);
+	}
+
+	if (pkey) {
+		free(pkey);
+	}
+
+	return false;
+#endif
 }
 
 #endif

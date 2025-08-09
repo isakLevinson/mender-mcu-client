@@ -160,12 +160,12 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 
 	_clearCount();
 
-	INFO("scanning fiel;ds\n");
-	cJSON_ArrayForEach(item, root) {
-		if (cJSON_IsString(item)) {
-			INFO("%-16s: %s\n", item->string, item->valuestring);
-		}
-	}
+	INFO("scanning fields\n");
+	//cJSON_ArrayForEach(item, root) {
+	//	if (cJSON_IsString(item)) {
+	//		INFO("%-16s: %s\n", item->string, item->valuestring);
+	//	}
+	//}
 /*
 	cJSON_ArrayForEach(item, root) {
 		if (cJSON_IsString(item)) {
@@ -370,11 +370,6 @@ bool CFG_del(cfg_id_t id)
 		}
 	}
 
-	return true;
-}
-
-static bool dbgStatus(uint8_t argc, char** argv)
-{
 	return true;
 }
 
@@ -653,7 +648,6 @@ static bool dbgDel(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("config", NULL)
-		DEBUG_MENU_CMD("status",    	NULL,		NULL, dbgStatus)
 		DEBUG_MENU_CMD("json",	    	NULL,		NULL, dbgJson)
 		DEBUG_MENU_CMD("config",		"<json>",	NULL, dbgConfig)
 		DEBUG_MENU_CMD("default",		NULL,		NULL, dbgDefault)
