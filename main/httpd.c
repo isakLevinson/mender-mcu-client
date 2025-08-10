@@ -802,11 +802,11 @@ bool wss_init(void)
 	}
 
 	conf.cacert_pem = (const uint8_t*)ca_pem;
-	conf.cacert_len = strlen(ca_pem);
+	conf.cacert_len = strlen(ca_pem) + 1;
 	conf.servercert = (const uint8_t*)dev_pem;
-	conf.servercert_len = strlen(dev_pem);
+	conf.servercert_len = strlen(dev_pem) + 1;
 	conf.prvtkey_pem	= (const uint8_t*)pkey;
-	conf.prvtkey_len	= strlen(pkey);
+	conf.prvtkey_len	= strlen(pkey) + 1;
 
 	conf.httpd.uri_match_fn = uri_match;
 	conf.httpd.open_fn = wss_open_fd;
