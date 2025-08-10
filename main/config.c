@@ -29,6 +29,7 @@ typedef struct {
 	char*	namespace;
 	char*	def;
 	char*	temp;
+	config_type_t	type;
 	uint8_t	count;
 } cfg_item_t;
 
@@ -42,7 +43,12 @@ char* const g_namespaces[] = {
 	"cfg",
 };
 
-#define CFG_ARR(id, ns, t, d)	[cfg_id_ ## id] = {.key = #id, .namespace = g_namespaces[namespace_ ## ns], .def = d},
+#define CFG_ARR(id, ns, t, d)	[cfg_id_ ## id] = {	\
+	.key = #id,	\
+	.namespace = g_namespaces[namespace_ ## ns],	\
+	.def = d,	\
+	.type = config_type_ ## t,	\
+},
 
 static cfg_item_t g_id[] = {
 	CFG_LIST(CFG_ARR)
@@ -94,16 +100,42 @@ static int32_t _findPartialId(char* key)
 
 int32_t _findId(char* pName)
 {
-	uint8_t	i = 1 ; // first one is "INVALID"
+	uint8_t	i;
 
-	while (g_id[i].key) {
+	for (i = 0; i < cfg_id_last; i++) {
 		if (!strcmp(g_id[i].key, pName)) {
 			return i;
 		}
-		i++;
 	}
 
 	return -1;
+}
+
+cfg_status_t _checkConfigValidity(void)
+{
+	uint8_t	i;
+
+	for (i = 0; i < cfg_id_last; i++) {
+		INFO("%-16s: %2d %d\n", g_id[i].key, g_id[i].type, g_id[i].count);
+		if (g_id[i].count > 1) {
+			ERROR("more than one %s\n", g_id[i].key);
+			return cfg_status_syntax_error;
+		}
+
+		if ((g_id[i].namespace) && (g_id[i].type == config_type_mandatory) && (!g_id[i].count)) {
+			ERROR("missing mandatory param %s\n", g_id[i].key);
+			return cfg_status_missing_param;
+		}
+
+		if ((g_id[i].type != config_type_mandatory) && (g_id[i].type != config_type_optional)) {
+			if (g_id[i].count) {
+				ERROR("no allowed param %s\n", g_id[i].key);
+				return cfg_status_unsupported_param;
+			}
+		}
+	}
+
+	return cfg_status_ok;
 }
 
 cfg_item_t* _findEntry(char* pName)
@@ -145,9 +177,11 @@ static void _clearCount(void)
 	}
 }
 
-PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
+cfg_status_t CFG_parseWssCommand(char* pStr, size_t size)
 {
 	int ret;
+	cfg_status_t status;
+
 	cJSON* root = NULL;
 	const cJSON *item = NULL;
 	const cJSON* object = NULL;
@@ -155,17 +189,30 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 	root = cJSON_ParseWithLength(pStr, size);
 	if (!root) {
 		WARN("json parse error\n");
-		return PARSE_STATUS_SYNTAX_ERROR;
+		status = cfg_status_syntax_error;
+		goto end;
 	}
 
 	_clearCount();
 
-	INFO("scanning fields\n");
-	//cJSON_ArrayForEach(item, root) {
-	//	if (cJSON_IsString(item)) {
-	//		INFO("%-16s: %s\n", item->string, item->valuestring);
-	//	}
-	//}
+    INFO("scanning fields\n");
+    cJSON_ArrayForEach(item, root) {
+        if (cJSON_IsString(item)) {
+            cfg_item_t*  cfg = _findEntry(item->string);
+
+            if (cfg) {
+                cfg->count++;
+                INFO("%s: %d\n", cfg->key, cfg->type);
+            } else {
+                WARN("unrecognized param %s\n", item->string);
+				status = cfg_status_missing_param;
+				goto end;
+            }
+        }
+    }
+
+	status = _checkConfigValidity();
+
 /*
 	cJSON_ArrayForEach(item, root) {
 		if (cJSON_IsString(item)) {
@@ -237,16 +284,19 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 	}
 #endif
 
-	INFO("CFG_parseWssCommand: PARSE_STATUS_OK\n");
-
-	cJSON_Delete(root);
-
-	ret = xTimerStart(g_cfg.timer, 0);
-	if (pdPASS != ret) {
-		ERROR("failed to start timer\n");
+end:
+	if (root) {
+		cJSON_Delete(root);
 	}
 
-	return PARSE_STATUS_OK;
+	if (cfg_status_ok == status) {
+		ret = xTimerStart(g_cfg.timer, 0);
+		if (pdPASS != ret) {
+			ERROR("failed to start timer\n");
+		}
+	}
+	
+	return status;
 }
 
 bool CFG_default(void)

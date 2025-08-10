@@ -467,7 +467,7 @@ static esp_err_t _config_handler(httpd_req_t* req)
 {
 	//esp_err_t ret;
 	bool    		ret;
-	PARSE_STATUS	status;
+	cfg_status_t	status;
 	char    		buf[2048];
 	bool    		validSsid;
 	bool    		validPasswd;
@@ -498,23 +498,23 @@ static esp_err_t _config_handler(httpd_req_t* req)
 	INFO_BUF("/config POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
 	status = CFG_parseWssCommand(buf, req->content_len);
 	switch (status) {
-		case PARSE_STATUS_OK:
-			pResp = "OK";
+		case cfg_status_ok:
+			pResp = "OK\n";
 			break;
-		case PARSE_STATUS_SYNTAX_ERROR:
-			pResp = "SYNTAX_ERROR";
+		case cfg_status_syntax_error:
+			pResp = "SYNTAX_ERROR\n";
 			break;
-		case PARSE_STATUS_UNSUPPORTED_PARAM:
-			pResp = "UNSUPPORTED_PARAM";
+		case cfg_status_unsupported_param:
+			pResp = "UNSUPPORTED_PARAM\n";
 			break;
-		case PARSE_STATUS_MISSING_PARAM:
-			pResp = "MISSING_PARAM";
+		case cfg_status_missing_param:
+			pResp = "MISSING_PARAM\n";
 			break;
-		case PARSE_STATUS_INVALID_CREDENTIAL:
-			pResp = "INVALID_CREDENTIAL";
+		case cfg_status_invalid_credentials:
+			pResp = "INVALID_CREDENTIAL\n";
 			break;
 		default:
-			pResp = "INTERNAL_ERROR";
+			pResp = "INTERNAL_ERROR\n";
 	}
 	if (!ret) {
 		pResp = "ERROR\n";

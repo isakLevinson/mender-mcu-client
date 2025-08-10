@@ -11,6 +11,11 @@ typedef enum {
 
 // *INDENT-OFF*
 #define CFG_LIST(cmd)	\
+	cmd(sn,				null,	locked,		NULL)	\
+	cmd(manufact_date,	null,	locked,		NULL)	\
+	cmd(hw_revision,	null,	locked,		NULL)	\
+	cmd(model,			null,	locked,		NULL)	\
+	cmd(ota_updated,	cfg,	locked,		"0")	\
 	cmd(ssid,			cfg,	mandatory,	NULL)	\
 	cmd(passwd,			cfg,	mandatory,	NULL)	\
 	cmd(sync_dns,		cfg,	optional,	NULL)	\
@@ -18,13 +23,8 @@ typedef enum {
 	cmd(mdns,			cfg,	optional,	NULL)	\
 	cmd(ota_url,		cfg,	mandatory,	CONFIG_MENDER_SERVER_HOST)	\
 	cmd(ota_token,		cfg,	mandatory,	CONFIG_MENDER_SERVER_TENANT_TOKEN)	\
-	cmd(ota_updated,	cfg,	locked,		"0")		\
-	cmd(cert_pem,		cfg,	mandatory,	NULL)		\
-	cmd(cert_key,		cfg,	mandatory,	NULL)		\
-	cmd(sn,				null,	mandatory,	NULL)		\
-	cmd(manufact_date,	null,	mandatory,	NULL)		\
-	cmd(hw_revision,	null,	mandatory,	NULL)		\
-	cmd(model,			null,	mandatory,	NULL)		\
+	cmd(cert_pem,		cfg,	optional,	NULL)		\
+	cmd(cert_key,		cfg,	optional,	NULL)		\
 	cmd(ca_pem,			cfg,	optional,	NULL)		\
 	cmd(vault_url,		cfg,	optional,	NULL)		\
 	cmd(client_cn,		null,	mandatory,	"client")	\	
@@ -38,12 +38,12 @@ typedef enum {
 } cfg_id_t;
 
 typedef enum {
-	PARSE_STATUS_OK,
-	PARSE_STATUS_SYNTAX_ERROR,
-	PARSE_STATUS_MISSING_PARAM,
-	PARSE_STATUS_UNSUPPORTED_PARAM,
-	PARSE_STATUS_INVALID_CREDENTIAL,
-} PARSE_STATUS;
+	cfg_status_ok,
+	cfg_status_syntax_error,
+	cfg_status_missing_param,
+	cfg_status_unsupported_param,
+	cfg_status_invalid_credentials,
+} cfg_status_t;
 
 typedef enum {
 	cfg_location_invalid,
@@ -55,7 +55,7 @@ typedef enum {
 } cfg_location_t;
 
 void		 CFG_init(void);
-PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size);
+cfg_status_t CFG_parseWssCommand(char* pStr, size_t size);
 bool		 CFG_default(void);
 
 bool CFG_get(cfg_id_t id,  char* val, size_t maxSize);
