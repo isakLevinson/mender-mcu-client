@@ -28,6 +28,7 @@ typedef enum {
 	cmd(ca_pem,			cfg,	optional,	NULL)		\
 	cmd(vault_url,		cfg,	optional,	NULL)		\
 	cmd(client_cn,		null,	mandatory,	"client")	\	
+
 // *INDENT-ON*
 
 #define CFG_ENUM(id, ns, t, def)	cfg_id_ ## id,

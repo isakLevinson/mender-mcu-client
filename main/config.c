@@ -138,6 +138,7 @@ cfg_status_t _checkConfigValidity(void)
 	return cfg_status_ok;
 }
 
+
 cfg_item_t* _findEntry(char* pName)
 {
 	int32_t	id =  _findId(pName);
@@ -195,7 +196,7 @@ cfg_status_t CFG_parseWssCommand(char* pStr, size_t size)
 
 	_clearCount();
 
-    INFO("scanning fields\n");
+    INFO("validating fields\n");
     cJSON_ArrayForEach(item, root) {
         if (cJSON_IsString(item)) {
             cfg_item_t*  cfg = _findEntry(item->string);
@@ -213,18 +214,17 @@ cfg_status_t CFG_parseWssCommand(char* pStr, size_t size)
 
 	status = _checkConfigValidity();
 
-/*
-	cJSON_ArrayForEach(item, root) {
-		if (cJSON_IsString(item)) {
-			INFO("%-16s: %s\n", item->string, item->valuestring);
-			ret = CFG_setByName(item->string, item->valuestring);
-			if (!ret) {
-				ERROR("unexpected key %s\n", item->string);
-				return PARSE_STATUS_UNSUPPORTED_PARAM;
+	if (cfg_status_ok == status) {
+		cJSON_ArrayForEach(item, root) {
+			if (cJSON_IsString(item)) {
+				ret = CFG_setByName(item->string, item->valuestring);
+				if (!ret) {
+					status = cfg_status_syntax_error;
+					goto end;
+				}
 			}
 		}
 	}
-*/
 
 #if 0
 	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");
