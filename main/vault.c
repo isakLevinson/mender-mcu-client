@@ -143,11 +143,54 @@ static bool _voultCreateCsrJson(char* csr, char* ttl, char* json)
 
 static void _print_cert_dates(const mbedtls_x509_crt* cert)
 {
+	tm_t	t;
+	int32_t	from_days;
+	int32_t	to_days;
+
 	const mbedtls_x509_time* from = &cert->valid_from;
 	const mbedtls_x509_time* to   = &cert->valid_to;
 
-	INFO("%04d-%02d-%02d %02d:%02d:%02d - ", from->year, from->mon, from->day, from->hour, from->min, from->sec);
-	INFO("%04d-%02d-%02d %02d:%02d:%02d\n", to->year, to->mon, to->day, to->hour, to->min, to->sec);
+	t.year	= from->year;
+	t.mon	= from->mon;
+	t.day	= from->day;
+	t.hour	= from->hour;
+	t.min	= from->min;
+	t.sec	= from->sec;
+
+	from_days = TIME_mktime(&t) / 3600/24;
+
+	t.year	= to->year;
+	t.mon	= to->mon;
+	t.day	= to->day;
+	t.hour	= to->hour;
+	t.min	= to->min;
+	t.sec	= to->sec;
+
+	to_days = TIME_mktime(&t) / 3600/24;
+
+	PRINT("%04d-%02d-%02d %02d:%02d:%02d - ", from->year, from->mon, from->day, from->hour, from->min, from->sec);
+	PRINT("%04d-%02d-%02d %02d:%02d:%02d ", to->year, to->mon, to->day, to->hour, to->min, to->sec);
+	PRINT("%d - %d (%d)\n", from_days, to_days, to_days - from_days);
+}
+
+static void _printErrors(cJSON* root)
+{
+	cJSON* errors = cJSON_GetObjectItem(root, "errors");
+	if (!errors) {
+		return;
+	}
+
+	if (!cJSON_IsArray(errors)) {
+		return;
+	}
+
+	int size = cJSON_GetArraySize(errors);
+	for (int i = 0; i < size; i++) {
+		cJSON* item = cJSON_GetArrayItem(errors, i);
+		if (cJSON_IsString(item)) {
+			ERROR(" <%s> ", item->valuestring);
+		}
+	}
 }
 
 #if 0
@@ -235,27 +278,10 @@ static bool _vaultLoginRoleSecret(char* o_pToken)
 	return true;
 
 err:
-	//INFO_BUF("response",	PRINT_BUF_STYLE_ASC_SIZE_NL, http_result, http_result_size);
-	cJSON* errors = cJSON_GetObjectItem(root, "errors");
-	if (cJSON_IsArray(errors)) {
-		int size = cJSON_GetArraySize(errors);
-		for (int i = 0; i < size; i++) {
-			cJSON* item = cJSON_GetArrayItem(errors, i);
-			if (cJSON_IsString(item)) {
-				ERROR(" <%s> ", item->valuestring);
-			}
-		}
-		//ERROR("\n%d\n", size);
-	} else {
-		ERROR("errors field is not an array\n");
-		//		char *printed_json = cJSON_Print(root);  // Pretty print with indentation
-		//			if (printed_json) {
-		//				INFO("Full JSON Content:\n%s\n", printed_json);
-		//				free(printed_json);
-		//			}
-	}
+	//INFO_BUF("response",	PRINT_BUF_STYLE_ASC_HEX_SIZE_NL, http_result, http_result_size);
 
 	if (root) {
+		_printErrors(root);
 		cJSON_Delete(root);
 	}
 
@@ -320,6 +346,7 @@ static bool _vaultLoginCert(char* o_pToken)
 	}
 
 	free(http_result);
+
 	cJSON_Delete(root);
 	return true;
 
@@ -345,6 +372,7 @@ err:
 	}
 
 	if (root) {
+		_printErrors(root);
 		cJSON_Delete(root);
 	}
 
@@ -508,6 +536,7 @@ static bool _vaultRenew(char* token)
 
 err:
 	if (root) {
+		_printErrors(root);
 		cJSON_Delete(root);
 	}
 	if (http_result) {
@@ -523,7 +552,7 @@ err:
 	return false;
 }
 
-static bool dbgStatus(uint8_t argc, char** argv)
+static bool dbgTlsStatus(uint8_t argc, char** argv)
 {
 	int     	ret;
 	char    	errStr[256];
@@ -535,9 +564,9 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 	TLS_getCerts(&cert, &ca_cert);
 
-	INFO("CA  : ");
+	PRINT("CA  : ");
 	_print_cert_dates(ca_cert);
-	INFO("cert: ");
+	PRINT("cert: ");
 	_print_cert_dates(cert);
 
 	ret = mbedtls_x509_crt_verify(cert, ca_cert, NULL, NULL, &flags, NULL, NULL);
@@ -545,9 +574,9 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	if (ret) {
 		char buf[256];
 		mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
-		INFO("Certificate verification failed: %s\n", buf);
+		PRINT("Certificate verification failed: %s\n", buf);
 	} else {
-		INFO("Certificate verification SUCCESS.\n");
+		PRINT("Certificate verification SUCCESS.\n");
 	}
 
 	return true;
@@ -571,7 +600,7 @@ static bool dbgVerify(uint8_t argc, char** argv)
 		return true;
 	}
 
-	PRINT_BUF("CA",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, strlen(buf));
+	//PRINT_BUF("CA",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, strlen(buf));
 
 	if (mbedtls_x509_crt_parse(&ca_chain, (const unsigned char*)buf, strlen(buf) + 1) != 0) {
 		PRINT("Failed to parse root CA cert\n");
@@ -584,7 +613,7 @@ static bool dbgVerify(uint8_t argc, char** argv)
 		return false;
 	}
 
-	PRINT_BUF("CERT",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, strlen(buf));
+	//PRINT_BUF("CERT",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, strlen(buf));
 
 	if (mbedtls_x509_crt_parse(&cert, (const unsigned char*)buf, strlen(buf) + 1) != 0) {
 		ERROR("mbedtls_x509_crt_parse returned %d\n", ret);
@@ -760,7 +789,7 @@ static bool dbgCurl(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("vault", NULL)
-		DEBUG_MENU_CMD("status",    NULL,	NULL, dbgStatus)
+		DEBUG_MENU_CMD("tlsStatus", NULL,	NULL, dbgTlsStatus)
 		DEBUG_MENU_CMD("verify",    NULL,	NULL, dbgVerify)
 		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
 		DEBUG_MENU_CMD("curl",		NULL,	NULL, dbgCurl)
