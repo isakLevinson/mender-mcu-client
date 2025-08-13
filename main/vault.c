@@ -157,7 +157,7 @@ static void _print_cert_dates(const mbedtls_x509_crt* cert)
 	t.min	= from->min;
 	t.sec	= from->sec;
 
-	from_days = TIME_mktime(&t) / 3600/24;
+	from_days = TIME_mktime(&t) / 3600 / 24;
 
 	t.year	= to->year;
 	t.mon	= to->mon;
@@ -166,7 +166,7 @@ static void _print_cert_dates(const mbedtls_x509_crt* cert)
 	t.min	= to->min;
 	t.sec	= to->sec;
 
-	to_days = TIME_mktime(&t) / 3600/24;
+	to_days = TIME_mktime(&t) / 3600 / 24;
 
 	PRINT("%04d-%02d-%02d %02d:%02d:%02d - ", from->year, from->mon, from->day, from->hour, from->min, from->sec);
 	PRINT("%04d-%02d-%02d %02d:%02d:%02d ", to->year, to->mon, to->day, to->hour, to->min, to->sec);
@@ -552,11 +552,10 @@ err:
 	return false;
 }
 
-static bool dbgTlsStatus(uint8_t argc, char** argv)
+static bool _tlsVerify(void)
 {
 	int     	ret;
 	char    	errStr[256];
-	char		ca_pem[2048];
 	uint32_t	flags;
 
 	mbedtls_x509_crt* cert;
@@ -564,25 +563,25 @@ static bool dbgTlsStatus(uint8_t argc, char** argv)
 
 	TLS_getCerts(&cert, &ca_cert);
 
-	PRINT("CA  : ");
-	_print_cert_dates(ca_cert);
-	PRINT("cert: ");
-	_print_cert_dates(cert);
-
 	ret = mbedtls_x509_crt_verify(cert, ca_cert, NULL, NULL, &flags, NULL, NULL);
 
 	if (ret) {
 		char buf[256];
 		mbedtls_x509_crt_verify_info(buf, sizeof(buf), "", flags);
-		PRINT("Certificate verification failed: %s\n", buf);
+		PRINT("TLS Certificate verification failed: %s\n", buf);
 	} else {
-		PRINT("Certificate verification SUCCESS.\n");
+		PRINT("TLS Certificate verification SUCCESS.\n");
 	}
+
+	PRINT("CA  : ");
+	_print_cert_dates(ca_cert);
+	PRINT("cert: ");
+	_print_cert_dates(cert);
 
 	return true;
 }
 
-static bool dbgVerify(uint8_t argc, char** argv)
+static bool _certVerify(void)
 {
 	int     ret;
 	mbedtls_x509_crt cert;
@@ -633,6 +632,13 @@ static bool dbgVerify(uint8_t argc, char** argv)
 	mbedtls_x509_crt_free(&cert);
 	mbedtls_x509_crt_free(&ca_chain);
 
+	return true;
+}
+
+static bool dbgVerify(uint8_t argc, char** argv)
+{
+	_certVerify();
+	_tlsVerify();
 	return true;
 }
 
@@ -789,7 +795,6 @@ static bool dbgCurl(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("vault", NULL)
-		DEBUG_MENU_CMD("tlsStatus", NULL,	NULL, dbgTlsStatus)
 		DEBUG_MENU_CMD("verify",    NULL,	NULL, dbgVerify)
 		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
 		DEBUG_MENU_CMD("curl",		NULL,	NULL, dbgCurl)
