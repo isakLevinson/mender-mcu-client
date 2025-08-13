@@ -341,7 +341,7 @@ static bool _init(void)
 	xSemaphoreGive(g_cmd.semaphore);
 
 #if USE_STREAM
-	ret = xTaskCreate(_taskStreamer, "streamer", 4096, NULL, 3, NULL);
+	ret = xTaskCreate(_taskStreamer, "streamer", 8192, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task %s failed\n", "streamer");
 		return false;
@@ -816,7 +816,6 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 	int16_t		press[4];
 	bool		valves[5];
 	bool		pumps[4];
-	int			i;
 
 	INFO("STATUS\n");
 
@@ -862,13 +861,13 @@ static bool	_json_STATUS_func(CMD_CONTEXT* i_pContext, char* pContent)
 
 static bool	_json_VERSION_func(CMD_CONTEXT* i_pContext, char* pContent)
 {
+#if 0
 	char*		ver;
 	uint32_t	numbers[3];
 	char*		sn;
 	char*		proj;
 	char		str[256];
 	char*		pStr = str;
-#if 0
 	MENDER_version(&proj, &ver, numbers);
 	FACTORY_factoryGetSn(&sn);
 
@@ -946,13 +945,14 @@ ok:
 static bool	_json_DEFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
 {
 	bool	ret;
-	cJSON* json = NULL;
-	const cJSON* object = NULL;
 	uint16_t	press[4] = {0};
 
 	INFO("DEFLATE_CHANNELS\n");
 
 	ret = CTRL_setTarget(press);
+	if (!ret) {
+		return false;
+	}
 
 	_sendRespStr(i_pContext,
 	    "{"
@@ -963,7 +963,7 @@ static bool	_json_DEFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
 	return true;
 }
 
-bool CMD_processJson(CMD_CONTEXT* i_pContext, char* pCommand, char* pData)
+bool CMD_processJson(CMD_CONTEXT* i_pContext, const char* pCommand, char* pData)
 {
 	INFO("CMD_processJson <%s> <%s>\n", pCommand, pData);
 

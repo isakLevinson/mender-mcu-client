@@ -41,17 +41,17 @@ static void _freeObject(void)
 	g_pBuf = NULL;
 }
 
-static const bool _getFactoryObjectStr(char* pObject, char* val, size_t maxSize)
+static bool _getFactoryObjectStr(char* pObject, char* val, size_t maxSize)
 {
 	esp_err_t               err;
-	const cJSON*            json = NULL;
+	cJSON*            json = NULL;
 	const cJSON*            object = NULL;
 	const esp_partition_t*  partition = NULL;
 
 	partition = find_partition(0x40, 0x01, NULL);
 	if (!partition) {
 		WARN("config partition not found\n");
-		return NULL;
+		return false;
 	}
 
 	if (!g_pBuf) {
@@ -59,7 +59,7 @@ static const bool _getFactoryObjectStr(char* pObject, char* val, size_t maxSize)
 		g_pBuf = malloc(partition->size);
 		if (!g_pBuf) {
 			ERROR("failed allocating %d bytes for partition\n", partition->size);
-			return NULL;
+			return false;
 		}
 
 		err = esp_partition_read(partition, 0, g_pBuf, partition->size);

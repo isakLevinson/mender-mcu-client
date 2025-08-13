@@ -86,9 +86,9 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	PRINT("interval: %d\n", interval);
 
 	for (i = 0; i < 8; i++) {
-		char* srvr = esp_sntp_getservername(i);
+		const char* srvr = esp_sntp_getservername(i);
 		if (srvr) {
-			uint8_t reachability = sntp_getreachability(i);
+			uint8_t reachability = esp_sntp_getreachability(i);
 			PRINT("%d: %s %d\n", i, srvr, reachability);
 		}
 	}
