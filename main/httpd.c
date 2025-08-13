@@ -72,6 +72,7 @@ static struct socket_desc_t* _socketGet(int fd)
 	return NULL;
 }
 
+#if 0
 static void _socketPrint(char* prefix, int fd)
 {
 	struct socket_desc_t*	sock = _socketGet(fd);
@@ -87,6 +88,7 @@ static void _socketPrint(char* prefix, int fd)
 
 	INFO("%s %d %s\n", prefix, fd, sock->type);
 }
+#endif
 
 static bool _socketAdd(int fd)
 {
@@ -161,6 +163,7 @@ static bool _tx(httpd_handle_t hd, int fd, httpd_ws_frame_t* pkt)
 	return true;
 }
 
+#if 0
 static void send_ping(void* arg)
 {
 	struct resp_arg* resp_arg = arg;
@@ -175,12 +178,13 @@ static void send_ping(void* arg)
 	_tx(hd, fd, &pkt);
 	free(resp_arg);
 }
+#endif
 
 bool check_client_alive_cb(wss_keep_alive_t h, int fd)
 {
-	int status;
 	TRACE("check_client_alive_cb() Checking if client (fd=%d) is alive\n", fd);
 #if 0
+	int status;
 	struct resp_arg* resp_arg = malloc(sizeof(struct resp_arg));
 	resp_arg->hd = wss_keep_alive_get_user_ctx(h);
 	resp_arg->fd = fd;
@@ -248,6 +252,7 @@ static bool _cmdSendResp(void* pArg, void* i_pBuf, uint16_t size)
 	return ret;
 }
 
+#if USE_REST
 static bool _restSendResp(void* pArg, void* i_pBuf, uint16_t size)
 {
 	esp_err_t    err;
@@ -256,6 +261,9 @@ static bool _restSendResp(void* pArg, void* i_pBuf, uint16_t size)
 	TRACE_BUF("_restSendResp",	PRINT_BUF_STYLE_ASC_SIZE_NL, i_pBuf, size);
 
 	err = httpd_resp_send(pAsync->req, i_pBuf, HTTPD_RESP_USE_STRLEN);
+	if (ESP_OK != err) {
+		return false;
+	}
 
 	return true;
 }
@@ -296,9 +304,13 @@ static bool _restSendStatus(void* pArg, uint32_t status)
 	}
 
 	err = httpd_resp_set_status(pAsync->req, pStr);
+	if (ESP_OK != err) {
+		return false;
+	}
 
 	return true;
 }
+#endif
 
 static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 {
@@ -424,9 +436,7 @@ exit:
 
 static esp_err_t events_handler(httpd_req_t* req)
 {
-	esp_err_t ret;
 	httpd_ws_frame_t pkt;
-	uint8_t* buf = NULL;
 
 	int fd = httpd_req_to_sockfd(req);
 
@@ -469,8 +479,6 @@ static esp_err_t _config_handler(httpd_req_t* req)
 	bool    		ret;
 	cfg_status_t	status;
 	char    		buf[2048];
-	bool    		validSsid;
-	bool    		validPasswd;
 	const char* 	pResp = "OK\n";
 
 	int fd = httpd_req_to_sockfd(req);
@@ -520,8 +528,8 @@ static esp_err_t _config_handler(httpd_req_t* req)
 		pResp = "ERROR\n";
 	}
 
+	
 	INFO("CFG_parseWssCommand <%s>\n", pResp);
-
 	/* Send response with body set as the
 	 * string passed in user context*/
 	//const char* resp_str = (const char*) req->user_ctx;
@@ -536,11 +544,12 @@ static esp_err_t _config_handler(httpd_req_t* req)
 	return ESP_OK;
 }
 
+#if USE_REST
 static esp_err_t rest_handler(httpd_req_t* req)
 {
-	bool    ret;
-	char    buf[256];
-	char*	pCmd;
+	bool		ret;
+	char		buf[256];
+	const char*	pCmd;
 
 	struct resp_arg resp = {
 		.req = req,
@@ -599,12 +608,13 @@ static esp_err_t rest_handler(httpd_req_t* req)
 
 	return ESP_OK;
 }
+#endif
 
 esp_err_t wss_open_fd(httpd_handle_t hd, int fd)
 {
 	INFO("open hd:0x%x fd:%d\n", hd, fd);
 
-	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
+	//wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
 
 	_socketAdd(fd);
 
@@ -621,8 +631,8 @@ void wss_close_fd(httpd_handle_t hd, int fd)
 		INFO("close_fd hd:0x%x fd:%d\n", hd, fd);
 	}
 
-	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
-	//	wss_keep_alive_remove_client(h, fd);
+	// wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
+	// wss_keep_alive_remove_client(h, fd);
 	close(fd);
 	_socketDel(fd);
 }
@@ -726,6 +736,7 @@ bool wss_init(void)
 	char*	pkey	= NULL;
 #endif
 
+#if USE_REST
 	httpd_uri_t uri_rest = {
 		.uri        = REST_HANDLER_BASE_URI "*",
 		.method     = HTTP_POST,
@@ -734,7 +745,7 @@ bool wss_init(void)
 		.is_websocket = false,
 		.handle_ws_control_frames = true
 	};
-
+#endif
 	if (g_server.handle) {
 		WARN("wss already started\n");
 		return false;

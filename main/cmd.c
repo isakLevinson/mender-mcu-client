@@ -963,7 +963,7 @@ static bool	_json_DEFLATE_CHANNELS_func(CMD_CONTEXT* i_pContext, char* pContent)
 	return true;
 }
 
-bool CMD_processJson(CMD_CONTEXT* i_pContext, char* pCommand, char* pData)
+bool CMD_processJson(CMD_CONTEXT* i_pContext, const char* pCommand, char* pData)
 {
 	INFO("CMD_processJson <%s> <%s>\n", pCommand, pData);
 
