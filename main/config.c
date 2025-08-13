@@ -25,7 +25,7 @@ static struct {
 	TimerHandle_t		timer;
 } g_cfg;
 
-static void _timer( TimerHandle_t pxTimer )
+static void _timer(TimerHandle_t pxTimer)
 {
 	INFO("config _timer\n");
 	wss_config_stop();
@@ -52,16 +52,16 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 		INFO("%x, child:%x\n", object, child);
 
 		while (child) {
-				if (child->string) {
-					bool isValidName = NVS_isValidName(child->string);
-					INFO("name:%s %d\n", child->string, isValidName);
-					if (!isValidName) {
-						WARN("invalid name %s\n", child->string);
-						return PARSE_STATUS_UNSUPPORTED_PARAM;
-					}
+			if (child->string) {
+				bool isValidName = NVS_isValidName(child->string);
+				INFO("name:%s %d\n", child->string, isValidName);
+				if (!isValidName) {
+					WARN("invalid name %s\n", child->string);
+					return PARSE_STATUS_UNSUPPORTED_PARAM;
 				}
+			}
 
-				child = child->next;
+			child = child->next;
 		}
 
 		object = object->next;
@@ -148,7 +148,7 @@ PARSE_STATUS CFG_parseWssCommand(char* pStr, size_t size)
 					return PARSE_STATUS_INVALID_CREDENTIAL;
 				}
 				connected = WIFI_isConnected();
-				TRACE("#1 %d %d\n", connected, t-t0);
+				TRACE("#1 %d %d\n", connected, t - t0);
 			} while (!connected);
 			INFO("CFG_parseWssCommand connected\n");
 		}

@@ -20,7 +20,9 @@ static struct {
 
 nvs_arr_t g_id[] = {
 	NVS_LIST(NVS_ARR)
-	{.pId = NULL, .pDefault = NULL}
+	{
+		.pId = NULL, .pDefault = NULL
+	}
 };
 
 static bool _get(char* key,  char* val)
@@ -96,7 +98,7 @@ exit:
 
 bool NVS_isValidName(char* pName)
 {
-	uint8_t	i= 1 ; // first one is "INVALID"
+	uint8_t	i = 1 ; // first one is "INVALID"
 
 	while (g_id[i].pId) {
 		if (!strcmp(g_id[i].pId, pName)) {

@@ -63,7 +63,7 @@ static struct {
 static struct socket_desc_t* _socketGet(int fd)
 {
 	uint8_t	i;
-	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
+	for (i = 0; i < MAX_SOCKETS_COUNT; i++) {
 		if (g_server.dbg.sockets[i].fd == fd) {
 			return &g_server.dbg.sockets[i];
 		}
@@ -91,7 +91,7 @@ static void _socketPrint(char* prefix, int fd)
 static bool _socketAdd(int fd)
 {
 	uint8_t	i;
-	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
+	for (i = 0; i < MAX_SOCKETS_COUNT; i++) {
 		if (!g_server.dbg.sockets[i].fd) {
 			g_server.dbg.sockets[i].fd = fd;
 			g_server.dbg.sockets[i].txMutex = xSemaphoreCreateMutexStatic(&g_server.dbg.sockets[i].txMutexBuffer);
@@ -269,15 +269,30 @@ static bool _restSendStatus(void* pArg, uint32_t status)
 	TRACE("_restSendStatus %d\n", status);
 
 	switch (status) {
-		case 200:	pStr = HTTPD_200;	break;
-		case 204:	pStr = HTTPD_204;	break;
-		case 207:	pStr = HTTPD_207;	break;
-		case 400:	pStr = HTTPD_400;	break;
-		case 404:	pStr = HTTPD_404;	break;
-		case 408:	pStr = HTTPD_408;	break;
-		case 500:	pStr = HTTPD_500;	break;
+		case 200:
+			pStr = HTTPD_200;
+			break;
+		case 204:
+			pStr = HTTPD_204;
+			break;
+		case 207:
+			pStr = HTTPD_207;
+			break;
+		case 400:
+			pStr = HTTPD_400;
+			break;
+		case 404:
+			pStr = HTTPD_404;
+			break;
+		case 408:
+			pStr = HTTPD_408;
+			break;
+		case 500:
+			pStr = HTTPD_500;
+			break;
 		default:
-			pStr = HTTPD_200;	break;
+			pStr = HTTPD_200;
+			break;
 	}
 
 	err = httpd_resp_set_status(pAsync->req, pStr);
@@ -337,10 +352,10 @@ static bool common_handler(httpd_req_t* req, httpd_ws_frame_t* pkt)
 			return wss_keep_alive_client_is_active(httpd_get_global_user_ctx(req->handle), fd);
 			break;
 
-//		case HTTPD_WS_TYPE_TEXT:
-//			INFO("HTTPD_WS_TYPE_TEXT len:%d\n", pkt->len);
-//			INFO_BUF("HTTPD_WS_TYPE_TEXT",	PRINT_BUF_STYLE_HEX_SIZE_NL, pkt->payload, pkt->len);
-//			break;
+		//		case HTTPD_WS_TYPE_TEXT:
+		//			INFO("HTTPD_WS_TYPE_TEXT len:%d\n", pkt->len);
+		//			INFO_BUF("HTTPD_WS_TYPE_TEXT",	PRINT_BUF_STYLE_HEX_SIZE_NL, pkt->payload, pkt->len);
+		//			break;
 
 		case HTTPD_WS_TYPE_CLOSE:
 			INFO("CLOSE fd:%d\n", fd);
@@ -401,7 +416,7 @@ static esp_err_t ws_handler(httpd_req_t* req)
 	    httpd_req_to_sockfd(req),
 	    httpd_ws_get_fd_info(req->handle, fd));
 
-	exit:
+exit:
 	free(pkt.payload);
 	pkt.payload = NULL;
 	return ESP_OK;
@@ -479,11 +494,21 @@ static esp_err_t _config_handler(httpd_req_t* req)
 	INFO_BUF("/config POST",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, req->content_len);
 	status = CFG_parseWssCommand(buf, req->content_len);
 	switch (status) {
-		case PARSE_STATUS_OK:					pResp = "OK";	break;
-		case PARSE_STATUS_SYNTAX_ERROR:			pResp = "SYNTAX_ERROR";	break;
-		case PARSE_STATUS_UNSUPPORTED_PARAM:	pResp = "UNSUPPORTED_PARAM";	break;
-		case PARSE_STATUS_MISSING_PARAM:		pResp = "MISSING_PARAM";		break;
-		case PARSE_STATUS_INVALID_CREDENTIAL:	pResp = "INVALID_CREDENTIAL";	break;
+		case PARSE_STATUS_OK:
+			pResp = "OK";
+			break;
+		case PARSE_STATUS_SYNTAX_ERROR:
+			pResp = "SYNTAX_ERROR";
+			break;
+		case PARSE_STATUS_UNSUPPORTED_PARAM:
+			pResp = "UNSUPPORTED_PARAM";
+			break;
+		case PARSE_STATUS_MISSING_PARAM:
+			pResp = "MISSING_PARAM";
+			break;
+		case PARSE_STATUS_INVALID_CREDENTIAL:
+			pResp = "INVALID_CREDENTIAL";
+			break;
 		default:
 			pResp = "INTERNAL_ERROR";
 	}
@@ -529,8 +554,12 @@ static esp_err_t rest_handler(httpd_req_t* req)
 
 	char* pMethod = "DEFAULT";
 	switch (req->method) {
-		case HTTP_GET:	pMethod = "GET";	break;
-		case HTTP_POST:	pMethod = "POST";	break;
+		case HTTP_GET:
+			pMethod = "GET";
+			break;
+		case HTTP_POST:
+			pMethod = "POST";
+			break;
 		default:
 			WARN("unsupported method %s. must be POST\n", req->method);
 			return ESP_OK;
@@ -561,7 +590,7 @@ static esp_err_t rest_handler(httpd_req_t* req)
 	httpd_resp_set_type(req, "application/json");
 	//	httpd_resp_send_chunk(req, NULL, 0);
 	//TODO: use httpd_resp_set_status()
-		
+
 	CMD_processJson(&context, pCmd, buf);
 
 	return ESP_OK;
@@ -576,7 +605,7 @@ esp_err_t wss_open_fd(httpd_handle_t hd, int fd)
 	_socketAdd(fd);
 
 	return ESP_OK;
-//	return wss_keep_alive_add_client(h, fd);
+	//	return wss_keep_alive_add_client(h, fd);
 }
 
 void wss_close_fd(httpd_handle_t hd, int fd)
@@ -589,7 +618,7 @@ void wss_close_fd(httpd_handle_t hd, int fd)
 	}
 
 	wss_keep_alive_t h = httpd_get_global_user_ctx(hd);
-//	wss_keep_alive_remove_client(h, fd);
+	//	wss_keep_alive_remove_client(h, fd);
 	close(fd);
 	_socketDel(fd);
 }
@@ -601,7 +630,7 @@ bool client_not_alive_cb(wss_keep_alive_t h, int fd)
 	return true;
 }
 
-#if USE_WSS	
+#if USE_WSS
 static const httpd_uri_t uri_ws = {
 	.uri        = "/ws",
 	.method     = HTTP_GET,
@@ -638,7 +667,7 @@ bool wss_config_start(void)
 	return true;
 }
 
-bool uri_match(const char *reference_uri, const char *uri_to_match, size_t match_upto)
+bool uri_match(const char* reference_uri, const char* uri_to_match, size_t match_upto)
 {
 	bool match = false;
 
@@ -659,7 +688,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 {
 
 	uint8_t	i;
-	for (i=0; i<MAX_SOCKETS_COUNT; i++) {
+	for (i = 0; i < MAX_SOCKETS_COUNT; i++) {
 		if (g_server.dbg.sockets[i].fd) {
 			PRINT("%d ", g_server.dbg.sockets[i].fd);
 			if (g_server.dbg.sockets[i].type) {
@@ -774,7 +803,7 @@ bool wss_init(void)
 
 	// Set URI handlers
 	INFO("Registering URI handlers");
-#if USE_WSS	
+#if USE_WSS
 	httpd_register_uri_handler(g_server.handle, &uri_ws);
 	httpd_register_uri_handler(g_server.handle, &uri_events);
 #endif

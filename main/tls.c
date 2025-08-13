@@ -46,21 +46,21 @@
 #define WEB_PORT	"2000"
 
 typedef struct {
-	mbedtls_ssl_context *ssl;
-	mbedtls_net_context *fd;
+	mbedtls_ssl_context* ssl;
+	mbedtls_net_context* fd;
 } cmd_ctx_arg_t;
 
 static struct {
-    mbedtls_ssl_config conf;
-    mbedtls_entropy_context entropy;
-    mbedtls_ctr_drbg_context ctr_drbg;
-    mbedtls_x509_crt srvcert;
-    mbedtls_pk_context pkey;
+	mbedtls_ssl_config conf;
+	mbedtls_entropy_context entropy;
+	mbedtls_ctr_drbg_context ctr_drbg;
+	mbedtls_x509_crt srvcert;
+	mbedtls_pk_context pkey;
 #if defined(MBEDTLS_SSL_CACHE_C)
-    mbedtls_ssl_cache_context cache;
+	mbedtls_ssl_cache_context cache;
 #endif
 
-    SemaphoreHandle_t	mutex;
+	SemaphoreHandle_t	mutex;
 
 	mbedtls_net_context fd_cmd;
 	mbedtls_net_context fd_stream;
@@ -68,20 +68,20 @@ static struct {
 	TimerHandle_t		kaTimer;
 } g_ssl;
 
-static void my_debug(void *ctx, int level, const char *file, int line, const char *str)
-{   
+static void my_debug(void* ctx, int level, const char* file, int line, const char* str)
+{
 	TRACE("SSLDBG: %s:%04d: %s", file, line, str);
 }
 
 static bool _cmdKa(uint8_t timeout)
 {
 	int ret;
-	
+
 	if (!timeout) {
 		return false;
 	}
 
-	xTimerChangePeriod(g_ssl.kaTimer, timeout*100, 0);
+	xTimerChangePeriod(g_ssl.kaTimer, timeout * 100, 0);
 	ret = xTimerStart(g_ssl.kaTimer, 0);
 	if (pdPASS != ret) {
 		return false;
@@ -89,41 +89,41 @@ static bool _cmdKa(uint8_t timeout)
 	return true;
 }
 
-static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mbedtls_net_context *client_fd, bool startKaTimer)
+static bool _accept(mbedtls_ssl_context* ssl, mbedtls_net_context* listen_fd, mbedtls_net_context* client_fd, bool startKaTimer)
 {
-    int ret;
+	int ret;
 
-	reset:
-    mbedtls_net_free(client_fd);
-    mbedtls_ssl_session_reset(ssl);
+reset:
+	mbedtls_net_free(client_fd);
+	mbedtls_ssl_session_reset(ssl);
 
-    INFO("Waiting for a remote connection ...\n");
+	INFO("Waiting for a remote connection ...\n");
 
-    if ((ret = mbedtls_net_accept(listen_fd, client_fd, NULL, 0, NULL)) != 0) {
-        ERROR("mbedtls_net_accept %d\n", ret);
-        return false;
-    }
+	if ((ret = mbedtls_net_accept(listen_fd, client_fd, NULL, 0, NULL)) != 0) {
+		ERROR("mbedtls_net_accept %d\n", ret);
+		return false;
+	}
 
-    xSemaphoreTake(g_ssl.mutex, portMAX_DELAY);
+	xSemaphoreTake(g_ssl.mutex, portMAX_DELAY);
 
-    mbedtls_ssl_set_bio(ssl, client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
-    INFO("accept ok\n");
+	mbedtls_ssl_set_bio(ssl, client_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
+	INFO("accept ok\n");
 
 	if (startKaTimer) {
 		_cmdKa(30);
 	}
 
-    while ((ret = mbedtls_ssl_handshake(ssl)) != 0) {
-        if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-            ERROR("mbedtls_ssl_handshake -%x\n", -ret);
+	while ((ret = mbedtls_ssl_handshake(ssl)) != 0) {
+		if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+			ERROR("mbedtls_ssl_handshake -%x\n", -ret);
 			xSemaphoreGive(g_ssl.mutex);
-            goto reset;
-        }
-    }
+			goto reset;
+		}
+	}
 
-	const mbedtls_x509_crt *client_cert = mbedtls_ssl_get_peer_cert(ssl);
+	const mbedtls_x509_crt* client_cert = mbedtls_ssl_get_peer_cert(ssl);
 	char cn[256];
-	const mbedtls_x509_name *name = &client_cert->subject;
+	const mbedtls_x509_name* name = &client_cert->subject;
 #if 1
 	if (client_cert) {
 		while (name) {
@@ -134,168 +134,168 @@ static bool _accept(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mb
 				break;
 			}
 			name = name->next;
-		}	
+		}
 	} else {
 		WARN("no client certificate received\n");
 	}
 #endif
-//	INFO("cert:%x\n", client_cert);
+	//	INFO("cert:%x\n", client_cert);
 	//INFO("len: %d\n", name->oid.len);
-//	while (name) {
-//		//INFO("len: %d\n", name->oid.len);
-//
-//		name = name->next;
-//	}
+	//	while (name) {
+	//		//INFO("len: %d\n", name->oid.len);
+	//
+	//		name = name->next;
+	//	}
 	xSemaphoreGive(g_ssl.mutex);
 
-    INFO("handshake ok\n");
-    return true;
+	INFO("handshake ok\n");
+	return true;
 }
 
-static bool _write(mbedtls_ssl_context *ssl, void *buf, int len)
+static bool _write(mbedtls_ssl_context* ssl, void* buf, int len)
 {
-    int ret;
+	int ret;
 
-    while ((ret = mbedtls_ssl_write(ssl, buf, len)) <= 0) {
-        if (ret == MBEDTLS_ERR_NET_CONN_RESET) {
-            WARN("peer closed the connection\n");
-            return false;
-        }
+	while ((ret = mbedtls_ssl_write(ssl, buf, len)) <= 0) {
+		if (ret == MBEDTLS_ERR_NET_CONN_RESET) {
+			WARN("peer closed the connection\n");
+			return false;
+		}
 
-        if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-            WARN("mbedtls_ssl_write returned %d\n", ret);
+		if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+			WARN("mbedtls_ssl_write returned %d\n", ret);
 			//mbedtls_print_error_msg(ret);
-            return false;
-        }
-    }
+			return false;
+		}
+	}
 
-    return true;
+	return true;
 }
 
 static bool _cmdWrite(void* pArg, void* i_pBuf, uint16_t size)
 {
-    bool ret;
+	bool ret;
 
-	cmd_ctx_arg_t *ctxarg = (cmd_ctx_arg_t*)pArg;
+	cmd_ctx_arg_t* ctxarg = (cmd_ctx_arg_t*)pArg;
 
-    TRACE_BUF("_cmdWrite",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
+	TRACE_BUF("_cmdWrite",	PRINT_BUF_STYLE_HEX_SIZE_NL, i_pBuf, size);
 
 	if (ctxarg->fd->fd < 0) {
 		WARN("socket is closed\n");
 		return false;
 	}
 
-    ret = _write(ctxarg->ssl, i_pBuf, size);
-    return ret;
+	ret = _write(ctxarg->ssl, i_pBuf, size);
+	return ret;
 }
 
-static bool _taskInit(mbedtls_ssl_context *ssl, mbedtls_net_context *listen_fd, mbedtls_net_context *client_fd, char* port)
+static bool _taskInit(mbedtls_ssl_context* ssl, mbedtls_net_context* listen_fd, mbedtls_net_context* client_fd, char* port)
 {
 	int ret;
 	mbedtls_net_init(listen_fd);
-    mbedtls_net_init(client_fd);
+	mbedtls_net_init(client_fd);
 
-    mbedtls_ssl_init(ssl);
-    if ((ret = mbedtls_ssl_setup(ssl, &g_ssl.conf)) != 0) {
-        ERROR("mbedtls_ssl_setup %d\n", ret);
-        return false;
-    }
+	mbedtls_ssl_init(ssl);
+	if ((ret = mbedtls_ssl_setup(ssl, &g_ssl.conf)) != 0) {
+		ERROR("mbedtls_ssl_setup %d\n", ret);
+		return false;
+	}
 
-    if ((ret = mbedtls_net_bind(listen_fd, NULL, port, MBEDTLS_NET_PROTO_TCP)) != 0) {
-        ERROR("mbedtls_net_bind %d\n", ret);
-        return false;
-    }
+	if ((ret = mbedtls_net_bind(listen_fd, NULL, port, MBEDTLS_NET_PROTO_TCP)) != 0) {
+		ERROR("mbedtls_net_bind %d\n", ret);
+		return false;
+	}
 
-    mbedtls_net_free(client_fd);
-	
+	mbedtls_net_free(client_fd);
+
 	return true;
 }
 
 static void _taskCmd(void* arg)
 {
-    int ret;
-    int len;
-    unsigned char buf[1024];
+	int ret;
+	int len;
+	unsigned char buf[1024];
 
-    mbedtls_ssl_context ssl;
-    mbedtls_net_context listen_fd;
+	mbedtls_ssl_context ssl;
+	mbedtls_net_context listen_fd;
 
 	cmd_ctx_arg_t ctxarg = {
 		.ssl	= &ssl,
 		.fd		= &g_ssl.fd_cmd,
 	};
 
-    CMD_CONTEXT context = {
-        .p_cbSend   = _cmdWrite,
+	CMD_CONTEXT context = {
+		.p_cbSend   = _cmdWrite,
 		.p_cbKa		= _cmdKa,
-        .pArg       = &ctxarg,
-    };
+		.pArg       = &ctxarg,
+	};
 
 	ret = _taskInit(&ssl, &listen_fd, &g_ssl.fd_cmd, TLS_CMD_PORT);
 	if (!ret) {
 		goto exit;
 	}
 
-    while (true) {
+	while (true) {
 		vTaskDelay(100);
 
-        ret = _accept(&ssl, &listen_fd, &g_ssl.fd_cmd, true);
+		ret = _accept(&ssl, &listen_fd, &g_ssl.fd_cmd, true);
 		if (!ret) {
 			continue;
 		}
 
 		INFO("cmd connected\n");
 
-        do {
-            len = sizeof(buf) - 1;
-            memset(buf, 0, sizeof(buf));
-            ret = mbedtls_ssl_read(&ssl, buf, len);
+		do {
+			len = sizeof(buf) - 1;
+			memset(buf, 0, sizeof(buf));
+			ret = mbedtls_ssl_read(&ssl, buf, len);
 
-            if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+			if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
 				//TRACE("#1 %d\n", ret);
-                continue;
-            }
+				continue;
+			}
 			//TRACE("#2 %d\n", ret);
-    
-            if (ret <= 0) {
-                switch (ret) {
-                    case MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY:
-                        INFO("connection was closed gracefully\n");
-                        break;
-    
-                    case MBEDTLS_ERR_NET_CONN_RESET:
-                        INFO("connection was reset by peer\n");
-                        break;
-    
-                    default:
-                        WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) -ret);
-                        break;
-                }
+
+			if (ret <= 0) {
+				switch (ret) {
+					case MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY:
+						INFO("connection was closed gracefully\n");
+						break;
+
+					case MBEDTLS_ERR_NET_CONN_RESET:
+						INFO("connection was reset by peer\n");
+						break;
+
+					default:
+						WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) - ret);
+						break;
+				}
 				INFO("cmd disconnected\n");
 				ret = xTimerStop(g_ssl.kaTimer, 0);
-                break;
-            }
-    
-            len = ret;
-            TRACE_BUF("cmd",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, len);
-    
-            CMD_processBuffer(&context, buf, len);
-        } while (1);
-    }
+				break;
+			}
 
-    exit:
-    mbedtls_net_free(&listen_fd);
-    vTaskDelete(NULL);
+			len = ret;
+			TRACE_BUF("cmd",	PRINT_BUF_STYLE_HEX_SIZE_NL, buf, len);
+
+			CMD_processBuffer(&context, buf, len);
+		} while (1);
+	}
+
+exit:
+	mbedtls_net_free(&listen_fd);
+	vTaskDelete(NULL);
 }
 
 static void _taskStream(void* arg)
 {
-    int ret;
-    int len;
-    unsigned char buf[1024];
+	int ret;
+	int len;
+	unsigned char buf[1024];
 
-    mbedtls_ssl_context ssl;
-    mbedtls_net_context listen_fd;
+	mbedtls_ssl_context ssl;
+	mbedtls_net_context listen_fd;
 
 	cmd_ctx_arg_t ctxarg = {
 		.ssl	= &ssl,
@@ -303,67 +303,67 @@ static void _taskStream(void* arg)
 	};
 
 	CMD_CONTEXT context = {
-        .p_cbSend	= _cmdWrite,
-        .pArg       = &ctxarg,
-    };
-    CMD_setStreamContext(&context);
+		.p_cbSend	= _cmdWrite,
+		.pArg       = &ctxarg,
+	};
+	CMD_setStreamContext(&context);
 
 	ret = _taskInit(&ssl, &listen_fd, &g_ssl.fd_stream, TLS_STREAM_PORT);
 	if (!ret) {
 		goto exit;
 	}
 
-    while (true) {
+	while (true) {
 		vTaskDelay(100);
 
-        ret = _accept(&ssl, &listen_fd, &g_ssl.fd_stream, false);
+		ret = _accept(&ssl, &listen_fd, &g_ssl.fd_stream, false);
 		if (!ret) {
 			continue;
 		}
 
 		INFO("stream connected\n");
 
-        do {
-            len = sizeof(buf) - 1;
-            memset(buf, 0, sizeof(buf));
-            ret = mbedtls_ssl_read(&ssl, buf, len);
-    
-            if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
-                continue;
-            }
-    
-            if (ret <= 0) {
-                switch (ret) {
-                    case MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY:
-                        INFO("connection was closed gracefully\n");
-                        break;
-    
-                    case MBEDTLS_ERR_NET_CONN_RESET:
-                        INFO("connection was reset by peer\n");
-                        break;
-    
-                    default:
-                        WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) -ret);
-                        break;
-                }
-   				INFO("stream disconnected\n");
-                break;
-            }
-    
-            len = ret;
-            INFO_BUF("stream",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, len);
-    
-            // echo back the buffer
-            //_write(&ssl, buf, len);
-        } while (1);
-    }
+		do {
+			len = sizeof(buf) - 1;
+			memset(buf, 0, sizeof(buf));
+			ret = mbedtls_ssl_read(&ssl, buf, len);
 
-    exit:
-    mbedtls_net_free(&listen_fd);
-    vTaskDelete(NULL);
+			if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+				continue;
+			}
+
+			if (ret <= 0) {
+				switch (ret) {
+					case MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY:
+						INFO("connection was closed gracefully\n");
+						break;
+
+					case MBEDTLS_ERR_NET_CONN_RESET:
+						INFO("connection was reset by peer\n");
+						break;
+
+					default:
+						WARN("mbedtls_ssl_read returned -0x%x\n", (unsigned int) - ret);
+						break;
+				}
+				INFO("stream disconnected\n");
+				break;
+			}
+
+			len = ret;
+			INFO_BUF("stream",	PRINT_BUF_STYLE_ASC_SIZE_NL, buf, len);
+
+			// echo back the buffer
+			//_write(&ssl, buf, len);
+		} while (1);
+	}
+
+exit:
+	mbedtls_net_free(&listen_fd);
+	vTaskDelete(NULL);
 }
 
-static void _kaTimerCb( TimerHandle_t pxTimer )
+static void _kaTimerCb(TimerHandle_t pxTimer)
 {
 	INFO("_kaTimerCb\n");
 
@@ -373,43 +373,43 @@ static void _kaTimerCb( TimerHandle_t pxTimer )
 
 static bool _sslInit(void)
 {
-    int ret;
-    const char *pers = "ssl_server";
+	int ret;
+	const char* pers = "ssl_server";
 
-    mbedtls_ssl_config_init(&g_ssl.conf);
+	mbedtls_ssl_config_init(&g_ssl.conf);
 #if defined(MBEDTLS_SSL_CACHE_C)
-    mbedtls_ssl_cache_init(&g_ssl.cache);
+	mbedtls_ssl_cache_init(&g_ssl.cache);
 #endif
-    mbedtls_x509_crt_init(&g_ssl.srvcert);
-    mbedtls_pk_init(&g_ssl.pkey);
-    mbedtls_entropy_init(&g_ssl.entropy);
-    mbedtls_ctr_drbg_init(&g_ssl.ctr_drbg);
-    
+	mbedtls_x509_crt_init(&g_ssl.srvcert);
+	mbedtls_pk_init(&g_ssl.pkey);
+	mbedtls_entropy_init(&g_ssl.entropy);
+	mbedtls_ctr_drbg_init(&g_ssl.ctr_drbg);
+
 #if defined(MBEDTLS_USE_PSA_CRYPTO)
-    psa_status_t status = psa_crypto_init();
-    if (status != PSA_SUCCESS) {
-        mbedtls_fprintf(stderr, "Failed to initialize PSA Crypto implementation: %d\n",
-                        (int) status);
-        ret = MBEDTLS_ERR_SSL_HW_ACCEL_FAILED;
-        goto exit;
-    }
+	psa_status_t status = psa_crypto_init();
+	if (status != PSA_SUCCESS) {
+		mbedtls_fprintf(stderr, "Failed to initialize PSA Crypto implementation: %d\n",
+		    (int) status);
+		ret = MBEDTLS_ERR_SSL_HW_ACCEL_FAILED;
+		goto exit;
+	}
 #endif /* MBEDTLS_USE_PSA_CRYPTO */
 
 #if defined(MBEDTLS_DEBUG_C)
-    mbedtls_debug_set_threshold(DEBUG_LEVEL);
+	mbedtls_debug_set_threshold(DEBUG_LEVEL);
 #endif
 
-    INFO("Seeding the random number generator...\n");
+	INFO("Seeding the random number generator...\n");
 
-    if ((ret = mbedtls_ctr_drbg_seed(&g_ssl.ctr_drbg, mbedtls_entropy_func, &g_ssl.entropy,
-                                     (const unsigned char *) pers,
-                                     strlen(pers))) != 0) {
-        ERROR("failed\n  ! mbedtls_ctr_drbg_seed returned %d\n", ret);
-        return false;
-    }
+	if ((ret = mbedtls_ctr_drbg_seed(&g_ssl.ctr_drbg, mbedtls_entropy_func, &g_ssl.entropy,
+	                (const unsigned char*) pers,
+	                strlen(pers))) != 0) {
+		ERROR("failed\n  ! mbedtls_ctr_drbg_seed returned %d\n", ret);
+		return false;
+	}
 
-    INFO("Loading the server cert. and key...\n");
-    extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
+	INFO("Loading the server cert. and key...\n");
+	extern const unsigned char server_cert_start[] asm("_binary_server_crt_start");
 	extern const unsigned char server_cert_end[]   asm("_binary_server_crt_end");
 	const uint8_t* servercert = server_cert_start;
 	int servercert_len = server_cert_end - server_cert_start;
@@ -424,91 +424,91 @@ static bool _sslInit(void)
 	const uint8_t* cacert_pem = ca_cert_start;
 	int cacert_len = ca_cert_end - ca_cert_start;
 
-    ret = mbedtls_x509_crt_parse(&g_ssl.srvcert, (const unsigned char *) servercert, servercert_len);
-    if (ret != 0) {
-        ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
-        return false;
-    }
+	ret = mbedtls_x509_crt_parse(&g_ssl.srvcert, (const unsigned char*) servercert, servercert_len);
+	if (ret != 0) {
+		ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
+		return false;
+	}
 
-   ret = mbedtls_x509_crt_parse(&g_ssl.srvcert, (const unsigned char *) cacert_pem, cacert_len);
-    if (ret != 0) {
-        ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
-        return false;
-    }
+	ret = mbedtls_x509_crt_parse(&g_ssl.srvcert, (const unsigned char*) cacert_pem, cacert_len);
+	if (ret != 0) {
+		ERROR("failed\n  !  mbedtls_x509_crt_parse returned %d\n", ret);
+		return false;
+	}
 
-    ret =  mbedtls_pk_parse_key(&g_ssl.pkey, (const unsigned char *) prvtkey_pem, prvtkey_len, NULL, 0,
-                                mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
-    if (ret != 0) {
-        ERROR("failed\n  !  mbedtls_pk_parse_key returned %d\n", ret);
-        return false;
-    }
+	ret =  mbedtls_pk_parse_key(&g_ssl.pkey, (const unsigned char*) prvtkey_pem, prvtkey_len, NULL, 0,
+	        mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
+	if (ret != 0) {
+		ERROR("failed\n  !  mbedtls_pk_parse_key returned %d\n", ret);
+		return false;
+	}
 
-    INFO("ok\n");
+	INFO("ok\n");
 
-    if ((ret = mbedtls_ssl_config_defaults(&g_ssl.conf,
-                                           MBEDTLS_SSL_IS_SERVER,
-                                           MBEDTLS_SSL_TRANSPORT_STREAM,
-                                           MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
-        ERROR("mbedtls_ssl_config_defaults %d\n", ret);
-        return false;
-    }
+	if ((ret = mbedtls_ssl_config_defaults(&g_ssl.conf,
+	                MBEDTLS_SSL_IS_SERVER,
+	                MBEDTLS_SSL_TRANSPORT_STREAM,
+	                MBEDTLS_SSL_PRESET_DEFAULT)) != 0) {
+		ERROR("mbedtls_ssl_config_defaults %d\n", ret);
+		return false;
+	}
 
 	//g_ssl.conf.private_read_timeout = 1000;
 
-    mbedtls_ssl_conf_rng(&g_ssl.conf, mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
-    mbedtls_ssl_conf_dbg(&g_ssl.conf, my_debug, stdout);
+	mbedtls_ssl_conf_rng(&g_ssl.conf, mbedtls_ctr_drbg_random, &g_ssl.ctr_drbg);
+	mbedtls_ssl_conf_dbg(&g_ssl.conf, my_debug, stdout);
 
 #if defined(MBEDTLS_SSL_CACHE_C)
-    mbedtls_ssl_conf_session_cache(&g_ssl.conf, &g_ssl.cache, mbedtls_ssl_cache_get, mbedtls_ssl_cache_set);
+	mbedtls_ssl_conf_session_cache(&g_ssl.conf, &g_ssl.cache, mbedtls_ssl_cache_get, mbedtls_ssl_cache_set);
 #endif
 
-    mbedtls_ssl_conf_ca_chain(&g_ssl.conf, g_ssl.srvcert.next, NULL);
-    if ((ret = mbedtls_ssl_conf_own_cert(&g_ssl.conf, &g_ssl.srvcert, &g_ssl.pkey)) != 0) {
-        ERROR("mbedtls_ssl_conf_own_cert returned %d\n", ret);
-        return false;
-    }
+	mbedtls_ssl_conf_ca_chain(&g_ssl.conf, g_ssl.srvcert.next, NULL);
+	if ((ret = mbedtls_ssl_conf_own_cert(&g_ssl.conf, &g_ssl.srvcert, &g_ssl.pkey)) != 0) {
+		ERROR("mbedtls_ssl_conf_own_cert returned %d\n", ret);
+		return false;
+	}
 
 	mbedtls_ssl_conf_authmode(&g_ssl.conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
 
-    INFO("ok\n");
-    return true;
+	INFO("ok\n");
+	return true;
 }
 
 static bool _init(void)
 {
-    int ret;
+	int ret;
 
-    _sslInit();
+	_sslInit();
 
-    g_ssl.mutex = xSemaphoreCreateMutex();
+	g_ssl.mutex = xSemaphoreCreateMutex();
 
 	g_ssl.kaTimer = xTimerCreate("KA", 3000, pdFALSE, NULL, _kaTimerCb);
-	if (!g_ssl.kaTimer ) {
+	if (!g_ssl.kaTimer) {
 		ERROR("xTimerCreate\n");
 	}
 
-    ret = xTaskCreate(_taskCmd, "tls_cmd", 8192, NULL, 3, NULL);
+	ret = xTaskCreate(_taskCmd, "tls_cmd", 8192, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task failed\n");
 		return false;
 	}
 
-    ret = xTaskCreate(_taskStream, "tls_stream", 8192, NULL, 3, NULL);
+	ret = xTaskCreate(_taskStream, "tls_stream", 8192, NULL, 3, NULL);
 	if (ret != pdPASS) {
 		ERROR("create task failed\n");
 		return false;
 	}
 
-    return true;
+	return true;
 }
 
 bool	TLS_isConnected(void)
 {
-	if(g_ssl.fd_cmd.fd < 0) {
+	if (g_ssl.fd_cmd.fd < 0) {
 		return false;
 	}
 
-	if(g_ssl.fd_stream.fd < 0) {
+	if (g_ssl.fd_stream.fd < 0) {
 		return false;
 	}
 
@@ -518,7 +518,7 @@ bool	TLS_isConnected(void)
 static bool dbgConnect(uint8_t argc, char** argv)
 {
 #if 0
-    int ret;
+	int ret;
 	int flags;
 	char buf[512];
 
@@ -553,8 +553,7 @@ static bool dbgConnect(uint8_t argc, char** argv)
 		bzero(buf, sizeof(buf));
 		mbedtls_x509_crt_verify_info(buf, sizeof(buf), "  ! ", flags);
 		WARN("verification info: %s\n", buf);
-	}
-	else {
+	} else {
 		INFO("Certificate verified.\n");
 	}
 
@@ -586,19 +585,19 @@ static bool dbgClose(uint8_t argc, char** argv)
 		isCmd	= true;
 		isSteam	= true;
 	} else {
-		if (argv[1][0]=='c') {
+		if (argv[1][0] == 'c') {
 			isCmd = true;
 		}
-		if (argv[1][0]=='s') {
+		if (argv[1][0] == 's') {
 			isSteam = true;
 		}
 	}
 
 	if (isCmd) {
-	    mbedtls_net_free(&g_ssl.fd_cmd);
+		mbedtls_net_free(&g_ssl.fd_cmd);
 	}
 	if (isSteam) {
-	    mbedtls_net_free(&g_ssl.fd_stream);
+		mbedtls_net_free(&g_ssl.fd_stream);
 	}
 	return true;
 }
@@ -612,7 +611,7 @@ static bool dbgStatus(uint8_t argc, char** argv)
 	uint32_t expiration = xTimerGetExpiryTime(g_ssl.kaTimer);
 	int32_t	ticks = xTaskGetTickCount();
 	if (timerState) {
-		PRINT("timer active: %d %d %d\n", timerState, expiration, expiration-ticks);
+		PRINT("timer active: %d %d %d\n", timerState, expiration, expiration - ticks);
 	} else {
 		PRINT("timer not active\n");
 	}
@@ -633,11 +632,11 @@ DEBUG_MENU_END
 
 bool TLS_init(void)
 {
-    DBG_TREE_add("/", g_menu);
+	DBG_TREE_add("/", g_menu);
 
 	_init();
-	
-    return true;
+
+	return true;
 }
 
 #endif

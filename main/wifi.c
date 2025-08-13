@@ -192,7 +192,7 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
 
 	if (strEvent) {
 		if ('_' == strEvent[0]) {
-			TRACE("event_handler %s\n", strEvent+1);
+			TRACE("event_handler %s\n", strEvent + 1);
 		} else {
 			INFO("event_handler %s\n", strEvent);
 		}
@@ -616,11 +616,21 @@ static bool dbgStatus(uint8_t argc, char** argv)
 				switch (bw) {
 					//case WIFI_BW_HT20:		PRINT("HT20");	break;
 					//case WIFI_BW_HT40:		PRINT("HT40");	break;
-					case WIFI_BW20:			PRINT("BW20");	break;
-					case WIFI_BW40:			PRINT("BW40");	break;
-					case WIFI_BW80:			PRINT("BW80");	break;
-					case WIFI_BW160:		PRINT("BW160");	break;
-					case WIFI_BW80_BW80:	PRINT("BW80_BW80");	break;
+					case WIFI_BW20:
+						PRINT("BW20");
+						break;
+					case WIFI_BW40:
+						PRINT("BW40");
+						break;
+					case WIFI_BW80:
+						PRINT("BW80");
+						break;
+					case WIFI_BW160:
+						PRINT("BW160");
+						break;
+					case WIFI_BW80_BW80:
+						PRINT("BW80_BW80");
+						break;
 				}
 				PRINT("\n");
 			}

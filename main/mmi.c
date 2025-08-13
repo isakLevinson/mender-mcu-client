@@ -79,7 +79,7 @@ static void _task(void* arg)
 	ret = FACTORY_factoryGetSn(NULL);
 	if (!ret) {
 		ERROR("no SN in factory storage. Halting on error\n");
-		_updateRgb(100,0,0,0,0);
+		_updateRgb(100, 0, 0, 0, 0);
 		time = TIME_get32();
 		_handleBlink(time);
 		while (true) {
@@ -102,7 +102,7 @@ static void _task(void* arg)
 		}
 
 		if (!g_led.isConfigurated) {
-			_updateRgb(100,100,100,0,0);
+			_updateRgb(100, 100, 100, 0, 0);
 		} else {
 			bool isConnected = WIFI_isConnected();
 			if (isConnected) {
@@ -117,25 +117,25 @@ static void _task(void* arg)
 				}
 #else
 				err = false;
-				soc=100;
+				soc = 100;
 #endif
 				if (err) {
-					_updateRgb(100,0,0,0,0);
+					_updateRgb(100, 0, 0, 0, 0);
 					g_led.interval  = 0;
 				} else if (soc < 15)  {
-					_updateRgb(100,0,0,500,100);
+					_updateRgb(100, 0, 0, 500, 100);
 				} else if (soc < 30) {
-					_updateRgb(100,0,0,1000,200);
+					_updateRgb(100, 0, 0, 1000, 200);
 				} else {
 					if (TLS_isConnected()) {
-						_updateRgb(0,100,0,0,0);
+						_updateRgb(0, 100, 0, 0, 0);
 					} else {
-						_updateRgb(0,100,0,1000,10);
+						_updateRgb(0, 100, 0, 1000, 10);
 					}
 
 				}
 			} else {
-				_updateRgb(0,100,0,200,50);
+				_updateRgb(0, 100, 0, 200, 50);
 			}
 		}
 
