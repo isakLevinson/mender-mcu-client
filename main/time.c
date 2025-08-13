@@ -21,47 +21,48 @@ static struct {
 	int64_t	lastUpdated;
 } g_timerDb;
 
-int is_leap(int year) {
-    return ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0));
+int is_leap(int year)
+{
+	return ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0));
 }
 
 // Number of days in each month
 static const int days_in_month[] = {
-    31, 28, 31, 30, 31, 30,
-    31, 31, 30, 31, 30, 31
+	31, 28, 31, 30, 31, 30,
+	31, 31, 30, 31, 30, 31
 };
 
-int64_t TIME_mktime(tm_t *t)
+int64_t TIME_mktime(tm_t* t)
 {
-    static const int SECONDS_PER_MINUTE = 60;
-    static const int SECONDS_PER_HOUR = 3600;
-    static const int SECONDS_PER_DAY = 86400;
+	static const int SECONDS_PER_MINUTE = 60;
+	static const int SECONDS_PER_HOUR = 3600;
+	static const int SECONDS_PER_DAY = 86400;
 
-    uint64_t days = 0;
+	uint64_t days = 0;
 
-    // Years since 1970
-    for (int year = 1970; year < t->year; year++) {
-        days += is_leap(year) ? 366 : 365;
-    }
+	// Years since 1970
+	for (int year = 1970; year < t->year; year++) {
+		days += is_leap(year) ? 366 : 365;
+	}
 
-    // Months in current year
-    for (int month = 1; month < t->mon; month++) {
-        days += days_in_month[month];
-        if (month == 1 && is_leap(t->year)) {
-            days += 1;  // February in leap year
-        }
-    }
+	// Months in current year
+	for (int month = 1; month < t->mon; month++) {
+		days += days_in_month[month];
+		if (month == 1 && is_leap(t->year)) {
+			days += 1;  // February in leap year
+		}
+	}
 
-    // Days in current month
-    days += t->day - 1;
+	// Days in current month
+	days += t->day - 1;
 
-    // Convert to seconds
-    uint64_t seconds = days * SECONDS_PER_DAY;
-    seconds += t->hour * SECONDS_PER_HOUR;
-    seconds += t->min * SECONDS_PER_MINUTE;
-    seconds += t->sec;
+	// Convert to seconds
+	uint64_t seconds = days * SECONDS_PER_DAY;
+	seconds += t->hour * SECONDS_PER_HOUR;
+	seconds += t->min * SECONDS_PER_MINUTE;
+	seconds += t->sec;
 
-    return seconds;
+	return seconds;
 }
 
 int64_t TIME_set64(int64_t time)

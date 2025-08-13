@@ -56,10 +56,8 @@ bool NVS_set(char* namespace, char* key,  char* val)
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
 
-#ifdef 	NVS_MAX_LENGTH
-	char    str[NVS_MAX_LENGTH];
+	char*	rdStr;
 	size_t  length;
-#endif
 
 	err = nvs_open(namespace, NVS_READWRITE, &handle);
 	if (err != ESP_OK) {
@@ -67,15 +65,21 @@ bool NVS_set(char* namespace, char* key,  char* val)
 		return false;
 	}
 
-#ifdef 	NVS_MAX_LENGTH
-	length = sizeof(str);
-	err =  nvs_get_str(handle, key, str, &length);
+	length = 4096;
+	rdStr = calloc(1, length);
+	if (!rdStr) {
+		WARN("can't allocate rdStr. storing\n");
+		goto store;
+	}
+
+	err =  nvs_get_str(handle, key, rdStr, &length);
 	if (err != ESP_OK) {
 		TRACE("nvs_get_str <%s> failed\n", key);
 		goto    store;
 	}
-	str[length] = '\0';
-	if (strcmp(str, val)) {
+
+	rdStr[length] = '\0';
+	if (strcmp(rdStr, val)) {
 		INFO("<%s> mismatch. storing new <%s>\n", key, val);
 		goto store;
 	}
@@ -84,8 +88,6 @@ bool NVS_set(char* namespace, char* key,  char* val)
 	goto exit;
 
 store:
-#endif
-
 	INFO("storing %s\n", key);
 	err = nvs_set_str(handle, key, val);
 	if (err != ESP_OK) {
@@ -93,9 +95,10 @@ store:
 		ret = false;
 	}
 
-#ifdef 	NVS_MAX_LENGTH
 exit:
-#endif
+	if (rdStr) {
+		free(rdStr);
+	}
 
 	nvs_commit(handle);
 	nvs_close(handle);

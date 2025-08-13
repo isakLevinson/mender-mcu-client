@@ -863,7 +863,7 @@ bool wss_init(void)
 	return true;
 
 #if (HTTP_UNSECURE == 0)
-	err:
+err:
 	if (ca_pem) {
 		free(ca_pem);
 	}
