@@ -27,7 +27,7 @@ typedef enum {
 	cmd(cert_key,		cfg,	optional,	NULL)		\
 	cmd(ca_pem,			cfg,	optional,	NULL)		\
 	cmd(vault_url,		cfg,	optional,	NULL)		\
-	cmd(client_cn,		null,	mandatory,	"client")	\	
+	cmd(client_cn,		null,	mandatory,	"client")	\
 
 // *INDENT-ON*
 

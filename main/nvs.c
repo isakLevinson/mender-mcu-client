@@ -310,11 +310,8 @@ static bool dbgList(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-	bool		ret;
 	esp_err_t   err = ESP_OK;
 	nvs_stats_t nvs_stats;
-	uint8_t		i;
-	char		val[2048];
 
 	err =  nvs_get_stats(NULL, &nvs_stats);
 	if (err == ESP_OK) {

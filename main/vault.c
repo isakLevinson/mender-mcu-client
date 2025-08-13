@@ -33,7 +33,6 @@
 #include "nvs.h"
 #include "cJSON.h"
 
-
 #define VAULT_ROLE_NAME			"brain-space-all"
 #define VAULT_URL_LOGIN			"/v1/auth/approle/login"
 #define VAULT_URL_LOGIN_CERT	"/v1/auth/cert/login"
@@ -357,7 +356,6 @@ err:
 static bool _vaultRenew(char* token)
 {
 	bool    ret;
-	esp_err_t err;
 	int		resultSize;
 	mbedtls_pk_context*	pkey = TLS_getPkey();
 	char	baseUrl[64];
@@ -526,8 +524,6 @@ err:
 static bool dbgStatus(uint8_t argc, char** argv)
 {
 	int     	ret;
-	char    	errStr[256];
-	char		ca_pem[2048];
 	uint32_t	flags;
 
 	mbedtls_x509_crt* cert;
@@ -559,7 +555,6 @@ static bool dbgVerify(uint8_t argc, char** argv)
 	mbedtls_x509_crt cert;
 	mbedtls_x509_crt ca_chain;
 	char	buf[4096];
-	char*	ca_pem;
 	uint32_t flags;
 
 	mbedtls_x509_crt_init(&cert);
