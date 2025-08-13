@@ -44,11 +44,11 @@ char* const g_namespaces[] = {
 };
 
 #define CFG_ARR(id, ns, t, d)	[cfg_id_ ## id] = {	\
-	.key = #id,	\
-	.namespace = g_namespaces[namespace_ ## ns],	\
-	.def = d,	\
-	.type = config_type_ ## t,	\
-},
+        .key = #id,	\
+        .namespace = g_namespaces[namespace_ ## ns],	\
+        .def = d,	\
+        .type = config_type_ ## t,	\
+    },
 
 static cfg_item_t g_id[] = {
 	CFG_LIST(CFG_ARR)
@@ -173,7 +173,7 @@ static void _clearCount(void)
 {
 	uint8_t i;
 
-	for (i=0; i<ARR_SIZE(g_id); i++) {
+	for (i = 0; i < ARR_SIZE(g_id); i++) {
 		g_id[i].count = 0;
 	}
 }
@@ -184,8 +184,10 @@ cfg_status_t CFG_parseWssCommand(char* pStr, size_t size)
 	cfg_status_t status;
 
 	cJSON* root = NULL;
-	const cJSON *item = NULL;
+	const cJSON* item = NULL;
 	const cJSON* object = NULL;
+	char	ssid[32];
+	char	passwd[32];
 
 	root = cJSON_ParseWithLength(pStr, size);
 	if (!root) {
@@ -196,34 +198,57 @@ cfg_status_t CFG_parseWssCommand(char* pStr, size_t size)
 
 	_clearCount();
 
-    INFO("validating fields\n");
-    cJSON_ArrayForEach(item, root) {
-        if (cJSON_IsString(item)) {
-            cfg_item_t*  cfg = _findEntry(item->string);
+	INFO("validating fields\n");
+	cJSON_ArrayForEach(item, root) {
+		if (cJSON_IsString(item)) {
+			cfg_item_t*  cfg = _findEntry(item->string);
 
-            if (cfg) {
-                cfg->count++;
-                INFO("%s: %d\n", cfg->key, cfg->type);
-            } else {
-                WARN("unrecognized param %s\n", item->string);
+			if (cfg) {
+				cfg->count++;
+				INFO("%s: %d\n", cfg->key, cfg->type);
+			} else {
+				WARN("unrecognized param %s\n", item->string);
 				status = cfg_status_missing_param;
 				goto end;
-            }
-        }
-    }
+			}
+		}
+	}
 
 	status = _checkConfigValidity();
 
-	if (cfg_status_ok == status) {
-		cJSON_ArrayForEach(item, root) {
-			if (cJSON_IsString(item)) {
-				ret = CFG_setByName(item->string, item->valuestring);
-				if (!ret) {
-					status = cfg_status_syntax_error;
-					goto end;
-				}
+	if (cfg_status_ok != status) {
+		goto end;
+	}
+
+	cJSON_ArrayForEach(item, root) {
+		if (cJSON_IsString(item)) {
+			ret = CFG_setByName(item->string, item->valuestring);
+			if (!ret) {
+				status = cfg_status_syntax_error;
+				goto end;
 			}
 		}
+	}
+
+	ret = CFG_get(cfg_id_ssid, ssid, sizeof(ssid));
+	if (!ret) {
+		ERROR("ssid not set\n");
+		status = cfg_status_syntax_error;
+		goto end;
+	}
+
+	ret = CFG_get(cfg_id_passwd, passwd, sizeof(passwd));
+	if (!ret) {
+		ERROR("passwd not set\n");
+		status = cfg_status_syntax_error;
+		goto end;
+	}
+
+	ret = WIFI_sta_connect(ssid, passwd);
+	if (!ret) {
+		ERROR("WIFI_sta_connectfailed\n");
+		status = cfg_status_syntax_error;
+		goto end;
 	}
 
 #if 0
@@ -284,18 +309,18 @@ cfg_status_t CFG_parseWssCommand(char* pStr, size_t size)
 	}
 #endif
 
-end:
-	if (root) {
-		cJSON_Delete(root);
-	}
-
 	if (cfg_status_ok == status) {
 		ret = xTimerStart(g_cfg.timer, 0);
 		if (pdPASS != ret) {
 			ERROR("failed to start timer\n");
 		}
 	}
-	
+
+end:
+	if (root) {
+		cJSON_Delete(root);
+	}
+
 	return status;
 }
 
@@ -357,7 +382,7 @@ bool CFG_getEx(cfg_id_t id,  char* val, size_t maxSize, cfg_location_t* location
 	}
 
 	TRACE("key %s not found\n", g_id[id].key);
-	if (val && maxSize) { 
+	if (val && maxSize) {
 		val[0] = '\0';
 	}
 	return false;
@@ -567,16 +592,28 @@ static bool dbgGet(uint8_t argc, char** argv)
 			if (ret) {
 				char* locStr = "";
 				switch (location) {
-					case cfg_location_invalid:		locStr = "inv ";	break;
-					case cfg_location_none:			locStr = "none";	break;
-					case cfg_location_default:		locStr = "def ";	break;
-					case cfg_location_factory:		locStr = "fact";	break;
-					case cfg_location_nvs:			locStr = "nvs ";	break;
-					case cfg_location_temporary:	locStr = "temp";	break;
+					case cfg_location_invalid:
+						locStr = "inv ";
+						break;
+					case cfg_location_none:
+						locStr = "none";
+						break;
+					case cfg_location_default:
+						locStr = "def ";
+						break;
+					case cfg_location_factory:
+						locStr = "fact";
+						break;
+					case cfg_location_nvs:
+						locStr = "nvs ";
+						break;
+					case cfg_location_temporary:
+						locStr = "temp";
+						break;
 				};
 
 				PRINT("%2d %s %s %-16s: (%d)", id, nsStr, locStr, keyStr, strlen(str));
-				PRINT_BUF(NULL,	PRINT_BUF_STYLE_ASC_SIZE_NL, str, MIN(64, strlen(str)) );
+				PRINT_BUF(NULL,	PRINT_BUF_STYLE_ASC_SIZE_NL, str, MIN(64, strlen(str)));
 			} else {
 				PRINT("%2d %s none %-16s\n", id, nsStr, keyStr);
 			}
@@ -591,7 +628,7 @@ static bool dbgGet(uint8_t argc, char** argv)
 
 	id = _findPartialId(key);
 	if (id < 0) {
-		return false;	
+		return false;
 	}
 
 	ret = CFG_get(id, str, sizeof(str));

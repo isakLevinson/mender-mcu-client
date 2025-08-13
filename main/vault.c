@@ -438,7 +438,7 @@ static bool _vaultRenew(char* token)
 	if (ica) {
 		INFO_BUF("ICA",	PRINT_BUF_STYLE_ASC_SIZE_NL | PRINT_BUF_STYLE_FORMAT_ASC, ica->valuestring, strlen(ica->valuestring));
 	}
-#if 0	
+#if 0
 	cJSON* chain = cJSON_GetObjectItem(data, "ca_chain");
 	if (chain) {
 		INFO("CHAIN\n");
@@ -496,7 +496,7 @@ static bool _vaultRenew(char* token)
 	free(certStr);
 	cJSON_Delete(root);
 
-#if 0	
+#if 0
 	ret = TLS_reload();
 	if (!ret) {
 		ERROR("TLS_reload failed\n");

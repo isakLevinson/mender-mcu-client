@@ -156,12 +156,12 @@ reset:
 			size_t pem_len = 0;
 
 			ret = mbedtls_pem_write_buffer(
-				"-----BEGIN CERTIFICATE-----\n",
-				"-----END CERTIFICATE-----\n",
-				client_cert->raw.p, client_cert->raw.len,
-				pem_buf, sizeof(pem_buf), &pem_len
-			);
-			if (ret!=0) {
+			        "-----BEGIN CERTIFICATE-----\n",
+			        "-----END CERTIFICATE-----\n",
+			        client_cert->raw.p, client_cert->raw.len,
+			        pem_buf, sizeof(pem_buf), &pem_len
+			    );
+			if (ret != 0) {
 				WARN("mbedtls_pem_write_buffer failed -0x%04x\n", -ret);
 			} else {
 				INFO_BUF("Peer cert",	PRINT_BUF_STYLE_ASC_SIZE_NL, pem_buf, pem_len);
@@ -183,7 +183,7 @@ reset:
 				ret = CFG_get(cfg_id_client_cn,  client_cn, sizeof(client_cn));
 				if (ret) {
 					//INFO("client_cn: %s\n", client_cn);
-					if(strcmp(client_cn, cert_cn)) {
+					if (strcmp(client_cn, cert_cn)) {
 						WARN("CN does not match %s\n", client_cn);
 						xSemaphoreGive(g_tls.mutex);
 						goto reset;
@@ -204,11 +204,11 @@ reset:
 			.min	= exp->min,
 			.sec	= exp->sec,
 		};
-	
+
 		int32_t sec = TIME_mktime(&t);
 		INFO("cert sec: %d\n", sec);
-		int32_t cert_day = TIME_mktime(&t) / 3600/24;
-		int32_t day = TIME_getSec() / 3600/24;
+		int32_t cert_day = TIME_mktime(&t) / 3600 / 24;
+		int32_t day = TIME_getSec() / 3600 / 24;
 
 		INFO("Certificate expires on: %04d-%02d-%02d %02d:%02d:%02d\n", exp->year, exp->mon, exp->day, exp->hour, exp->min, exp->sec);
 
@@ -218,7 +218,7 @@ reset:
 			xSemaphoreGive(g_tls.mutex);
 			goto reset;
 		} else {
-			INFO("remaining %d days\n", (cert_day-day));
+			INFO("remaining %d days\n", (cert_day - day));
 		}
 
 	} else {
