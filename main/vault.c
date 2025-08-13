@@ -144,7 +144,8 @@ static void _print_cert_dates(const mbedtls_x509_crt* cert)
 {
 	tm_t	t;
 	int32_t	from_days;
-	int32_t	to_days;
+	int64_t	to_sec;
+	int32_t remaining;
 
 	const mbedtls_x509_time* from = &cert->valid_from;
 	const mbedtls_x509_time* to   = &cert->valid_to;
@@ -165,11 +166,20 @@ static void _print_cert_dates(const mbedtls_x509_crt* cert)
 	t.min	= to->min;
 	t.sec	= to->sec;
 
-	to_days = TIME_mktime(&t) / 3600 / 24;
+	to_sec = TIME_mktime(&t);
+	int32_t to_days = to_sec/3600/24;
+
+	int64_t sec = TIME_getSec();
+	if (sec < 1735689600) {
+		WARN("invalid time. assume certificates as expired\n");
+		remaining = -1;
+	} else {
+		remaining = to_sec - sec;
+	}
 
 	PRINT("%04d-%02d-%02d %02d:%02d:%02d - ", from->year, from->mon, from->day, from->hour, from->min, from->sec);
 	PRINT("%04d-%02d-%02d %02d:%02d:%02d ", to->year, to->mon, to->day, to->hour, to->min, to->sec);
-	PRINT("%d - %d (%d)\n", from_days, to_days, to_days - from_days);
+	PRINT("%d - %d. remaining %d sec %d days\n", from_days, to_days, remaining, remaining/3600/24);
 }
 
 static void _printErrors(cJSON* root)
