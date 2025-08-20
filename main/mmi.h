@@ -12,5 +12,4 @@ bool	TLS_isConnected(void);
 #define MMI_init()			true
 #define TLS_isConnected()	false
 
-
 #endif

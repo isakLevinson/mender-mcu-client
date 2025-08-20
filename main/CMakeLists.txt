@@ -36,8 +36,6 @@ idf_component_register(
 				"mender_ota.c"
 
 				INCLUDE_DIRS "."
-
-                EMBED_TXTFILES	"${project_dir}/ota_server_certs/ca_cert.pem"
 				)
 
 target_compile_options(${COMPONENT_LIB} PUBLIC "-Wno-format")

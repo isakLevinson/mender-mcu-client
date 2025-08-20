@@ -8,9 +8,7 @@
 
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
-
-extern const uint8_t server_cert_pem_start[] asm("_binary_ca_cert_pem_start");
-extern const uint8_t server_cert_pem_end[] asm("_binary_ca_cert_pem_end");
+#include "config.h"
 
 static struct {
 	esp_https_ota_handle_t  handle;
@@ -56,16 +54,66 @@ esp_err_t _http_event_handler(esp_http_client_event_t* evt)
 	return ESP_OK;
 }
 
-int OTA_auto(char* pUrl)
+static bool _configInit(esp_http_client_config_t* cfg)
 {
-	\
+	bool	ret;
+
+	cfg->cert_pem = calloc(1, 2048);
+	if (!cfg->cert_pem) {
+		return false;
+	}
+
+	cfg->client_cert_pem = calloc(1, 4048);
+	if (!cfg->client_cert_pem) {
+		return false;
+	}
+
+	cfg->client_key_pem = calloc(1, 2048);
+	if (!cfg->client_key_pem) {
+		return false;
+	}
+
+	ret = CFG_get(cfg_id_ca_pem, (char*)cfg->cert_pem, 2048);
+	if (!ret) {
+		return false;
+	}
+
+	ret = CFG_get(cfg_id_cert_pem, (char*)cfg->client_cert_pem, 4096);
+	if (!ret) {
+		return false;
+	}
+
+	ret = CFG_get(cfg_id_cert_key, (char*)cfg->client_key_pem, 2048);
+	if (!ret) {
+		return false;
+	}
+
+	return true;
+}
+
+static bool _configFree(esp_http_client_config_t* cfg)
+{
+	if (cfg->cert_pem) {
+		free((void*)cfg->cert_pem);
+	}
+	
+	if (cfg->client_cert_pem) {
+		free((void*)cfg->client_cert_pem);
+	}
+
+	if (cfg->client_key_pem) {
+		free((void*)cfg->client_key_pem);
+	}
+
+	return true;
+}
+
+
+bool OTA_auto(char* pUrl)
+{
+	bool	ret = true;
 	esp_http_client_config_t config = {
 		.url = pUrl,
-#ifdef CONFIG_EXAMPLE_USE_CERT_BUNDLE
-		.crt_bundle_attach = esp_crt_bundle_attach,
-#else
-		.cert_pem = (char*)server_cert_pem_start,
-#endif /* CONFIG_EXAMPLE_USE_CERT_BUNDLE */
 		.event_handler = _http_event_handler,
 		.keep_alive_enable = true,
 		.skip_cert_common_name_check = true,
@@ -82,24 +130,33 @@ int OTA_auto(char* pUrl)
 		.http_config = &config,
 	};
 
+	ret = _configInit(&config);
+	if (!ret) {
+		goto exit;
+	}
+
 	INFO("Attempting to download update from %s\n", config.url);
-	esp_err_t ret = esp_https_ota(&ota_config);
-	if (ret == ESP_OK) {
+	esp_err_t status = esp_https_ota(&ota_config);
+	if (status == ESP_OK) {
 		INFO("OTA Succeed\n");
 	} else {
 		ERROR("Firmware upgrade failed %d\n", ret);
+		ret = false;
+		goto exit;
 	}
 
+exit:
+	_configFree(&config);
 	return ret;
 }
 
 bool OTA_begin(char* pUrl)
 {
+	bool		ret = true;
 	esp_err_t   err;
 
 	esp_http_client_config_t config = {
 		.url = pUrl,
-		.cert_pem = (char*)server_cert_pem_start,
 		.event_handler = _http_event_handler,
 		.keep_alive_enable = true,
 		.skip_cert_common_name_check = true,
@@ -108,16 +165,23 @@ bool OTA_begin(char* pUrl)
 	esp_https_ota_config_t ota_config = {
 		.http_config = &config,
 	};
+	ret = _configInit(&config);
+	if (!ret) {
+		goto exit;
+	}
 
 	INFO("begin OTA from %s\n", config.url);
 
 	err = esp_https_ota_begin(&ota_config, &g_ota.handle);
 	if (ESP_OK != err) {
 		ERROR("esp_https_ota_begin failed %d\n", err);
-		return false;
+		ret = false;
+		goto exit;
 	}
 
-	return true;
+exit:
+	_configFree(&config);
+	return ret;
 }
 
 bool OTA_perform(void)
