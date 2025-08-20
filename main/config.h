@@ -57,7 +57,7 @@ typedef enum {
 
 void		 CFG_init(void);
 cfg_status_t CFG_parseWssCommand(char* pStr, size_t size);
-bool		 CFG_default(void);
+bool		 CFG_factoryReset(void);
 
 bool CFG_get(cfg_id_t id,  char* val, size_t maxSize);
 bool CFG_getEx(cfg_id_t id,  char* val, size_t maxSize, cfg_location_t* location);

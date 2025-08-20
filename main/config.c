@@ -185,7 +185,6 @@ cfg_status_t CFG_parseWssCommand(char* pStr, size_t size)
 
 	cJSON* root = NULL;
 	const cJSON* item = NULL;
-	const cJSON* object = NULL;
 	char	ssid[32];
 	char	passwd[32];
 
@@ -254,7 +253,7 @@ cfg_status_t CFG_parseWssCommand(char* pStr, size_t size)
 #if 0
 	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");
 	if (object) {
-		if (cJSON_IsArray(object)) {
+		if (cJSON_IsArray(object)) {sta	
 			const cJSON* element;
 			PRINT("array:\n");
 			PRINT("number: %f\n", object->valuedouble);
@@ -324,9 +323,9 @@ end:
 	return status;
 }
 
-bool CFG_default(void)
+bool CFG_factoryReset(void)
 {
-	NVS_eraseAll();
+	NVS_eraseNamespace(NVS_NAMESPACE);
 	WIFI_sta_disconnect();
 	WIFI_startAp();
 	wss_config_start();
@@ -395,8 +394,6 @@ bool CFG_get(cfg_id_t id,  char* val, size_t maxSize)
 
 bool CFG_set(cfg_id_t id,  char* val)
 {
-	bool	ret;
-
 	if (id >= cfg_id_last) {
 		return false;
 	}
@@ -430,8 +427,6 @@ bool CFG_setByName(char* key,  char* val)
 
 bool CFG_del(cfg_id_t id)
 {
-	bool	ret;
-
 	if (id >= cfg_id_last) {
 		return false;
 	}
@@ -544,7 +539,7 @@ static bool dbgDefault(uint8_t argc, char** argv)
 		return false;
 	}
 
-	CFG_default();
+	CFG_factoryReset();
 	return true;
 }
 
@@ -558,7 +553,6 @@ static bool dbgGet(uint8_t argc, char** argv)
 {
 	bool    	ret;
 	bool    	isAll	= false;
-	char*		pIdStr	= NULL;
 	char  		str[3000];
 	cfg_id_t	id;
 	cfg_location_t	location;
@@ -643,8 +637,8 @@ static bool dbgGet(uint8_t argc, char** argv)
 		if (g_id[id].key) {
 			keyStr = g_id[id].key;
 		}
-		//		PRINT("%s\n", str);
-		PRINT("%2d %s %s: \n", id, g_id[id].namespace, g_id[id].key);
+
+		PRINT("%2d %s %s: \n", id, nsStr, keyStr);
 		PRINT_BUF("",	PRINT_BUF_STYLE_ASC_SIZE_NL | PRINT_BUF_STYLE_FORMAT_ASC, str, strlen(str));
 	} else {
 		PRINT("NULL\n");

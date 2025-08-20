@@ -167,7 +167,7 @@ static void _task(void* arg)
 		if (trig) {
 			if (time - pressTime >= BUTTOR_PRESS_TIME_FACTORY_RESET) {
 				INFO("resetting to default\n");
-				CFG_default();
+				CFG_factoryReset();
 				g_led.isConfigurated = false;
 				trig = false;
 			}
@@ -226,7 +226,7 @@ static bool dbgFactory(uint8_t argc, char** argv)
 		return false;
 	}
 
-	CFG_default();
+	CFG_factoryReset();
 	return true;
 }
 

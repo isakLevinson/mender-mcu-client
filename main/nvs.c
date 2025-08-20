@@ -131,12 +131,12 @@ bool NVS_del(char* namespace, char* key)
 	return ret;
 }
 
-bool NVS_eraseAll(void)
+bool NVS_eraseNamespace(char* ns)
 {
 	esp_err_t err = ESP_OK;
 	nvs_handle_t handle;
 
-	err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+	err = nvs_open(ns, NVS_READWRITE, &handle);
 	if (err != ESP_OK) {
 		ERROR("nvs_open <%s> failed %x\n",  NVS_NAMESPACE, err);
 		return false;
