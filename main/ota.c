@@ -218,8 +218,16 @@ void OTA_restart(void)
 
 static bool dbgAuto(uint8_t argc, char** argv)
 {
+	bool	ret;
+
 	if (argc < 2) {
-		return false;
+		char url[256];
+		ret = CFG_get(cfg_id_ota_url, url, sizeof(url));
+		if (!ret) {
+			PRINT("can't get url\n");
+		}
+		OTA_auto(url);
+		return true;
 	}
 
 	//	sprintf(url, "https://%s:8070/%s", argv[1], argv[2]);
@@ -232,8 +240,16 @@ static bool dbgAuto(uint8_t argc, char** argv)
 
 static bool dbgBegin(uint8_t argc, char** argv)
 {
+	bool	ret;
+
 	if (argc < 2) {
-		return false;
+		char url[256];
+		ret = CFG_get(cfg_id_ota_url, url, sizeof(url));
+		if (!ret) {
+			PRINT("can't get url\n");
+		}
+		OTA_begin(url);
+		return true;
 	}
 
 	OTA_begin(argv[1]);
