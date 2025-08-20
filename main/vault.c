@@ -167,7 +167,7 @@ static void _print_cert_dates(const mbedtls_x509_crt* cert)
 	t.sec	= to->sec;
 
 	to_sec = TIME_mktime(&t);
-	int32_t to_days = to_sec/3600/24;
+	int32_t to_days = to_sec / 3600 / 24;
 
 	int64_t sec = TIME_getSec();
 	if (sec < 1735689600) {
@@ -179,7 +179,7 @@ static void _print_cert_dates(const mbedtls_x509_crt* cert)
 
 	PRINT("%04d-%02d-%02d %02d:%02d:%02d - ", from->year, from->mon, from->day, from->hour, from->min, from->sec);
 	PRINT("%04d-%02d-%02d %02d:%02d:%02d ", to->year, to->mon, to->day, to->hour, to->min, to->sec);
-	PRINT("%d - %d. remaining %d sec %d days\n", from_days, to_days, remaining, remaining/3600/24);
+	PRINT("%d - %d. remaining %d sec %d days\n", from_days, to_days, remaining, remaining / 3600 / 24);
 }
 
 static void _printErrors(cJSON* root)

@@ -253,7 +253,7 @@ cfg_status_t CFG_parseWssCommand(char* pStr, size_t size)
 #if 0
 	object = cJSON_GetObjectItemCaseSensitive(json, "wr_reg");
 	if (object) {
-		if (cJSON_IsArray(object)) {sta	
+		if (cJSON_IsArray(object)) {
 			const cJSON* element;
 			PRINT("array:\n");
 			PRINT("number: %f\n", object->valuedouble);
