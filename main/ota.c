@@ -218,8 +218,6 @@ void OTA_restart(void)
 
 static bool dbgAuto(uint8_t argc, char** argv)
 {
-//	char    url[64];
-
 	if (argc < 2) {
 		return false;
 	}
@@ -315,13 +313,13 @@ static bool dbgStatus(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("ota", NULL)
-		DEBUG_MENU_CMD("status",	NULL,		    NULL, dbgStatus)
-		DEBUG_MENU_CMD("auto",		NULL,		    NULL, dbgAuto)
-		DEBUG_MENU_CMD("restart",	NULL,		    NULL, dbgRestart)
-		DEBUG_MENU_CMD("begin",		"<ip> <file>",	NULL, dbgBegin)
-		DEBUG_MENU_CMD("perform",	NULL,		    NULL, dbgPerform)
-		DEBUG_MENU_CMD("finish",	NULL,		    NULL, dbgFinish)
-		DEBUG_MENU_CMD("abort", 	NULL,		    NULL, dbgAbort)
+		DEBUG_MENU_CMD("status",	NULL,	NULL, dbgStatus)
+		DEBUG_MENU_CMD("auto",		"<url>",NULL, dbgAuto)
+		DEBUG_MENU_CMD("restart",	NULL,	NULL, dbgRestart)
+		DEBUG_MENU_CMD("begin",		"<url>",NULL, dbgBegin)
+		DEBUG_MENU_CMD("perform",	NULL,	NULL, dbgPerform)
+		DEBUG_MENU_CMD("finish",	NULL,	NULL, dbgFinish)
+		DEBUG_MENU_CMD("abort", 	NULL,	NULL, dbgAbort)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
