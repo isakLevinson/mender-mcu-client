@@ -238,7 +238,6 @@ bool CLI_getc(char* o_pChar)
 static bool dbgVer(uint8_t argc, char** argv)
 {
 	bool	ret;
-	int		err;
 	char*	proj;
 	char*	ver;
 	char	hw_ver[64] = {0};

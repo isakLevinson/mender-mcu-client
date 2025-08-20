@@ -126,7 +126,7 @@ reset:
 
 	while ((ret = mbedtls_ssl_handshake(ssl)) != 0) {
 		if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
-			char* str = mbedtls_high_level_strerr(ret);
+			const char* str = mbedtls_high_level_strerr(ret);
 			ERROR("mbedtls_ssl_handshake -%x %s\n", -ret, str);
 			xSemaphoreGive(g_tls.mutex);
 			goto reset;
@@ -144,7 +144,7 @@ reset:
 			mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), "", flags);
 			ERROR("Certificate verification failed:\n%s", vrfy_buf);
 
-			ret = mbedtls_x509_crt_verify(client_cert, &g_tls.ca_cert, NULL, NULL, &flags, NULL, NULL);
+			ret = mbedtls_x509_crt_verify((mbedtls_x509_crt*)client_cert, &g_tls.ca_cert, NULL, NULL, &flags, NULL, NULL);
 			if (ret != 0) {
 				mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), "", flags);
 				ERROR("Manual cert verification failed:\n%s", vrfy_buf);
@@ -195,7 +195,7 @@ reset:
 			name = name->next;
 		}
 
-		mbedtls_x509_time* exp = &client_cert->valid_to;
+		const mbedtls_x509_time* exp = &client_cert->valid_to;
 		tm_t t = {
 			.year	= exp->year,
 			.mon	= exp->mon,
@@ -362,14 +362,14 @@ static bool _taskInit(mbedtls_ssl_context* ssl, mbedtls_net_context* listen_fd, 
 
 	mbedtls_ssl_init(ssl);
 	if ((ret = mbedtls_ssl_setup(ssl, &g_tls.conf)) != 0) {
-		char* str = mbedtls_high_level_strerr(ret);
+		const char* str = mbedtls_high_level_strerr(ret);
 		ERROR("mbedtls_ssl_setup %x %s\n", -ret, str);
 		INFO("exiting task\n");
 		return false;
 	}
 
 	if ((ret = mbedtls_net_bind(listen_fd, NULL, port, MBEDTLS_NET_PROTO_TCP)) != 0) {
-		char* str = mbedtls_high_level_strerr(ret);
+		const char* str = mbedtls_high_level_strerr(ret);
 		ERROR("mbedtls_net_bind %d %s\n", ret, str);
 		return false;
 	}
@@ -546,7 +546,6 @@ static bool _tlsInit(void)
 	int			ret;
 	const char* pers = "ssl_server";
 	char*		buf = NULL;
-	uint32_t	len;
 
 	mbedtls_ssl_config_init(&g_tls.conf);
 #if defined(MBEDTLS_SSL_CACHE_C)
@@ -796,7 +795,6 @@ int TLS_curl(char* url, esp_http_client_method_t method, char* header_key, char*
 {
 	int		ret = true;
 	esp_err_t err;
-	int     read_len;
 	int		i;
 	esp_http_client_handle_t client	= NULL;
 	char*	cert_pem				= NULL;
@@ -1051,9 +1049,6 @@ static bool dbgClose(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-	int     ret;
-	char    errStr[256];
-
 	PRINT("cmd    : %d\n", g_tls.fd_cmd.fd);
 	PRINT("stresam: %d\n", g_tls.fd_stream.fd);
 

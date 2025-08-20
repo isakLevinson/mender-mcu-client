@@ -20,7 +20,7 @@ typedef struct {
 bool	CMD_init(CMD_CONTEXT* i_pDefaultContext);
 void	CMD_parseByte(CMD_CONTEXT* i_pContext, uint8_t data);
 bool	CMD_processBuffer(CMD_CONTEXT* i_pContext, uint8_t* i_pBuf, uint16_t size);
-bool 	CMD_processJson(CMD_CONTEXT* i_pContext, char* pCommand, char* pData);
+bool 	CMD_processJson(CMD_CONTEXT* i_pContext, const char* pCommand, char* pData);
 void	CMD_parseInit(void);
 bool	CMD_setStreamContext(CMD_CONTEXT* i_pContext);
 bool	CMD_sendBatteryEvent(uint8_t soc, uint16_t voltage_mv);
