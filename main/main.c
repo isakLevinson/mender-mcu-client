@@ -39,6 +39,7 @@
 #include "max30001.h"
 #include "max17049.h"
 #include "mender_ota.h"
+#include "ota.h"
 #include "vault.h"
 
 #define BUF_SIZE    1024
@@ -145,6 +146,7 @@ void app_main(void)
 	CLI_init();
 	FACTORY_init();
 	CFG_init();
+	OTA_init();
 	NVS_init();
 	MENDER_init();
 	CMD_init(NULL);

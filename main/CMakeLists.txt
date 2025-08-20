@@ -32,7 +32,7 @@ idf_component_register(
 				"nvs.c"
 				"config.c"
 				"factory.c"
-#				"ota.c"
+				"ota.c"
 				"mender_ota.c"
 
 				INCLUDE_DIRS "."

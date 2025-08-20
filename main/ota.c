@@ -154,7 +154,7 @@ void OTA_restart(void)
 
 static bool dbgAuto(uint8_t argc, char** argv)
 {
-	char    url[64];
+//	char    url[64];
 
 	if (argc < 2) {
 		return false;
@@ -170,9 +170,6 @@ static bool dbgAuto(uint8_t argc, char** argv)
 
 static bool dbgBegin(uint8_t argc, char** argv)
 {
-	esp_err_t   err;
-	char    url[64];
-
 	if (argc < 2) {
 		return false;
 	}
