@@ -681,6 +681,44 @@ bool VAULT_checkExpiration(mbedtls_x509_time* from, mbedtls_x509_time* to, int32
 	return ret;
 }
 
+static void _taskRenew(void* arg)
+{
+	bool	ret;
+	char	token[256];
+
+	INFO("_taskRenew\n");
+
+	ret = _vaultLoginCert(token);
+	if (!ret) {
+		ERROR("login failed\n");
+		goto exit;
+	}
+
+	INFO("using token: %s\n", token);
+
+	ret = _vaultRenew(token);
+	if (!ret) {
+		ERROR("renew failed\n");
+	}
+
+exit:
+	INFO("_taskRenew exiting\n");
+	vTaskDelete(NULL);
+}
+
+bool VAULT_renewCertificates(void)
+{
+	bool	ret;
+
+	ret = xTaskCreate(_taskRenew, "vault renew", 8192, NULL, 3, NULL);
+	if (ret != pdPASS) {
+		ERROR("create task %s failed\n", "vualt renew");
+		return false;
+	}
+
+	return true;
+}
+
 static bool dbgVerify(uint8_t argc, char** argv)
 {
 	int32_t expirationOffset = 0;
@@ -721,16 +759,23 @@ static bool dbgRenew(uint8_t argc, char** argv)
 	bool	ret;
 	char	t[256];
 	char*	token = NULL;
+	bool	isAuto = false;
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
 		ARGS_ENTRY("t",		ARGS_TYPE_STRING,	0,	"role and secret login",	&token)
+		ARGS_ENTRY("a",		ARGS_TYPE_SWITCH,	0,	"auto reniew with a task",	&isAuto)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
 	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
 	if (!ret) {
 		return false;
+	}
+
+	if (isAuto) {
+		VAULT_renewCertificates();
+		return true;
 	}
 
 	if (!token) {
