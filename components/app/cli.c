@@ -32,6 +32,7 @@
 static struct {
 	DBG_DECODE_INST		decoder;
 	SemaphoreHandle_t	mutex;
+
 	TaskStatus_t 		taskStatusArray[32];
 
 #if USE_FLASH_LOG
@@ -39,6 +40,12 @@ static struct {
 
 	FIFO			logRamFifo;
 	FIFO			logFlashFifo;
+
+	StaticTask_t	taskCli;
+	uint8_t			stackCli[8194];
+
+	StaticTask_t	taskLog;
+	uint8_t			stackLog[2048];
 
 	uint8_t			logBuf[2048];
 	uint32_t		erasedSector;
@@ -372,6 +379,7 @@ static bool dbgMem(uint8_t argc, char** argv)
 	multi_heap_info_t heap_info;
 	size_t internal_ram_free	= heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
 	size_t spi_ram_free			= heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+	size_t total				= heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
 	static multi_heap_info_t heap_hist = {0};
 	int8_t	trace = -1;
 	bool	dump = false;
@@ -416,12 +424,14 @@ static bool dbgMem(uint8_t argc, char** argv)
 	PRINT("\n");
 	PRINT("SPI RAM free         : %d\n", spi_ram_free);
 	PRINT("Internal RAM free    : %d\n", internal_ram_free);
+	PRINT("Total internal       : %d\n", total);
 
 	_printDiffs("Total free bytes     :", heap_hist.total_free_bytes, heap_info.total_free_bytes);
 	_printDiffs("Total allocated bytes:", heap_hist.total_allocated_bytes, heap_info.total_allocated_bytes);
 	_printDiffs("Largest free block   :", heap_hist.largest_free_block, heap_info.largest_free_block);
 	_printDiffs("Free blocks          :", heap_hist.free_blocks, heap_info.free_blocks);
 	_printDiffs("Allocated blocks     :", heap_hist.allocated_blocks, heap_info.allocated_blocks);
+
 
 	memcpy(&heap_hist, &heap_info, sizeof(heap_hist));
 
@@ -650,14 +660,14 @@ bool	CLI_init(void)
 	uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
 	uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, str, strlen(str));
 
-	ret = xTaskCreate(_taskCli, "cli", 8192, NULL, 8, NULL);
-	if (ret != pdPASS) {
+	TaskHandle_t cliHandle = xTaskCreateStatic(_taskCli, "cli", sizeof(g_cli.stackCli), NULL, 8, g_cli.stackCli, &g_cli.taskCli);
+	if (!cliHandle) {
 		//ERROR
 		return false;
 	}
 
-	ret = xTaskCreate(_taskLog, "log", 4096, NULL, 8, NULL);
-	if (ret != pdPASS) {
+	TaskHandle_t logHandle = xTaskCreateStatic(_taskLog, "log", sizeof(g_cli.stackLog), NULL, 8, g_cli.stackLog, &g_cli.taskLog);
+	if (!logHandle) {
 		//ERROR
 		return false;
 	}

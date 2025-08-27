@@ -43,6 +43,8 @@
 #include "vault.h"
 
 #define BUF_SIZE    1024
+#define NUM_RECORDS 50
+static heap_trace_record_t trace_record[NUM_RECORDS];
 
 char* ESP_getErrStr(int err)
 {
@@ -132,9 +134,6 @@ void uart_init(void)
 	ESP_ERROR_CHECK(uart_param_config(CONFIG_ESP_CONSOLE_UART_NUM, &uart_config));
 	ESP_ERROR_CHECK(uart_set_pin(CONFIG_ESP_CONSOLE_UART_NUM, -1, -1, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 }
-
-#define NUM_RECORDS 1000
-static heap_trace_record_t trace_record[NUM_RECORDS];
 
 bool app_trace_start(void)
 {

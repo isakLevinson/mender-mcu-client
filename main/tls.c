@@ -63,6 +63,12 @@ typedef struct {
 } curl_data_t;
 
 static struct {
+	StaticTask_t	taskCmd;
+	uint8_t	stackCmd[16384];
+
+	StaticTask_t	taskStream;
+	uint8_t	stackStream[8192];
+
 	mbedtls_ssl_config conf;
 	mbedtls_entropy_context entropy;
 	mbedtls_ctr_drbg_context ctr_drbg;
@@ -717,19 +723,19 @@ static bool _init(void)
 
 	g_tls.mutex = xSemaphoreCreateMutex();
 
-	g_tls.kaTimer = xTimerCreate("KA", 3000, pdFALSE, NULL, _kaTimerCb);
-	if (!g_tls.kaTimer) {
-		ERROR("xTimerCreate\n");
-	}
+//	g_tls.kaTimer = xTimerCreate("KA", 3000, pdFALSE, NULL, _kaTimerCb);
+//	if (!g_tls.kaTimer) {
+//		ERROR("xTimerCreate\n");
+//	}
 
-	ret = xTaskCreate(_taskCmd, "tls_cmd", 16384, NULL, 3, NULL);
-	if (ret != pdPASS) {
+	TaskHandle_t taskCmd = xTaskCreateStatic(_taskCmd, "tls_cmd", sizeof(g_tls.stackCmd), NULL, 3, g_tls.stackCmd, &g_tls.taskCmd);
+	if (!taskCmd) {
 		ERROR("create task tls_cmd failed\n");
 		return false;
 	}
 
-	ret = xTaskCreate(_taskStream, "tls_stream", 8192, NULL, 3, NULL);
-	if (ret != pdPASS) {
+	TaskHandle_t taskStream = xTaskCreateStatic(_taskStream, "tls_stream", sizeof(g_tls.stackStream), NULL, 3, g_tls.stackStream, &g_tls.taskStream);
+	if (!taskStream) {
 		ERROR("create task tls_stream failed\n");
 		return false;
 	}
