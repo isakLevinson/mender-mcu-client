@@ -18,6 +18,9 @@
 #include "esp_timer.h"
 #include "esp_mac.h"
 #include "esp_partition.h"
+#include "esp_task_wdt.h"
+#include "esp_heap_trace.h"
+
 #include "config.h"
 
 #include "main.h"
@@ -359,11 +362,54 @@ static bool dbgPs(uint8_t argc, char** argv)
 		PRINT("\n");
 	}
 
+	return true;
+}
+
+static bool dbgMem(uint8_t argc, char** argv)
+{
+	bool	ret;
+	int		err;
 	multi_heap_info_t heap_info;
 	size_t internal_ram_free	= heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
 	size_t spi_ram_free			= heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-
 	static multi_heap_info_t heap_hist = {0};
+	int8_t	trace = -1;
+	bool	dump = false;
+
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("t",		ARGS_TYPE_INT8,		0,	"start / stop heap trace",	&trace)
+		ARGS_ENTRY("d",		ARGS_TYPE_SWITCH,	0,	"dump heap",				&dump)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (!ret) {
+		return false;
+	}
+
+	switch (trace) {
+		case 1:
+			INFO("starting heap trace\n");
+			app_trace_start();
+			return true;
+			break;
+
+		case 0:
+			INFO("stopping heap trace\n");
+			app_trace_stop();
+
+			//esp_int_wdt_disable();
+			heap_trace_dump();
+			return true;
+			break;
+	}
+
+	if (dump) {
+		heap_caps_dump(MALLOC_CAP_DEFAULT);
+		//heap_caps_print_all_task_stat_overview(NULL);
+		return true;
+	}
 
 	heap_caps_get_info(&heap_info, MALLOC_CAP_DEFAULT);
 
@@ -552,6 +598,7 @@ static bool dbgTime(uint8_t argc, char** argv)
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_CMD("ver",	NULL,	NULL, dbgVer)
 	DEBUG_MENU_CMD("ps",	NULL,	NULL, dbgPs)
+	DEBUG_MENU_CMD("mem",	NULL,	NULL, dbgMem)
 	DEBUG_MENU_CMD("tail",	NULL,	NULL, dbgLogTail)
 	DEBUG_MENU_CMD("time",	NULL,	NULL, dbgTime)
 	DEBUG_MENU_DIR("log", NULL)

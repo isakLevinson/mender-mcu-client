@@ -23,6 +23,7 @@
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_wifi.h"
+#include "esp_heap_trace.h"
 #include "main.h"
 #include "cli.h"
 #include "cmd.h"
@@ -132,6 +133,33 @@ void uart_init(void)
 	ESP_ERROR_CHECK(uart_set_pin(CONFIG_ESP_CONSOLE_UART_NUM, -1, -1, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 }
 
+#define NUM_RECORDS 1000
+static heap_trace_record_t trace_record[NUM_RECORDS];
+
+bool app_trace_start(void)
+{
+	int err;
+	err = heap_trace_init_standalone(trace_record, NUM_RECORDS);
+	if (ESP_OK != err) {
+		ERROR("heap_trace_init_standalone %x\n", err);
+		return false;
+	}
+
+	err = heap_trace_start(HEAP_TRACE_ALL);
+	if (ESP_OK != err) {
+		ERROR("heap_trace_start %x\n", err);
+		return false;
+	}
+
+	return true;
+}
+
+void app_trace_stop(void)
+{
+	int err;
+	err = heap_trace_stop();
+}
+
 void app_main(void)
 {
 	esp_err_t ret = nvs_flash_init();
@@ -140,6 +168,8 @@ void app_main(void)
 		ret = nvs_flash_init();
 	}
 	ESP_ERROR_CHECK(ret);
+
+	app_trace_start();
 
 	uart_init();
 	CLI_init();
@@ -167,4 +197,6 @@ void app_main(void)
 	PRINT(" ==================================================\n");
 	PRINT("  Ready.\n");
 	PRINT(" =================================================\n\n");
+
+	app_trace_stop();
 }
