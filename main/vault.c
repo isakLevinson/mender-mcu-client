@@ -612,7 +612,6 @@ static bool _certVerify(void)
 	return true;
 }
 
-
 bool VAULT_checkExpiration(mbedtls_x509_time* from, mbedtls_x509_time* to, int32_t expirationAdvanceDays)
 {
 	bool	ret = true;
@@ -646,7 +645,7 @@ bool VAULT_checkExpiration(mbedtls_x509_time* from, mbedtls_x509_time* to, int32
 		} else {
 			int32_t days = validTime / 24;
 			validTime %= 24;
-			INFO("Valid since %d days, %d hours\n", days, validTime);
+			INFO("Valid since %d days, %d hours ago\n", days, validTime);
 		}
 	}
 
@@ -669,7 +668,7 @@ bool VAULT_checkExpiration(mbedtls_x509_time* from, mbedtls_x509_time* to, int32
 		} else {
 			int32_t days = remaining / 24;
 			remaining %= 24;
-			INFO("Remaining time %d days %d hours ago.\n", days, remaining);
+			INFO("Remaining time %d days %d hours.\n", days, remaining);
 			days -= expirationAdvanceDays;
 			if (days < 0) {
 				INFO("now it's time to renew certificate\n");

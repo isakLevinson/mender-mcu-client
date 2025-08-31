@@ -42,7 +42,7 @@ static struct {
 	FIFO			logFlashFifo;
 
 	StaticTask_t	taskCli;
-	uint8_t			stackCli[8192];
+	uint8_t			stackCli[10000];
 
 	StaticTask_t	taskLog;
 	uint8_t			stackLog[2048];
@@ -108,6 +108,70 @@ uint64_t _getTime(void)
 
 	return t / 1000;
 }
+typedef struct {
+	T_PF_DEBUG_MENU_CMD_HANDLER f;
+	uint8_t argc;
+	char* argv[DBG_MENU_MAX_ARGS];
+} dispatch_args_t;
+
+static void _dispatchFree(dispatch_args_t* pArgs)
+{
+	uint8_t	i;
+
+	for (i=0; i<pArgs->argc; i++) {
+		if (pArgs->argv[i]) {
+			free(pArgs->argv[i]);
+		}
+	}
+	free(pArgs);
+}
+
+static void _dispatchTask(void* arg)
+{
+	dispatch_args_t* pArgs = (dispatch_args_t*)arg;
+
+	INFO("_dispatchTask\n");
+	pArgs->f(pArgs->argc, pArgs->argv);
+
+	_dispatchFree(pArgs);
+
+	INFO("_dispatchTask exit\n");
+	vTaskDelete(NULL);
+}
+
+bool _dispatch(T_PF_DEBUG_MENU_CMD_HANDLER f, uint8_t argc, char** argv)
+{
+	bool 	ret;
+	uint8_t	i;
+	dispatch_args_t* pArgs = calloc(1, sizeof(dispatch_args_t));
+
+	if (!pArgs) {
+		ERROR("can't allocate args for dispatcher\n");
+		return false;
+	}
+
+	pArgs->f	= f;
+	pArgs->argc	= argc;
+	
+	for (i=0; i<argc; i++) {
+		pArgs->argv[i]	= calloc(1, strlen(argv[i])+1);
+		if (!pArgs->argv[i]) {
+			goto error;
+		}
+		strcpy(pArgs->argv[i], argv[i]);
+	}
+
+	INFO("starting _dispatchTask task\n");
+	ret = xTaskCreate(_dispatchTask, "cli&", 8192, pArgs, 7, NULL);
+	return true;
+
+error:
+	ERROR("dispatch error\n");
+	_dispatchFree(pArgs);
+
+	return false;
+}
+
 
 #if USE_FLASH_LOG
 static void _flashRead(void* pArg, uint32_t addr, uint8_t* o_pData, uint16_t size)
@@ -638,6 +702,7 @@ bool	CLI_init(void)
 		.pPrompt	= PROMPT " \\w\\$ ",
 		.pfAlloc	= _alloc,
 		.pfFree		= _free,
+		.pfDispatch = _dispatch,
 	};
 
 	g_cli.mutex = xSemaphoreCreateMutex();
