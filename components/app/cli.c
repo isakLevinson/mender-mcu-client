@@ -129,13 +129,17 @@ static void _dispatchFree(dispatch_args_t* pArgs)
 static void _dispatchTask(void* arg)
 {
 	dispatch_args_t* pArgs = (dispatch_args_t*)arg;
+	uint8_t	i;
 
-	INFO("_dispatchTask\n");
 	pArgs->f(pArgs->argc, pArgs->argv);
 
-	_dispatchFree(pArgs);
+	INFO("Done ");
+	for (i=0; i<pArgs->argc; i++) {
+		INFO(" %s", pArgs->argv[i]);
+	}
+	INFO("\n");
 
-	INFO("_dispatchTask exit\n");
+	_dispatchFree(pArgs);
 	vTaskDelete(NULL);
 }
 
@@ -161,7 +165,6 @@ bool _dispatch(T_PF_DEBUG_MENU_CMD_HANDLER f, uint8_t argc, char** argv)
 		strcpy(pArgs->argv[i], argv[i]);
 	}
 
-	INFO("starting _dispatchTask task\n");
 	ret = xTaskCreate(_dispatchTask, "cli&", 8192, pArgs, 7, NULL);
 	return true;
 
