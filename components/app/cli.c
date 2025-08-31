@@ -42,7 +42,7 @@ static struct {
 	FIFO			logFlashFifo;
 
 	StaticTask_t	taskCli;
-	uint8_t			stackCli[10000];
+	uint8_t			stackCli[5000];
 
 	StaticTask_t	taskLog;
 	uint8_t			stackLog[2048];
@@ -436,6 +436,41 @@ static bool dbgPs(uint8_t argc, char** argv)
 	return true;
 }
 
+static bool dbgKill(uint8_t argc, char** argv)
+{
+	uint8_t i;
+
+	if (argc < 2) {
+		return false;
+	}
+
+	UBaseType_t	uxArraySize;
+	TaskStatus_t taskStatusArray[40] = {0};
+	TaskStatus_t* pTask;
+
+	uint32_t id = strtoul(argv[1], NULL, 10);
+
+	uxArraySize = uxTaskGetNumberOfTasks();
+	uxTaskGetSystemState(taskStatusArray, uxArraySize, NULL);
+	
+	for (i = 0; i < uxArraySize; i++) {
+		pTask = &taskStatusArray[i];
+		//INFO("%2d: %s\n", pTask->xTaskNumber, pTask->pcTaskName);
+		if (pTask->xTaskNumber == id) {
+			break;
+		}
+	}
+
+	if (i >= uxArraySize) {
+		PRINT("task id %d not found\n", id);
+		return true;
+	}
+
+	vTaskDelete(pTask->xHandle);
+
+	return true;
+}
+
 static bool dbgMem(uint8_t argc, char** argv)
 {
 	bool	ret;
@@ -670,11 +705,12 @@ static bool dbgTime(uint8_t argc, char** argv)
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-	DEBUG_MENU_CMD("ver",	NULL,	NULL, dbgVer)
-	DEBUG_MENU_CMD("ps",	NULL,	NULL, dbgPs)
-	DEBUG_MENU_CMD("mem",	NULL,	NULL, dbgMem)
-	DEBUG_MENU_CMD("tail",	NULL,	NULL, dbgLogTail)
-	DEBUG_MENU_CMD("time",	NULL,	NULL, dbgTime)
+	DEBUG_MENU_CMD("ver",	NULL,			NULL, dbgVer)
+	DEBUG_MENU_CMD("ps",	NULL,			NULL, dbgPs)
+	DEBUG_MENU_CMD("mem",	NULL,			NULL, dbgMem)
+	DEBUG_MENU_CMD("tail",	NULL,			NULL, dbgLogTail)
+	DEBUG_MENU_CMD("time",	NULL,			NULL, dbgTime)
+	DEBUG_MENU_CMD("kill",	"<task id>",	NULL, dbgKill)
 	DEBUG_MENU_DIR("log", NULL)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgLogStatus)
 		DEBUG_MENU_CMD("clear",		NULL,		NULL, dbgLogClear)
