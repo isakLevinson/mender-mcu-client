@@ -45,7 +45,7 @@ typedef enum {
 
 static struct {
 	StaticTask_t	task;
-	uint8_t			stack[4096];
+	uint8_t			stack[2048];
 
 	struct {
 		uint16_t    pmpValveDelay;

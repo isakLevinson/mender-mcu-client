@@ -64,7 +64,7 @@ typedef struct {
 
 static struct {
 	StaticTask_t	taskCmd;
-	uint8_t	stackCmd[16384];
+	uint8_t	stackCmd[8192];
 
 	StaticTask_t	taskStream;
 	uint8_t	stackStream[8192];
@@ -372,7 +372,7 @@ static void _taskCmd(void* arg)
 {
 	int ret;
 	int len;
-	unsigned char buf[1024];
+	unsigned char buf[256];
 
 	mbedtls_ssl_context ssl;
 	mbedtls_net_context listen_fd;
@@ -451,7 +451,7 @@ static void _taskStream(void* arg)
 {
 	int ret;
 	int len;
-	unsigned char buf[1024];
+	unsigned char buf[256];
 
 	mbedtls_ssl_context ssl;
 	mbedtls_net_context listen_fd;

@@ -48,7 +48,7 @@
 
 static struct {
 	StaticTask_t	taskTimeServer;
-	uint8_t			stackTimeServer[4096];
+	uint8_t			stackTimeServer[2048];
 
 	int udpSocket;
 	int tcpSocket;

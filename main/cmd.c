@@ -36,8 +36,11 @@
 #include "config.h"
 #include "tls.h"
 
-// *INDENT-OFF*
 
+#undef USE_STREAM
+#define USE_STREAM 0
+
+// *INDENT-OFF*
 //		Opcode name					OPCODE	Parameters
 #define CMD(req, rsp)	\
 	req(NOP,						0x00,	;)							\
