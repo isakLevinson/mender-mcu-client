@@ -18,6 +18,9 @@
 #include "esp_timer.h"
 #include "esp_mac.h"
 #include "esp_partition.h"
+#include "esp_task_wdt.h"
+#include "esp_heap_trace.h"
+
 #include "config.h"
 
 #include "main.h"
@@ -29,6 +32,7 @@
 static struct {
 	DBG_DECODE_INST		decoder;
 	SemaphoreHandle_t	mutex;
+
 	TaskStatus_t 		taskStatusArray[32];
 
 #if USE_FLASH_LOG
@@ -36,6 +40,12 @@ static struct {
 
 	FIFO			logRamFifo;
 	FIFO			logFlashFifo;
+
+	StaticTask_t	taskCli;
+	uint8_t			stackCli[8000];
+
+	StaticTask_t	taskLog;
+	uint8_t			stackLog[2048];
 
 	uint8_t			logBuf[2048];
 	uint32_t		erasedSector;
@@ -98,6 +108,73 @@ uint64_t _getTime(void)
 
 	return t / 1000;
 }
+typedef struct {
+	T_PF_DEBUG_MENU_CMD_HANDLER f;
+	uint8_t argc;
+	char* argv[DBG_MENU_MAX_ARGS];
+} dispatch_args_t;
+
+static void _dispatchFree(dispatch_args_t* pArgs)
+{
+	uint8_t	i;
+
+	for (i=0; i<pArgs->argc; i++) {
+		if (pArgs->argv[i]) {
+			free(pArgs->argv[i]);
+		}
+	}
+	free(pArgs);
+}
+
+static void _dispatchTask(void* arg)
+{
+	dispatch_args_t* pArgs = (dispatch_args_t*)arg;
+	uint8_t	i;
+
+	pArgs->f(pArgs->argc, pArgs->argv);
+
+	INFO("Done ");
+	for (i=0; i<pArgs->argc; i++) {
+		INFO(" %s", pArgs->argv[i]);
+	}
+	INFO("\n");
+
+	_dispatchFree(pArgs);
+	vTaskDelete(NULL);
+}
+
+bool _dispatch(T_PF_DEBUG_MENU_CMD_HANDLER f, uint8_t argc, char** argv)
+{
+	bool 	ret;
+	uint8_t	i;
+	dispatch_args_t* pArgs = calloc(1, sizeof(dispatch_args_t));
+
+	if (!pArgs) {
+		ERROR("can't allocate args for dispatcher\n");
+		return false;
+	}
+
+	pArgs->f	= f;
+	pArgs->argc	= argc;
+	
+	for (i=0; i<argc; i++) {
+		pArgs->argv[i]	= calloc(1, strlen(argv[i])+1);
+		if (!pArgs->argv[i]) {
+			goto error;
+		}
+		strcpy(pArgs->argv[i], argv[i]);
+	}
+
+	ret = xTaskCreate(_dispatchTask, "cli&", 8192, pArgs, 7, NULL);
+	return true;
+
+error:
+	ERROR("dispatch error\n");
+	_dispatchFree(pArgs);
+
+	return false;
+}
+
 
 #if USE_FLASH_LOG
 static void _flashRead(void* pArg, uint32_t addr, uint8_t* o_pData, uint16_t size)
@@ -359,23 +436,104 @@ static bool dbgPs(uint8_t argc, char** argv)
 		PRINT("\n");
 	}
 
+	return true;
+}
+
+static bool dbgKill(uint8_t argc, char** argv)
+{
+	uint8_t i;
+
+	if (argc < 2) {
+		return false;
+	}
+
+	UBaseType_t	uxArraySize;
+	TaskStatus_t taskStatusArray[40] = {0};
+	TaskStatus_t* pTask;
+
+	uint32_t id = strtoul(argv[1], NULL, 10);
+
+	uxArraySize = uxTaskGetNumberOfTasks();
+	uxTaskGetSystemState(taskStatusArray, uxArraySize, NULL);
+	
+	for (i = 0; i < uxArraySize; i++) {
+		pTask = &taskStatusArray[i];
+		//INFO("%2d: %s\n", pTask->xTaskNumber, pTask->pcTaskName);
+		if (pTask->xTaskNumber == id) {
+			break;
+		}
+	}
+
+	if (i >= uxArraySize) {
+		PRINT("task id %d not found\n", id);
+		return true;
+	}
+
+	vTaskDelete(pTask->xHandle);
+
+	return true;
+}
+
+static bool dbgMem(uint8_t argc, char** argv)
+{
+	bool	ret;
+	int		err;
 	multi_heap_info_t heap_info;
 	size_t internal_ram_free	= heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
 	size_t spi_ram_free			= heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-
+	size_t total				= heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
 	static multi_heap_info_t heap_hist = {0};
+	int8_t	trace = -1;
+	bool	dump = false;
+
+// *INDENT-OFF*
+	ARGS_ENTRY_BEGIN(args)
+		ARGS_ENTRY("t",		ARGS_TYPE_INT8,		0,	"start / stop heap trace",	&trace)
+		ARGS_ENTRY("d",		ARGS_TYPE_SWITCH,	0,	"dump heap",				&dump)
+	ARGS_ENTRY_END()
+// *INDENT-ON*
+
+	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
+	if (!ret) {
+		return false;
+	}
+
+	switch (trace) {
+		case 1:
+			INFO("starting heap trace\n");
+			app_trace_start();
+			return true;
+			break;
+
+		case 0:
+			INFO("stopping heap trace\n");
+			app_trace_stop();
+
+			//esp_int_wdt_disable();
+			heap_trace_dump();
+			return true;
+			break;
+	}
+
+	if (dump) {
+		heap_caps_dump(MALLOC_CAP_DEFAULT);
+		//heap_caps_print_all_task_stat_overview(NULL);
+		return true;
+	}
 
 	heap_caps_get_info(&heap_info, MALLOC_CAP_DEFAULT);
 
 	PRINT("\n");
 	PRINT("SPI RAM free         : %d\n", spi_ram_free);
 	PRINT("Internal RAM free    : %d\n", internal_ram_free);
+	PRINT("Total internal       : %d\n", total);
 
 	_printDiffs("Total free bytes     :", heap_hist.total_free_bytes, heap_info.total_free_bytes);
 	_printDiffs("Total allocated bytes:", heap_hist.total_allocated_bytes, heap_info.total_allocated_bytes);
 	_printDiffs("Largest free block   :", heap_hist.largest_free_block, heap_info.largest_free_block);
 	_printDiffs("Free blocks          :", heap_hist.free_blocks, heap_info.free_blocks);
 	_printDiffs("Allocated blocks     :", heap_hist.allocated_blocks, heap_info.allocated_blocks);
+
 
 	memcpy(&heap_hist, &heap_info, sizeof(heap_hist));
 
@@ -550,10 +708,12 @@ static bool dbgTime(uint8_t argc, char** argv)
 
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
-	DEBUG_MENU_CMD("ver",	NULL,	NULL, dbgVer)
-	DEBUG_MENU_CMD("ps",	NULL,	NULL, dbgPs)
-	DEBUG_MENU_CMD("tail",	NULL,	NULL, dbgLogTail)
-	DEBUG_MENU_CMD("time",	NULL,	NULL, dbgTime)
+	DEBUG_MENU_CMD("ver",	NULL,			NULL, dbgVer)
+	DEBUG_MENU_CMD("ps",	NULL,			NULL, dbgPs)
+	DEBUG_MENU_CMD("mem",	NULL,			NULL, dbgMem)
+	DEBUG_MENU_CMD("tail",	NULL,			NULL, dbgLogTail)
+	DEBUG_MENU_CMD("time",	NULL,			NULL, dbgTime)
+	DEBUG_MENU_CMD("kill",	"<task id>",	NULL, dbgKill)
 	DEBUG_MENU_DIR("log", NULL)
 		DEBUG_MENU_CMD("status",	NULL,		NULL, dbgLogStatus)
 		DEBUG_MENU_CMD("clear",		NULL,		NULL, dbgLogClear)
@@ -581,6 +741,7 @@ bool	CLI_init(void)
 		.pPrompt	= PROMPT " \\w\\$ ",
 		.pfAlloc	= _alloc,
 		.pfFree		= _free,
+		.pfDispatch = _dispatch,
 	};
 
 	g_cli.mutex = xSemaphoreCreateMutex();
@@ -603,14 +764,14 @@ bool	CLI_init(void)
 	uart_write_bytes(ECHO_UART_PORT_NUM, str, strlen(str));
 	uart_write_bytes(CONFIG_ESP_CONSOLE_UART_NUM, str, strlen(str));
 
-	ret = xTaskCreate(_taskCli, "cli", 8192, NULL, 8, NULL);
-	if (ret != pdPASS) {
+	TaskHandle_t cliHandle = xTaskCreateStatic(_taskCli, "cli", sizeof(g_cli.stackCli), NULL, 8, g_cli.stackCli, &g_cli.taskCli);
+	if (!cliHandle) {
 		//ERROR
 		return false;
 	}
 
-	ret = xTaskCreate(_taskLog, "log", 4096, NULL, 8, NULL);
-	if (ret != pdPASS) {
+	TaskHandle_t logHandle = xTaskCreateStatic(_taskLog, "log", sizeof(g_cli.stackLog), NULL, 8, g_cli.stackLog, &g_cli.taskLog);
+	if (!logHandle) {
 		//ERROR
 		return false;
 	}

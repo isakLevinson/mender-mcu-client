@@ -44,6 +44,9 @@ typedef enum {
 } PRESS_STATE;
 
 static struct {
+	StaticTask_t	task;
+	uint8_t			stack[2048];
+
 	struct {
 		uint16_t    pmpValveDelay;
 		uint16_t    pmpValveDelayGainPercent;
@@ -70,7 +73,7 @@ static struct {
 		bool    valveZeroDelay;
 		int32_t valveZeroTime;
 	} channels[CHANNEL_COUNT];
-} g_app = {
+} g_ctrl = {
 	.cfg = {
 		.pmpValveDelay  = 100,
 		.pmpValveDelayGainPercent  = 100,
@@ -91,7 +94,7 @@ bool _valveOn(uint8_t v, bool on)
 	}
 
 	gpio_set_level(g_valveGpios[v], on);
-	g_app.channels[v].valveStatus = on;
+	g_ctrl.channels[v].valveStatus = on;
 
 	return true;
 }
@@ -102,7 +105,7 @@ bool _pumpOn(uint8_t v, bool on)
 		return false;
 	}
 	PMP_on(v, on);
-	g_app.channels[v].pumpStatus = on;
+	g_ctrl.channels[v].pumpStatus = on;
 
 	return true;
 }
@@ -111,7 +114,7 @@ bool CTRL_setPump(uint8_t n, bool on)
 {
 	bool    ret;
 
-	if (g_app.loopActive) {
+	if (g_ctrl.loopActive) {
 		return false;
 	}
 
@@ -123,7 +126,7 @@ bool CTRL_setValve(uint8_t n, bool on)
 {
 	bool    ret;
 
-	if (g_app.loopActive) {
+	if (g_ctrl.loopActive) {
 		return false;
 	}
 
@@ -135,34 +138,34 @@ static void _pressurize(uint8_t ch, PRESS_STATE dir)
 {
 	uint32_t    valveDelay;
 
-	if (g_app.channels[ch].pressurizeState == dir) {
+	if (g_ctrl.channels[ch].pressurizeState == dir) {
 		return;
 	}
 
 	switch (dir) {
 		case PRESS_STATE_IDLE:
-			g_app.channels[ch].valveDelay = false;
+			g_ctrl.channels[ch].valveDelay = false;
 			_pumpOn(ch, 0);
 			_valveOn(ch, 0);
 			break;
 
 		case PRESS_STATE_INFLATE:
 			_pumpOn(ch, 1);
-			g_app.channels[ch].valveDelay = true;
-			valveDelay = g_app.cfg.pmpValveDelay + g_app.cfg.pmpValveDelayGainPercent * g_app.channels[ch].press / 100;
+			g_ctrl.channels[ch].valveDelay = true;
+			valveDelay = g_ctrl.cfg.pmpValveDelay + g_ctrl.cfg.pmpValveDelayGainPercent * g_ctrl.channels[ch].press / 100;
 			INFO("valveDelay[%d]=%d\n", ch, valveDelay);
-			g_app.channels[ch].valveTime  = TIME_get32() + valveDelay;
+			g_ctrl.channels[ch].valveTime  = TIME_get32() + valveDelay;
 			break;
 
 		case PRESS_STATE_DEFLATE:
-			g_app.channels[ch].valveDelay = false;
+			g_ctrl.channels[ch].valveDelay = false;
 			_pumpOn(ch, 0);
 			_valveOn(ch, 1);
 			break;
 
 		default:
 	}
-	g_app.channels[ch].pressurizeState = dir;
+	g_ctrl.channels[ch].pressurizeState = dir;
 }
 
 static void _task(void* arg)
@@ -181,25 +184,25 @@ static void _task(void* arg)
 		ADC_getPressure(pressure);
 
 		for (i = 0; i < CHANNEL_COUNT; i++) {
-			g_app.channels[i].press = pressure[i];
+			g_ctrl.channels[i].press = pressure[i];
 
-			if (g_app.channels[i].valveDelay) {
-				if (t >= g_app.channels[i].valveTime) {
-					g_app.channels[i].valveDelay = false;
+			if (g_ctrl.channels[i].valveDelay) {
+				if (t >= g_ctrl.channels[i].valveTime) {
+					g_ctrl.channels[i].valveDelay = false;
 					_valveOn(i, 1);
 				}
 			}
 
-			if (g_app.channels[i].valveZeroDelay) {
-				if (t >= g_app.channels[i].valveZeroTime) {
-					g_app.channels[i].valveZeroDelay = false;
-					g_app.channels[i].deflateDone = true;
+			if (g_ctrl.channels[i].valveZeroDelay) {
+				if (t >= g_ctrl.channels[i].valveZeroTime) {
+					g_ctrl.channels[i].valveZeroDelay = false;
+					g_ctrl.channels[i].deflateDone = true;
 					_pressurize(i, PRESS_STATE_IDLE);
 				}
 			}
 		}
 
-		if (!g_app.loopActive) {
+		if (!g_ctrl.loopActive) {
 			continue;
 		}
 
@@ -209,13 +212,13 @@ static void _task(void* arg)
 
 		timeTrace += 100;
 		TRACE("press: %3d %3d %3d %3d %2d %2d %2d %2d\n",
-		    g_app.channels[0].press, g_app.channels[1].press, g_app.channels[2].press, g_app.channels[3].press,
-		    g_app.channels[0].pressurizeState, g_app.channels[1].pressurizeState, g_app.channels[2].pressurizeState, g_app.channels[3].pressurizeState);
+		    g_ctrl.channels[0].press, g_ctrl.channels[1].press, g_ctrl.channels[2].press, g_ctrl.channels[3].press,
+		    g_ctrl.channels[0].pressurizeState, g_ctrl.channels[1].pressurizeState, g_ctrl.channels[2].pressurizeState, g_ctrl.channels[3].pressurizeState);
 
 		minPressure = 1000;
 		for (i = 0; i < CHANNEL_COUNT; i++) {
-			if (g_app.channels[i].press < minPressure) {
-				minPressure = g_app.channels[i].press;
+			if (g_ctrl.channels[i].press < minPressure) {
+				minPressure = g_ctrl.channels[i].press;
 			}
 		}
 
@@ -226,39 +229,39 @@ static void _task(void* arg)
 		}
 
 		for (i = 0; i < CHANNEL_COUNT; i++) {
-			int delta = g_app.channels[i].press - g_app.channels[i].target;
+			int delta = g_ctrl.channels[i].press - g_ctrl.channels[i].target;
 
-			switch (g_app.channels[i].pressurizeState) {
+			switch (g_ctrl.channels[i].pressurizeState) {
 				case PRESS_STATE_INFLATE:
-					if (delta >= g_app.cfg.histeresisH1) {
+					if (delta >= g_ctrl.cfg.histeresisH1) {
 						_pressurize(i, PRESS_STATE_IDLE);
-						g_app.channels[i].deflateDone = true;
+						g_ctrl.channels[i].deflateDone = true;
 					}
 					break;
 
 				case PRESS_STATE_DEFLATE:
-					if (delta <= g_app.cfg.histeresisL1) {
+					if (delta <= g_ctrl.cfg.histeresisL1) {
 						_pressurize(i, PRESS_STATE_IDLE);
-						//                        if (!g_app.channels[i].target) {
-						g_app.channels[i].deflateDone = true;
+						//                        if (!g_ctrl.channels[i].target) {
+						g_ctrl.channels[i].deflateDone = true;
 						//                        }
 					}
 
-					if (!g_app.channels[i].valveZeroDelay) {
-						if (g_app.channels[i].press <= g_app.cfg.zeroTurnOff) {
-							g_app.channels[i].valveZeroDelay = true;
-							g_app.channels[i].valveZeroTime = t + g_app.cfg.zeroValveOpenDelay;
+					if (!g_ctrl.channels[i].valveZeroDelay) {
+						if (g_ctrl.channels[i].press <= g_ctrl.cfg.zeroTurnOff) {
+							g_ctrl.channels[i].valveZeroDelay = true;
+							g_ctrl.channels[i].valveZeroTime = t + g_ctrl.cfg.zeroValveOpenDelay;
 						}
 					}
 					break;
 
 				case PRESS_STATE_IDLE:
-					if ((delta > g_app.cfg.histeresisH2)) {
-						if (!g_app.channels[i].deflateDone) {
+					if ((delta > g_ctrl.cfg.histeresisH2)) {
+						if (!g_ctrl.channels[i].deflateDone) {
 							_pressurize(i, PRESS_STATE_DEFLATE);
 						}
 					}
-					if (delta < g_app.cfg.histeresisL2) {
+					if (delta < g_ctrl.cfg.histeresisL2) {
 						_pressurize(i, PRESS_STATE_INFLATE);
 					}
 					break;
@@ -280,18 +283,17 @@ static void _init(void)
 	gpio_set_direction(GPIO_PIEZO_CTRL, GPIO_MODE_OUTPUT);
 	gpio_set_level(GPIO_PIEZO_CTRL, 0);
 
-	ret = xTaskCreate(_task, "ctrl", 4096, NULL, 3, NULL);
-	if (ret != pdPASS) {
-		ERROR("create task %s failed\n", "ctrl");
-		return;
+	TaskHandle_t task = xTaskCreateStatic(_task, "ctrl", sizeof(g_ctrl.stack), NULL, 3, g_ctrl.stack, &g_ctrl.task);
+	if (!task) {
+		ERROR("create task ctrl failed\n");
 	}
 }
 
 static void _clearFsm(uint8_t ch)
 {
-	g_app.channels[ch].deflateDone      = false;
-	g_app.channels[ch].valveDelay       = false;
-	g_app.channels[ch].valveZeroDelay   = false;
+	g_ctrl.channels[ch].deflateDone      = false;
+	g_ctrl.channels[ch].valveDelay       = false;
+	g_ctrl.channels[ch].valveZeroDelay   = false;
 	_pressurize(ch, PRESS_STATE_IDLE);
 }
 
@@ -303,7 +305,7 @@ bool CTRL_loopEnable(bool on)
 		_clearFsm(i);
 	}
 
-	g_app.loopActive = on;
+	g_ctrl.loopActive = on;
 	return true;
 }
 
@@ -320,10 +322,10 @@ bool CTRL_setTarget(uint16_t* pPressure)
 	}
 
 	for (i = 0; i < CHANNEL_COUNT; i++) {
-		if (pPressure[i] == g_app.channels[i].target) {
+		if (pPressure[i] == g_ctrl.channels[i].target) {
 			continue;
 		}
-		g_app.channels[i].target = pPressure[i];
+		g_ctrl.channels[i].target = pPressure[i];
 		_clearFsm(i);
 	}
 
@@ -335,7 +337,7 @@ bool CTRL_getPressure(int16_t* pPressure)
 	int i;
 
 	for (i = 0; i < CHANNEL_COUNT; i++) {
-		pPressure[i] = g_app.channels[i].press;
+		pPressure[i] = g_ctrl.channels[i].press;
 	}
 
 	return true;
@@ -346,7 +348,7 @@ bool CTRL_getValves(bool* pValves)
 	int i;
 
 	for (i = 0; i < CHANNEL_COUNT; i++) {
-		pValves[i] = g_app.channels[i].valveStatus;
+		pValves[i] = g_ctrl.channels[i].valveStatus;
 	}
 
 	return true;
@@ -357,7 +359,7 @@ bool CTRL_getPump(bool* pPumpsOn)
 	int i;
 
 	for (i = 0; i < CHANNEL_COUNT; i++) {
-		pPumpsOn[i] = g_app.channels[i].pumpStatus;
+		pPumpsOn[i] = g_ctrl.channels[i].pumpStatus;
 	}
 
 	return true;
@@ -466,13 +468,13 @@ static bool dbgPiezoCtrl(uint8_t argc, char** argv)
 
 static bool dbgStatus(uint8_t argc, char** argv)
 {
-	PRINT("target:     %3d %3d %3d %3d\n", g_app.channels[0].target, g_app.channels[1].target, g_app.channels[2].target, g_app.channels[3].target);
-	PRINT("press:      %3d %3d %3d %3d\n", g_app.channels[0].press, g_app.channels[1].press, g_app.channels[2].press, g_app.channels[3].press);
-	PRINT("state:      %3d %3d %3d %3d\n", g_app.channels[0].pressurizeState, g_app.channels[1].pressurizeState, g_app.channels[2].pressurizeState, g_app.channels[3].pressurizeState);
-	PRINT("pump:       %3d %3d %3d %3d\n", g_app.channels[0].pumpStatus, g_app.channels[1].pumpStatus, g_app.channels[2].pumpStatus, g_app.channels[3].pumpStatus);
-	PRINT("valve:      %3d %3d %3d %3d\n", g_app.channels[0].valveStatus, g_app.channels[1].valveStatus, g_app.channels[2].valveStatus, g_app.channels[3].valveStatus);
-	PRINT("zero delay: %3d %3d %3d %3d\n", g_app.channels[0].valveZeroDelay, g_app.channels[0].valveZeroDelay, g_app.channels[2].valveZeroDelay, g_app.channels[3].valveZeroDelay);
-	PRINT("done:       %3d %3d %3d %3d\n", g_app.channels[0].deflateDone, g_app.channels[0].deflateDone, g_app.channels[2].deflateDone, g_app.channels[3].deflateDone);
+	PRINT("target:     %3d %3d %3d %3d\n", g_ctrl.channels[0].target, g_ctrl.channels[1].target, g_ctrl.channels[2].target, g_ctrl.channels[3].target);
+	PRINT("press:      %3d %3d %3d %3d\n", g_ctrl.channels[0].press, g_ctrl.channels[1].press, g_ctrl.channels[2].press, g_ctrl.channels[3].press);
+	PRINT("state:      %3d %3d %3d %3d\n", g_ctrl.channels[0].pressurizeState, g_ctrl.channels[1].pressurizeState, g_ctrl.channels[2].pressurizeState, g_ctrl.channels[3].pressurizeState);
+	PRINT("pump:       %3d %3d %3d %3d\n", g_ctrl.channels[0].pumpStatus, g_ctrl.channels[1].pumpStatus, g_ctrl.channels[2].pumpStatus, g_ctrl.channels[3].pumpStatus);
+	PRINT("valve:      %3d %3d %3d %3d\n", g_ctrl.channels[0].valveStatus, g_ctrl.channels[1].valveStatus, g_ctrl.channels[2].valveStatus, g_ctrl.channels[3].valveStatus);
+	PRINT("zero delay: %3d %3d %3d %3d\n", g_ctrl.channels[0].valveZeroDelay, g_ctrl.channels[0].valveZeroDelay, g_ctrl.channels[2].valveZeroDelay, g_ctrl.channels[3].valveZeroDelay);
+	PRINT("done:       %3d %3d %3d %3d\n", g_ctrl.channels[0].deflateDone, g_ctrl.channels[0].deflateDone, g_ctrl.channels[2].deflateDone, g_ctrl.channels[3].deflateDone);
 	return true;
 }
 
@@ -482,14 +484,14 @@ static bool dbgCfg(uint8_t argc, char** argv)
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
-		ARGS_ENTRY("h2",		ARGS_TYPE_INT8,	    0,	"histeresis high2",	&g_app.cfg.histeresisH2)
-		ARGS_ENTRY("h1",		ARGS_TYPE_INT8,	    0, 	"histeresis high1",	&g_app.cfg.histeresisH1)
-		ARGS_ENTRY("l1",		ARGS_TYPE_INT8,	    0,	"histeresis low1",	&g_app.cfg.histeresisL1)
-		ARGS_ENTRY("l2",		ARGS_TYPE_INT8,	    0,	"histeresis low2",	&g_app.cfg.histeresisL2)
-		ARGS_ENTRY("mt",		ARGS_TYPE_INT8,	    0,	"min turn off",     &g_app.cfg.zeroTurnOff)
-		ARGS_ENTRY("pdg",		ARGS_TYPE_UINT16,	0,	"pump delay",   	&g_app.cfg.pmpValveDelayGainPercent)
-		ARGS_ENTRY("pd",		ARGS_TYPE_UINT16,	0,	"pump delay",   	&g_app.cfg.pmpValveDelay)
-		ARGS_ENTRY("zd",		ARGS_TYPE_UINT16,	0,	"zero delay",   	&g_app.cfg.zeroValveOpenDelay)
+		ARGS_ENTRY("h2",		ARGS_TYPE_INT8,	    0,	"histeresis high2",	&g_ctrl.cfg.histeresisH2)
+		ARGS_ENTRY("h1",		ARGS_TYPE_INT8,	    0, 	"histeresis high1",	&g_ctrl.cfg.histeresisH1)
+		ARGS_ENTRY("l1",		ARGS_TYPE_INT8,	    0,	"histeresis low1",	&g_ctrl.cfg.histeresisL1)
+		ARGS_ENTRY("l2",		ARGS_TYPE_INT8,	    0,	"histeresis low2",	&g_ctrl.cfg.histeresisL2)
+		ARGS_ENTRY("mt",		ARGS_TYPE_INT8,	    0,	"min turn off",     &g_ctrl.cfg.zeroTurnOff)
+		ARGS_ENTRY("pdg",		ARGS_TYPE_UINT16,	0,	"pump delay",   	&g_ctrl.cfg.pmpValveDelayGainPercent)
+		ARGS_ENTRY("pd",		ARGS_TYPE_UINT16,	0,	"pump delay",   	&g_ctrl.cfg.pmpValveDelay)
+		ARGS_ENTRY("zd",		ARGS_TYPE_UINT16,	0,	"zero delay",   	&g_ctrl.cfg.zeroValveOpenDelay)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
@@ -498,14 +500,14 @@ static bool dbgCfg(uint8_t argc, char** argv)
 		return false;
 	}
 
-	PRINT("h2: %d\n", g_app.cfg.histeresisH2);
-	PRINT("h1: %d\n", g_app.cfg.histeresisH1);
-	PRINT("l1: %d\n", g_app.cfg.histeresisL1);
-	PRINT("l2: %d\n", g_app.cfg.histeresisL2);
-	PRINT("mt: %d\n", g_app.cfg.zeroTurnOff);
-	PRINT("pdg:%d\n", g_app.cfg.pmpValveDelayGainPercent);
-	PRINT("pd: %d\n", g_app.cfg.pmpValveDelay);
-	PRINT("zd: %d\n", g_app.cfg.zeroValveOpenDelay);
+	PRINT("h2: %d\n", g_ctrl.cfg.histeresisH2);
+	PRINT("h1: %d\n", g_ctrl.cfg.histeresisH1);
+	PRINT("l1: %d\n", g_ctrl.cfg.histeresisL1);
+	PRINT("l2: %d\n", g_ctrl.cfg.histeresisL2);
+	PRINT("mt: %d\n", g_ctrl.cfg.zeroTurnOff);
+	PRINT("pdg:%d\n", g_ctrl.cfg.pmpValveDelayGainPercent);
+	PRINT("pd: %d\n", g_ctrl.cfg.pmpValveDelay);
+	PRINT("zd: %d\n", g_ctrl.cfg.zeroValveOpenDelay);
 
 	return true;
 }

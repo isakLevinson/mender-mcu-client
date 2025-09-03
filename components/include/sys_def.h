@@ -44,7 +44,6 @@
 
 #endif
 
-
 #define USE_FLASH_LOG				1
 #define USE_FIFO_MEMORY_INTERFACE	1
 #define SIMULATION_MODE     true
@@ -66,6 +65,9 @@
 #define UDP_TIME_SERVER_PORT	5001
 #define TCP_CMD_PORT		    5002
 #define UDP_CMD_PORT		    5002
+
+#define UART_BUF_SIZE    1024
+#define MALLOC_TRACE_RECORDS 50
 
 #define TIME_ZONE_HOURS	3
 
@@ -155,7 +157,7 @@
 #define PROJ_OPT_FEATURE_GEN_DEBUG_MENUS
 #define PROJ_OPT_FEATURE_GEN_DEBUG_PRINTS
 #define DBG_PRINT_MAX_LINE_SIZE         512
-#define DBG_MENU_MAX_LINE_SIZE          512
+#define DBG_MENU_MAX_LINE_SIZE          1024
 #define DBG_MENU_MAX_ARGS               16
 #define DBG_MENU_MAX_PATH_DEPTH         8
 #define DBG_MENU_HISTORY_SIZE           32

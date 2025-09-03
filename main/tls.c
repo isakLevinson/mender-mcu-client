@@ -30,6 +30,7 @@
 #include "mbedtls/oid.h"
 #include "nvs.h"
 #include "factory.h"
+#include "vault.h"
 
 #if defined(MBEDTLS_SSL_CACHE_C)
 #include "mbedtls/ssl_cache.h"
@@ -62,6 +63,12 @@ typedef struct {
 } curl_data_t;
 
 static struct {
+	StaticTask_t	taskCmd;
+	uint8_t	stackCmd[8192];
+
+	StaticTask_t	taskStream;
+	uint8_t	stackStream[8192];
+
 	mbedtls_ssl_config conf;
 	mbedtls_entropy_context entropy;
 	mbedtls_ctr_drbg_context ctr_drbg;
@@ -195,30 +202,12 @@ reset:
 			name = name->next;
 		}
 
-		const mbedtls_x509_time* exp = &client_cert->valid_to;
-		tm_t t = {
-			.year	= exp->year,
-			.mon	= exp->mon,
-			.day	= exp->day,
-			.hour	= exp->hour,
-			.min	= exp->min,
-			.sec	= exp->sec,
-		};
+		ret = VAULT_checkExpiration((mbedtls_x509_time*)&client_cert->valid_from, (mbedtls_x509_time*)&client_cert->valid_to, 0);
 
-		int32_t sec = TIME_mktime(&t);
-		INFO("cert sec: %d\n", sec);
-		int32_t cert_day = TIME_mktime(&t) / 3600 / 24;
-		int32_t day = TIME_getSec() / 3600 / 24;
-
-		INFO("Certificate expires on: %04d-%02d-%02d %02d:%02d:%02d\n", exp->year, exp->mon, exp->day, exp->hour, exp->min, exp->sec);
-
-		INFO("cert day: %d, local day: %d\n", cert_day, day);
-		if (day >= cert_day) {
-			WARN("Cert is expired\n");
+		if (!ret) {
+			ERROR("Cert is expired\n");
 			xSemaphoreGive(g_tls.mutex);
 			goto reset;
-		} else {
-			INFO("remaining %d days\n", (cert_day - day));
 		}
 
 	} else {
@@ -383,7 +372,7 @@ static void _taskCmd(void* arg)
 {
 	int ret;
 	int len;
-	unsigned char buf[1024];
+	unsigned char buf[256];
 
 	mbedtls_ssl_context ssl;
 	mbedtls_net_context listen_fd;
@@ -462,7 +451,7 @@ static void _taskStream(void* arg)
 {
 	int ret;
 	int len;
-	unsigned char buf[1024];
+	unsigned char buf[256];
 
 	mbedtls_ssl_context ssl;
 	mbedtls_net_context listen_fd;
@@ -734,19 +723,19 @@ static bool _init(void)
 
 	g_tls.mutex = xSemaphoreCreateMutex();
 
-	g_tls.kaTimer = xTimerCreate("KA", 3000, pdFALSE, NULL, _kaTimerCb);
-	if (!g_tls.kaTimer) {
-		ERROR("xTimerCreate\n");
-	}
+//	g_tls.kaTimer = xTimerCreate("KA", 3000, pdFALSE, NULL, _kaTimerCb);
+//	if (!g_tls.kaTimer) {
+//		ERROR("xTimerCreate\n");
+//	}
 
-	ret = xTaskCreate(_taskCmd, "tls_cmd", 16384, NULL, 3, NULL);
-	if (ret != pdPASS) {
+	TaskHandle_t taskCmd = xTaskCreateStatic(_taskCmd, "tls_cmd", sizeof(g_tls.stackCmd), NULL, 3, g_tls.stackCmd, &g_tls.taskCmd);
+	if (!taskCmd) {
 		ERROR("create task tls_cmd failed\n");
 		return false;
 	}
 
-	ret = xTaskCreate(_taskStream, "tls_stream", 8192, NULL, 3, NULL);
-	if (ret != pdPASS) {
+	TaskHandle_t taskStream = xTaskCreateStatic(_taskStream, "tls_stream", sizeof(g_tls.stackStream), NULL, 3, g_tls.stackStream, &g_tls.taskStream);
+	if (!taskStream) {
 		ERROR("create task tls_stream failed\n");
 		return false;
 	}
@@ -1063,8 +1052,6 @@ static bool dbgStatus(uint8_t argc, char** argv)
 
 	return true;
 }
-
-
 
 static bool dbgGenKey(uint8_t argc, char** argv)
 {

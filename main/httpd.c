@@ -827,9 +827,7 @@ bool wss_init(void)
 	conf.httpd.global_user_ctx = keep_alive;
 	conf.httpd.max_open_sockets = max_clients;
 
-	INFO("cacert_len    : %d\n", conf.cacert_len);
-	INFO("servercert_len: %d\n", conf.servercert_len);
-	INFO("prvtkey_len   : %d\n", conf.prvtkey_len);
+	conf.httpd.stack_size	= 2048;
 
 	err = httpd_ssl_start(&g_server.handle, &conf);
 	free(ca_pem);

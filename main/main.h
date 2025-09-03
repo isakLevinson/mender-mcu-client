@@ -19,6 +19,8 @@ extern "C" {
 #define ECHO_UART_BAUD_RATE     (115200)
 
 char* ESP_getErrStr(int err);
+bool app_trace_start(void);
+void app_trace_stop(void);
 
 
 #ifdef __cplusplus

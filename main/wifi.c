@@ -47,6 +47,9 @@
 #define FLAG_GOT_IP_UDP_TIME_SYNC BIT4
 
 static struct {
+	StaticTask_t	taskTimeServer;
+	uint8_t			stackTimeServer[2048];
+
 	int udpSocket;
 	int tcpSocket;
 	struct sockaddr_in udp_addr;
@@ -326,10 +329,10 @@ static int _startServer(void)
 
 	INFO("starting listener tasks\n");
 
-	ret = xTaskCreate(task_udp_time_server, "udp_time", 4096, NULL, 3, NULL);
-	if (ret != pdPASS) {
-		ERROR("create task %s failed\n", task_udp_time_server);
-		return ESP_FAIL;
+	TaskHandle_t timeServer = xTaskCreateStatic(task_udp_time_server, "udp_time", sizeof(g_server.stackTimeServer), NULL, 3, g_server.stackTimeServer, &g_server.taskTimeServer);
+	if (!timeServer) {
+		ERROR("create task udp_time failed\n");
+		return false;
 	}
 
 	return ESP_OK;

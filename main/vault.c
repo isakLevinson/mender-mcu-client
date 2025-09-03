@@ -32,6 +32,7 @@
 #include "tls.h"
 #include "nvs.h"
 #include "cJSON.h"
+#include "vault.h"
 
 #define VAULT_ROLE_NAME			"brain-space-all"
 #define VAULT_URL_LOGIN			"/v1/auth/approle/login"
@@ -140,46 +141,16 @@ static bool _voultCreateCsrJson(char* csr, char* ttl, char* json)
 	return true;
 }
 
-static void _print_cert_dates(const mbedtls_x509_crt* cert)
+static void _print_cert_dates(const mbedtls_x509_crt* cert, int32_t expirationOffset)
 {
-	tm_t	t;
-	int32_t	from_days;
-	int64_t	to_sec;
-	int32_t remaining;
+	bool	ret;
+	const	mbedtls_x509_time* from = &cert->valid_from;
+	const	mbedtls_x509_time* to   = &cert->valid_to;
 
-	const mbedtls_x509_time* from = &cert->valid_from;
-	const mbedtls_x509_time* to   = &cert->valid_to;
-
-	t.year	= from->year;
-	t.mon	= from->mon;
-	t.day	= from->day;
-	t.hour	= from->hour;
-	t.min	= from->min;
-	t.sec	= from->sec;
-
-	from_days = TIME_mktime(&t) / 3600 / 24;
-
-	t.year	= to->year;
-	t.mon	= to->mon;
-	t.day	= to->day;
-	t.hour	= to->hour;
-	t.min	= to->min;
-	t.sec	= to->sec;
-
-	to_sec = TIME_mktime(&t);
-	int32_t to_days = to_sec / 3600 / 24;
-
-	int64_t sec = TIME_getSec();
-	if (sec < 1735689600) {
-		WARN("invalid time. assume certificates as expired\n");
-		remaining = -1;
-	} else {
-		remaining = to_sec - sec;
+	ret = VAULT_checkExpiration((mbedtls_x509_time*)from, (mbedtls_x509_time*)to, expirationOffset);
+	if (!ret) {
+		ERROR("certificate expired\n");
 	}
-
-	PRINT("%04d-%02d-%02d %02d:%02d:%02d - ", from->year, from->mon, from->day, from->hour, from->min, from->sec);
-	PRINT("%04d-%02d-%02d %02d:%02d:%02d ", to->year, to->mon, to->day, to->hour, to->min, to->sec);
-	PRINT("%d - %d. remaining %d sec %d days\n", from_days, to_days, remaining, remaining / 3600 / 24);
 }
 
 static void _printErrors(cJSON* root)
@@ -560,7 +531,7 @@ err:
 	return false;
 }
 
-static bool _tlsVerify(void)
+static bool _tlsVerify(int32_t expirationOffset)
 {
 	int     	ret;
 	uint32_t	flags;
@@ -581,9 +552,9 @@ static bool _tlsVerify(void)
 	}
 
 	PRINT("CA  : ");
-	_print_cert_dates(ca_cert);
+	_print_cert_dates(ca_cert, expirationOffset);
 	PRINT("cert: ");
-	_print_cert_dates(cert);
+	_print_cert_dates(cert, expirationOffset);
 
 	return true;
 }
@@ -641,10 +612,122 @@ static bool _certVerify(void)
 	return true;
 }
 
+bool VAULT_checkExpiration(mbedtls_x509_time* from, mbedtls_x509_time* to, int32_t expirationAdvanceDays)
+{
+	bool	ret = true;
+	tm_t	t;
+
+	INFO("%04d-%02d-%02d %02d:%02d:%02d - ", from->year, from->mon, from->day, from->hour, from->min, from->sec);
+	INFO("%04d-%02d-%02d %02d:%02d:%02d\n",	 to->year, to->mon, to->day, to->hour, to->min, to->sec);
+
+	int64_t hour = TIME_getSec() / 3600;
+	if (hour < (1735689600/3600)) {
+		WARN("Invalid time. assume certificates as expired\n");
+		return false;
+	}
+
+	if (from) {
+		t.year	= from->year;
+		t.mon	= from->mon;
+		t.day	= from->day;
+		t.hour	= from->hour;
+		t.min	= from->min;
+		t.sec	= from->sec;
+
+		int32_t from_hours = TIME_mktime(&t) / 3600;
+		int32_t validTime = hour - from_hours;
+		if (validTime < 0) {
+			validTime = -validTime;
+			int32_t days = validTime / 24;
+			validTime %= 24;
+			INFO("Not valid yet. will be valid in %d days, %d hours\n", days, validTime);
+			ret = false;
+		} else {
+			int32_t days = validTime / 24;
+			validTime %= 24;
+			INFO("Valid since %d days, %d hours ago\n", days, validTime);
+		}
+	}
+
+	if (to) {
+		t.year	= to->year;
+		t.mon	= to->mon;
+		t.day	= to->day;
+		t.hour	= to->hour;
+		t.min	= to->min;
+		t.sec	= to->sec;
+
+		int32_t to_hours = TIME_mktime(&t) / 3600;
+		int32_t remaining = to_hours - hour;
+		if (remaining < 0) {
+			remaining = -remaining;
+			int32_t days = remaining / 24;
+			remaining %= 24;
+			ERROR("Eexpired %d days %d hours ago.\n", days, remaining);
+			ret = false;
+		} else {
+			int32_t days = remaining / 24;
+			remaining %= 24;
+			INFO("Remaining time %d days %d hours.\n", days, remaining);
+			days -= expirationAdvanceDays;
+			if (days < 0) {
+				INFO("now it's time to renew certificate\n");
+				return false;
+			}
+		}
+	}
+
+	return ret;
+}
+
+static void _taskRenew(void* arg)
+{
+	bool	ret;
+	char	token[256];
+
+	INFO("_taskRenew\n");
+
+	ret = _vaultLoginCert(token);
+	if (!ret) {
+		ERROR("login failed\n");
+		goto exit;
+	}
+
+	INFO("using token: %s\n", token);
+
+	ret = _vaultRenew(token);
+	if (!ret) {
+		ERROR("renew failed\n");
+	}
+
+exit:
+	INFO("_taskRenew exiting\n");
+	vTaskDelete(NULL);
+}
+
+bool VAULT_renewCertificates(void)
+{
+	bool	ret;
+
+	ret = xTaskCreate(_taskRenew, "vault renew", 8192, NULL, 3, NULL);
+	if (ret != pdPASS) {
+		ERROR("create task %s failed\n", "vualt renew");
+		return false;
+	}
+
+	return true;
+}
+
 static bool dbgVerify(uint8_t argc, char** argv)
 {
+	int32_t expirationOffset = 0;
+
+	if (argc >= 2) {
+		expirationOffset = strtol(argv[1], NULL, 10);
+	}
+
 	_certVerify();
-	_tlsVerify();
+	_tlsVerify(expirationOffset);
 	return true;
 }
 
@@ -675,16 +758,23 @@ static bool dbgRenew(uint8_t argc, char** argv)
 	bool	ret;
 	char	t[256];
 	char*	token = NULL;
+	bool	isAuto = false;
 
 // *INDENT-OFF*
 	ARGS_ENTRY_BEGIN(args)
 		ARGS_ENTRY("t",		ARGS_TYPE_STRING,	0,	"role and secret login",	&token)
+		ARGS_ENTRY("a",		ARGS_TYPE_SWITCH,	0,	"auto reniew with a task",	&isAuto)
 	ARGS_ENTRY_END()
 // *INDENT-ON*
 
 	ret = ARGS_readValues(argc, argv, args, NULL, NULL);
 	if (!ret) {
 		return false;
+	}
+
+	if (isAuto) {
+		VAULT_renewCertificates();
+		return true;
 	}
 
 	if (!token) {
@@ -801,11 +891,11 @@ static bool dbgCurl(uint8_t argc, char** argv)
 // *INDENT-OFF*
 DEBUG_MENU_START(g_menu)
 	DEBUG_MENU_DIR("vault", NULL)
-		DEBUG_MENU_CMD("verify",    NULL,	NULL, dbgVerify)
-		DEBUG_MENU_CMD("csr",       NULL,	NULL, dbgCreateCsr)
-		DEBUG_MENU_CMD("curl",		NULL,	NULL, dbgCurl)
-		DEBUG_MENU_CMD("renew",		NULL,	NULL, dbgRenew)
-		DEBUG_MENU_CMD("login",		NULL,	NULL, dbgLogin)
+		DEBUG_MENU_CMD("verify",    "[expiration offset]",	NULL, dbgVerify)
+		DEBUG_MENU_CMD("csr",       NULL,					NULL, dbgCreateCsr)
+		DEBUG_MENU_CMD("curl",		NULL,					NULL, dbgCurl)
+		DEBUG_MENU_CMD("renew",		NULL,					NULL, dbgRenew)
+		DEBUG_MENU_CMD("login",		NULL,					NULL, dbgLogin)
 	DEBUG_MENU_DIR_END
 DEBUG_MENU_END
 // *INDENT-ON*
