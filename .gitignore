@@ -4,7 +4,6 @@ managed_components/
 *.old
 *.swp
 *.lock
-*.pem
 *.csr
 
 vault/*.id
