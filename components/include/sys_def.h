@@ -157,7 +157,7 @@
 #define PROJ_OPT_FEATURE_GEN_DEBUG_MENUS
 #define PROJ_OPT_FEATURE_GEN_DEBUG_PRINTS
 #define DBG_PRINT_MAX_LINE_SIZE         512
-#define DBG_MENU_MAX_LINE_SIZE          512
+#define DBG_MENU_MAX_LINE_SIZE          1024
 #define DBG_MENU_MAX_ARGS               16
 #define DBG_MENU_MAX_PATH_DEPTH         8
 #define DBG_MENU_HISTORY_SIZE           32

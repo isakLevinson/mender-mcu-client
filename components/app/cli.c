@@ -42,7 +42,7 @@ static struct {
 	FIFO			logFlashFifo;
 
 	StaticTask_t	taskCli;
-	uint8_t			stackCli[5000];
+	uint8_t			stackCli[8000];
 
 	StaticTask_t	taskLog;
 	uint8_t			stackLog[2048];
