@@ -119,6 +119,8 @@ mender_api_perform_authentication(void)
 		goto END;
 	}
 
+	mender_log_info("mender_http_perform mender_api_http_text_callback:%x", mender_api_http_text_callback);
+
 	/* Perform HTTP request */
 	if (MENDER_OK
 	    != (ret = mender_http_perform(NULL,

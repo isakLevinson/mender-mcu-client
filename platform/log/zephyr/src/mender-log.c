@@ -33,7 +33,6 @@ mender_log_init(void)
 mender_err_t
 mender_log_print(uint8_t level, const char* filename, const char* function, int line, char* format, ...)
 {
-
 	(void)function;
 	char log[256] = { 0 };
 

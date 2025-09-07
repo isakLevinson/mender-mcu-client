@@ -60,11 +60,11 @@ mender_http_init(mender_http_config_t* config)
 }
 
 mender_err_t
-mender_http_perform(char*                jwt,
-    char*                path,
-    mender_http_method_t method,
-    char*                payload,
-    char*                signature,
+mender_http_perform(char* jwt,
+    char*                 path,
+    mender_http_method_t  method,
+    char*                 payload,
+    char*                 signature,
 	mender_err_t (*update_http_config_cb)(esp_http_client_config_t* cfg),
     mender_err_t (*callback)(mender_http_client_event_t, void*, size_t, void*),
     void* params,
@@ -97,6 +97,9 @@ mender_http_perform(char*                jwt,
 	if (update_http_config_cb) {
 		update_http_config_cb(&config);
 	}
+	mender_log_info("skip_cert_common_name_check: %d", config.skip_cert_common_name_check);
+	//config.skip_cert_common_name_check = true;
+	//mender_log_error("skip_cert_common_name_check: %d", config.skip_cert_common_name_check);
 
 	if (MENDER_OK != (ret = callback(MENDER_HTTP_EVENT_LOAD_CERTIFICATES, NULL, 0, &config))) {
 		mender_log_error("An error occurred");

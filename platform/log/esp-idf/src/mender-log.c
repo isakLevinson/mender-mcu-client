@@ -29,7 +29,6 @@
 
 void mender_log_print(uint8_t level, const char* filename, const char* function, int line, char* format, ...)
 {
-
 	(void)function;
 	char log[256] = { 0 };
 
@@ -42,16 +41,16 @@ void mender_log_print(uint8_t level, const char* filename, const char* function,
 	/* Switch depending log level */
 	switch (level) {
 		case MENDER_LOG_LEVEL_ERR:
-			ERROR("mender", "%s (%d): %s\n", filename, line, log);
+			ERROR("-%s (%d): %s\n", filename, line, log);
 			break;
 		case MENDER_LOG_LEVEL_WRN:
-			WARN("mender", "%s (%d): %s\n", filename, line, log);
+			WARN("-%s (%d): %s\n", filename, line, log);
 			break;
 		case MENDER_LOG_LEVEL_INF:
-			INFO("mender", "%s (%d): %s\n", filename, line, log);
+			INFO("-%s (%d): %s\n", filename, line, log);
 			break;
 		case MENDER_LOG_LEVEL_DBG:
-			TRACE("mender", "%s (%d): %s\n", filename, line, log);
+			TRACE("-%s (%d): %s\n", filename, line, log);
 			break;
 		default:
 			break;

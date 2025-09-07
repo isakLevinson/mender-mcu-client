@@ -30,7 +30,6 @@ mender_log_init(void)
 __attribute__((weak)) mender_err_t
 mender_log_print(uint8_t level, const char* filename, const char* function, int line, char* format, ...)
 {
-
 	(void)level;
 	(void)filename;
 	(void)function;
