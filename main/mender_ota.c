@@ -174,14 +174,18 @@ mender_err_t update_http_config_cb(esp_http_client_config_t* cfg)
 	bool	ret;
 
 	INFO("update_http_config_cb\n");
+	cfg->skip_cert_common_name_check = true;
+	return MENDER_OK;
 
-	cfg->cert_pem = malloc(4096);
+	// TODO: 
+
+	cfg->cert_pem = malloc(2048);
 	if (!cfg->cert_pem) {
 		ERROR("failed allocating cert_pem\n");
 		goto err;
 	}
 
-	ret = CFG_get(cfg_id_ca_pem, cfg->cert_pem, 4096);
+	ret = CFG_get(cfg_id_ca_pem, cfg->cert_pem, 2048);
 	if (!ret) {
 		ERROR("CFG_get failed cert_pem\n");
 		goto err;
