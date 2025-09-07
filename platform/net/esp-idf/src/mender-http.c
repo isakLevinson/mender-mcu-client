@@ -70,7 +70,6 @@ mender_http_perform(char*                jwt,
     void* params,
     int*  status)
 {
-
 	assert(NULL != path);
 	assert(NULL != callback);
 	assert(NULL != status);
@@ -99,10 +98,6 @@ mender_http_perform(char*                jwt,
 		update_http_config_cb(&config);
 	}
 
-//	config.cert_pem = NULL;
-//	config.crt_bundle_attach = NULL;
-	config.skip_cert_common_name_check = true;
-//	config.use_global_ca_store = false;
 	if (MENDER_OK != (ret = callback(MENDER_HTTP_EVENT_LOAD_CERTIFICATES, NULL, 0, &config))) {
 		mender_log_error("An error occurred");
 		goto END;
@@ -114,6 +109,7 @@ mender_http_perform(char*                jwt,
 		ret = MENDER_FAIL;
 		goto END;
 	}
+
 	esp_http_client_set_method(client, mender_http_method_to_esp_http_client_method(method));
 	if (NULL != jwt) {
 		size_t str_length = strlen("Bearer ") + strlen(jwt) + 1;
@@ -161,7 +157,6 @@ mender_http_perform(char*                jwt,
 
 	/* Read data until all have been received */
 	do {
-
 		char data[MENDER_HTTP_RECV_BUF_LENGTH];
 		int  read_length = esp_http_client_read(client, data, sizeof(data));
 		if (read_length < 0) {
@@ -203,6 +198,18 @@ END:
 	}
 	if (NULL != url) {
 		free(url);
+	}
+
+	if (config.cert_pem) {
+		free(config.cert_pem);
+	}
+
+	if (config.client_cert_pem) {
+		free(config.client_cert_pem);
+	}
+
+	if (config.client_key_pem) {
+		free(config.client_key_pem);
 	}
 
 	return ret;
