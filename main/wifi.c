@@ -401,8 +401,8 @@ static bool _startAp(void)
 		INFO("authmode: %d\n", wifi_ap_config.ap.authmode);
 
 		//wifi_ap_config.ap.ssid_len = strlen((char*)wifi_ap_config.ap.ssid);
-		INFO_BUF("ssid", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.ssid, len);
-		INFO_BUF("passwd", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.password, sizeof(wifi_ap_config.ap.password));
+		INFO_BUF("AP ssid", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.ssid, len);
+		INFO_BUF("AP passwd", PRINT_BUF_STYLE_ASC_SIZE_NL, wifi_ap_config.ap.password, strlen(wifi_ap_config.ap.password));
 	} else {
 		ERROR("SN not set. Aborting AP startup\n");
 		return false;

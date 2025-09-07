@@ -172,6 +172,7 @@ static mender_err_t restart_cb(void)
 mender_err_t	update_http_config_cb(esp_http_client_config_t* cfg)
 {
 	INFO("update_http_config_cb\n");
+	return MENDER_OK;
 }
 
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_CONFIGURE
@@ -673,15 +674,14 @@ static bool _init(void)
 		.authentication_success = authentication_success_cb,
 		.authentication_failure = authentication_failure_cb,
 		.deployment_status      = deployment_status_cb,
-		.restart                = restart_cb
+		.restart                = restart_cb,
+		.update_http_config_cb	= update_http_config_cb,
 	};
 
 	CFG_get(cfg_id_ota_url, g_mender.url, sizeof(g_mender.url));
 	CFG_get(cfg_id_ota_token, g_mender.token, sizeof(g_mender.token));
 	mender_client_config.host 			= g_mender.url;
 	mender_client_config.tenant_token	= g_mender.token;
-	// TODO: add read callback
-	mender_client_config.update_http_config_cb = NULL;
 
 	ESP_ERROR_CHECK(mender_client_init(&mender_client_config, &mender_client_callbacks));
 	INFO("Mender client initialized\n");
