@@ -47,6 +47,7 @@ typedef enum {
  * @brief HTTP client events
  */
 typedef enum {
+    MENDER_HTTP_EVENT_LOAD_CERTIFICATES,
     MENDER_HTTP_EVENT_CONNECTED,     /**< Connected to the server */
     MENDER_HTTP_EVENT_DATA_RECEIVED, /**< Data received from the server */
     MENDER_HTTP_EVENT_DISCONNECTED,  /**< Disconnected from the server */
@@ -77,6 +78,7 @@ mender_err_t mender_http_perform(char                *jwt,
                                  mender_http_method_t method,
                                  char                *payload,
                                  char                *signature,
+								 mender_err_t (*update_http_config_cb)(esp_http_client_config_t* cfg),
                                  mender_err_t (*callback)(mender_http_client_event_t, void *, size_t, void *),
                                  void *params,
                                  int  *status);

@@ -265,11 +265,12 @@ mender_client_init(mender_client_config_t* config, mender_client_callbacks_t* ca
 		goto END;
 	}
 	mender_api_config_t mender_api_config = {
-		.identity      = mender_client_config.identity,
-		.artifact_name = mender_client_config.artifact_name,
-		.device_type   = mender_client_config.device_type,
-		.host          = mender_client_config.host,
-		.tenant_token  = mender_client_config.tenant_token,
+		.identity      			= mender_client_config.identity,
+		.artifact_name 			= mender_client_config.artifact_name,
+		.device_type   			= mender_client_config.device_type,
+		.host          			= mender_client_config.host,
+		.tenant_token  			= mender_client_config.tenant_token,
+		.update_http_config_cb	= mender_client_config.update_http_config_cb,
 	};
 	if (MENDER_OK != (ret = mender_api_init(&mender_api_config))) {
 		mender_log_error("Unable to initialize API");

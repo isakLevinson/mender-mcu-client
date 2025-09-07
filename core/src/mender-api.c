@@ -126,6 +126,7 @@ mender_api_perform_authentication(void)
 	                MENDER_HTTP_POST,
 	                payload,
 	                signature,
+					mender_api_config.update_http_config_cb,
 	                &mender_api_http_text_callback,
 	                (void*)&response,
 	                &status))) {
@@ -219,7 +220,15 @@ mender_api_check_for_deployment(char** id, char** artifact_name, char** uri)
 
 	/* Perform HTTP request */
 	if (MENDER_OK
-	    != (ret = mender_http_perform(mender_api_jwt, path, MENDER_HTTP_GET, NULL, NULL, &mender_api_http_text_callback, (void*)&response, &status))) {
+	    != (ret = mender_http_perform(
+			mender_api_jwt,
+			path,
+			MENDER_HTTP_GET,
+			NULL,
+			NULL,
+			mender_api_config.update_http_config_cb,
+			&mender_api_http_text_callback,
+			(void*)&response, &status))) {
 		mender_log_error("Unable to perform HTTP request");
 		goto END;
 	}
@@ -335,7 +344,15 @@ mender_api_publish_deployment_status(char* id, mender_deployment_status_t deploy
 
 	/* Perform HTTP request */
 	if (MENDER_OK
-	    != (ret = mender_http_perform(mender_api_jwt, path, MENDER_HTTP_PUT, payload, NULL, &mender_api_http_text_callback, (void*)&response, &status))) {
+	    != (ret = mender_http_perform(
+			mender_api_jwt,
+			path,
+			MENDER_HTTP_PUT,
+			payload,
+			NULL,
+			mender_api_config.update_http_config_cb,
+			&mender_api_http_text_callback,
+			(void*)&response, &status))) {
 		mender_log_error("Unable to perform HTTP request");
 		goto END;
 	}
@@ -378,7 +395,16 @@ mender_api_download_artifact(char* uri, mender_err_t (*callback)(char*, cJSON*, 
 	int          status = 0;
 
 	/* Perform HTTP request */
-	if (MENDER_OK != (ret = mender_http_perform(NULL, uri, MENDER_HTTP_GET, NULL, NULL, &mender_api_http_artifact_callback, callback, &status))) {
+	if (MENDER_OK != (ret = mender_http_perform(
+			NULL, 
+			uri,
+			MENDER_HTTP_GET,
+			NULL,
+			NULL,
+			mender_api_config.update_http_config_cb,
+			&mender_api_http_artifact_callback,
+			callback,
+			&status))) {
 		mender_log_error("Unable to perform HTTP request");
 		goto END;
 	}
@@ -408,6 +434,9 @@ mender_api_http_text_callback(mender_http_client_event_t event, void* data, size
 
 	/* Treatment depending of the event */
 	switch (event) {
+		case MENDER_HTTP_EVENT_LOAD_CERTIFICATES:
+			break;
+
 		case MENDER_HTTP_EVENT_CONNECTED:
 			/* Nothing to do */
 			break;

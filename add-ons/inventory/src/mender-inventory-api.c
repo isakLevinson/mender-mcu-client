@@ -103,6 +103,7 @@ mender_inventory_api_publish_inventory_data(char* artifact_name, char* device_ty
 	                MENDER_HTTP_PUT,
 	                payload,
 	                NULL,
+					NULL,
 	                &mender_api_http_text_callback,
 	                (void*)&response,
 	                &status))) {

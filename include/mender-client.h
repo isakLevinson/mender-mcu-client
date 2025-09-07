@@ -39,6 +39,7 @@ typedef struct {
     int32_t            authentication_poll_interval; /**< Authentication poll interval, default is 60 seconds, -1 permits to disable periodic execution */
     int32_t            update_poll_interval;         /**< Update poll interval, default is 1800 seconds, -1 permits to disable periodic execution */
     bool               recommissioning;              /**< Used to force creation of new authentication keys */
+	mender_err_t	  (*update_http_config_cb)(esp_http_client_config_t* cfg);
 } mender_client_config_t;
 
 /**

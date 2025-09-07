@@ -65,6 +65,7 @@ mender_http_perform(char*                jwt,
     mender_http_method_t method,
     char*                payload,
     char*                signature,
+	mender_err_t (*update_http_config_cb)(esp_http_client_config_t* cfg),
     mender_err_t (*callback)(mender_http_client_event_t, void*, size_t, void*),
     void* params,
     int*  status)
@@ -93,6 +94,19 @@ mender_http_perform(char*                jwt,
 	/* Configuration of the client */
 	esp_http_client_config_t config
 	    = { .url = (NULL != url) ? url : path, .user_agent = MENDER_HTTP_USER_AGENT, .crt_bundle_attach = esp_crt_bundle_attach, .buffer_size_tx = 2048 };
+
+	if (update_http_config_cb) {
+		update_http_config_cb(&config);
+	}
+
+//	config.cert_pem = NULL;
+//	config.crt_bundle_attach = NULL;
+	config.skip_cert_common_name_check = true;
+//	config.use_global_ca_store = false;
+	if (MENDER_OK != (ret = callback(MENDER_HTTP_EVENT_LOAD_CERTIFICATES, NULL, 0, &config))) {
+		mender_log_error("An error occurred");
+		goto END;
+	}
 
 	/* Initialization of the client */
 	if (NULL == (client = esp_http_client_init(&config))) {

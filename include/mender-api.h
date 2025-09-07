@@ -24,8 +24,10 @@
 extern "C" {
 #endif /* __cplusplus */
 
+#include <esp_http_client.h>
 #include "mender-http.h"
 #include "mender-utils.h"
+
 
 /**
  * @brief Mender API configuration
@@ -36,6 +38,7 @@ typedef struct {
     char              *device_type;   /**< Device type */
     char              *host;          /**< URL of the mender server */
     char              *tenant_token;  /**< Tenant token used to authenticate on the mender server (optional) */
+	mender_err_t	  (*update_http_config_cb)(esp_http_client_config_t* cfg);
 } mender_api_config_t;
 
 /**

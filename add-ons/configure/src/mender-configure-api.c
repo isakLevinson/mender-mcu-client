@@ -49,6 +49,7 @@ mender_configure_api_download_configuration_data(mender_keystore_t** configurati
 	                MENDER_HTTP_GET,
 	                NULL,
 	                NULL,
+					NULL,
 	                &mender_api_http_text_callback,
 	                (void*)&response,
 	                &status))) {
@@ -114,6 +115,7 @@ mender_configure_api_publish_configuration_data(mender_keystore_t* configuration
 	                MENDER_HTTP_PUT,
 	                payload,
 	                NULL,
+					NULL,
 	                &mender_api_http_text_callback,
 	                (void*)&response,
 	                &status))) {
