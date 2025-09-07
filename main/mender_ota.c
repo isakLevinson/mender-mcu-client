@@ -169,6 +169,11 @@ static mender_err_t restart_cb(void)
 	return MENDER_OK;
 }
 
+mender_err_t	update_http_config_cb(esp_http_client_config_t* cfg)
+{
+	INFO("update_http_config_cb\n");
+}
+
 #ifdef CONFIG_MENDER_CLIENT_ADD_ON_CONFIGURE
 #ifndef CONFIG_MENDER_CLIENT_CONFIGURE_STORAGE
 
@@ -661,6 +666,7 @@ static bool _init(void)
 		.update_poll_interval         = -1,	// only attempt once
 		.recommissioning              = false
 	};
+
 	mender_client_callbacks_t mender_client_callbacks = {
 		.network_connect        = network_connect_cb,
 		.network_release        = network_release_cb,
@@ -674,6 +680,8 @@ static bool _init(void)
 	CFG_get(cfg_id_ota_token, g_mender.token, sizeof(g_mender.token));
 	mender_client_config.host 			= g_mender.url;
 	mender_client_config.tenant_token	= g_mender.token;
+	// TODO: add read callback
+	mender_client_config.update_http_config_cb = NULL;
 
 	ESP_ERROR_CHECK(mender_client_init(&mender_client_config, &mender_client_callbacks));
 	INFO("Mender client initialized\n");
