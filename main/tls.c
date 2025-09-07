@@ -39,7 +39,6 @@
 #ifdef CONFIG_MBEDTLS_SSL_PROTO_TLS1_3
 #include "psa/crypto.h"
 #endif
-#include "esp_crt_bundle.h"
 
 #include "cmd.h"
 #include "wifi.h"
