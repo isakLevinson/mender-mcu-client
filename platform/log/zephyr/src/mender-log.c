@@ -45,16 +45,16 @@ mender_log_print(uint8_t level, const char* filename, const char* function, int 
 	/* Switch depending log level */
 	switch (level) {
 		case MENDER_LOG_LEVEL_ERR:
-			LOG_ERR("%s (%d): %s", filename, line, log);
+			LOG_ERR("%s (%d): %s", function, log);
 			break;
 		case MENDER_LOG_LEVEL_WRN:
-			LOG_WRN("%s (%d): %s", filename, line, log);
+			LOG_WRN("%s (%d): %s", function, log);
 			break;
 		case MENDER_LOG_LEVEL_INF:
-			LOG_INF("%s (%d): %s", filename, line, log);
+			LOG_INF("%s (%d): %s", function, log);
 			break;
 		case MENDER_LOG_LEVEL_DBG:
-			LOG_DBG("%s (%d): %s", filename, line, log);
+			LOG_DBG("%s (%d): %s", function, log);
 			break;
 		default:
 			break;

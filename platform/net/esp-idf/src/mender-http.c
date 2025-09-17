@@ -97,9 +97,6 @@ mender_http_perform(char* jwt,
 	if (update_http_config_cb) {
 		update_http_config_cb(&config);
 	}
-	mender_log_info("skip_cert_common_name_check: %d", config.skip_cert_common_name_check);
-	//config.skip_cert_common_name_check = true;
-	//mender_log_error("skip_cert_common_name_check: %d", config.skip_cert_common_name_check);
 
 	if (MENDER_OK != (ret = callback(MENDER_HTTP_EVENT_LOAD_CERTIFICATES, NULL, 0, &config))) {
 		mender_log_error("An error occurred");

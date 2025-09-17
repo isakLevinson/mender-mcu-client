@@ -41,16 +41,16 @@ void mender_log_print(uint8_t level, const char* filename, const char* function,
 	/* Switch depending log level */
 	switch (level) {
 		case MENDER_LOG_LEVEL_ERR:
-			ERROR("-%s (%d): %s\n", filename, line, log);
+			ERROR("%s(): %s\n", function, log);
 			break;
 		case MENDER_LOG_LEVEL_WRN:
-			WARN("-%s (%d): %s\n", filename, line, log);
+			WARN("%s(): %s\n", function, log);
 			break;
 		case MENDER_LOG_LEVEL_INF:
-			INFO("-%s (%d): %s\n", filename, line, log);
+			INFO("%s(): %s\n", function, log);
 			break;
 		case MENDER_LOG_LEVEL_DBG:
-			TRACE("-%s (%d): %s\n", filename, line, log);
+			TRACE("%s(): %s\n", function, log);
 			break;
 		default:
 			break;
