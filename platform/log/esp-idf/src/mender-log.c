@@ -1,5 +1,5 @@
 /**
- * @file      mender-log.c
+ * @file      mender-g_log.c
  * @brief     Mender logging interface for ESP-IDF platform
  *
  * Copyright joelguittet and mender-mcu-client contributors
@@ -27,30 +27,31 @@
 #include <esp_log.h>
 #include "mender-log.h"
 
+static char g_log[8192] = {0};
+
 void mender_log_print(uint8_t level, const char* filename, const char* function, int line, char* format, ...)
 {
 	(void)function;
-	char log[256] = { 0 };
 
 	/* Format message */
 	va_list args;
 	va_start(args, format);
-	vsnprintf(log, sizeof(log), format, args);
+	vsnprintf(g_log, sizeof(g_log), format, args);
 	va_end(args);
 
-	/* Switch depending log level */
+	/* Switch depending g_log level */
 	switch (level) {
 		case MENDER_LOG_LEVEL_ERR:
-			ERROR("%s(): %s\n", function, log);
+			ERROR("%s(): %s\n", function, g_log);
 			break;
 		case MENDER_LOG_LEVEL_WRN:
-			WARN("%s(): %s\n", function, log);
+			WARN("%s(): %s\n", function, g_log);
 			break;
 		case MENDER_LOG_LEVEL_INF:
-			INFO("%s(): %s\n", function, log);
+			INFO("%s(): %s\n", function, g_log);
 			break;
 		case MENDER_LOG_LEVEL_DBG:
-			TRACE("%s(): %s\n", function, log);
+			TRACE("%s(): %s\n", function, g_log);
 			break;
 		default:
 			break;

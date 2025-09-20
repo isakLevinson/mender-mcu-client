@@ -47,7 +47,6 @@ typedef enum {
  * @brief HTTP client events
  */
 typedef enum {
-    MENDER_HTTP_EVENT_LOAD_CERTIFICATES,
     MENDER_HTTP_EVENT_CONNECTED,     /**< Connected to the server */
     MENDER_HTTP_EVENT_DATA_RECEIVED, /**< Data received from the server */
     MENDER_HTTP_EVENT_DISCONNECTED,  /**< Disconnected from the server */

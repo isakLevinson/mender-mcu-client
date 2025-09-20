@@ -235,6 +235,8 @@ mender_api_check_for_deployment(char** id, char** artifact_name, char** uri)
 		goto END;
 	}
 
+	//mender_log_info("response: %s", response);
+	
 	/* Treatment depending of the status */
 	if (200 == status) {
 		cJSON* json_response = cJSON_Parse(response);
@@ -263,6 +265,9 @@ mender_api_check_for_deployment(char** id, char** artifact_name, char** uri)
 							ret = MENDER_FAIL;
 							goto END;
 						}
+
+						mender_log_info("response uri: %s", *uri);
+
 						ret = MENDER_OK;
 					} else {
 						mender_log_error("Invalid response");
@@ -390,14 +395,12 @@ END:
 mender_err_t
 mender_api_download_artifact(char* uri, mender_err_t (*callback)(char*, cJSON*, char*, size_t, void*, size_t, size_t))
 {
-
 	assert(NULL != uri);
 	assert(NULL != callback);
 	mender_err_t ret;
 	int          status = 0;
 
-
-	mender_log_info("before mender_http_perform");
+	mender_log_info("before mender_http_perform <%s>", uri);
 	/* Perform HTTP request */
 	if (MENDER_OK != (ret = mender_http_perform(
 			NULL, 
@@ -438,9 +441,6 @@ mender_api_http_text_callback(mender_http_client_event_t event, void* data, size
 
 	/* Treatment depending of the event */
 	switch (event) {
-		case MENDER_HTTP_EVENT_LOAD_CERTIFICATES:
-			break;
-
 		case MENDER_HTTP_EVENT_CONNECTED:
 			/* Nothing to do */
 			break;

@@ -79,6 +79,8 @@ mender_http_perform(char* jwt,
 	char*                    url    = NULL;
 	char*                    bearer = NULL;
 
+	mender_log_info("path: <%s>", path);
+
 	/* Compute URL if required */
 	if ((false == mender_utils_strbeginwith(path, "http://")) && (false == mender_utils_strbeginwith(path, "https://"))) {
 		size_t str_length = strlen(mender_http_config.host) + strlen(path) + 1;
@@ -96,11 +98,6 @@ mender_http_perform(char* jwt,
 
 	if (update_http_config_cb) {
 		update_http_config_cb(&config);
-	}
-
-	if (MENDER_OK != (ret = callback(MENDER_HTTP_EVENT_LOAD_CERTIFICATES, NULL, 0, &config))) {
-		mender_log_error("An error occurred");
-		goto END;
 	}
 
 	/* Initialization of the client */
