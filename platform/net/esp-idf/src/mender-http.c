@@ -201,14 +201,17 @@ END:
 	}
 
 	if (config.cert_pem) {
+		mender_log_info("freeing cert_pem");
 		free(config.cert_pem);
 	}
 
 	if (config.client_cert_pem) {
+		mender_log_info("freeing client_cert_pem");
 		free(config.client_cert_pem);
 	}
 
 	if (config.client_key_pem) {
+		mender_log_info("freeing client_key_pem");
 		free(config.client_key_pem);
 	}
 

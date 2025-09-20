@@ -396,6 +396,8 @@ mender_api_download_artifact(char* uri, mender_err_t (*callback)(char*, cJSON*, 
 	mender_err_t ret;
 	int          status = 0;
 
+
+	mender_log_info("before mender_http_perform");
 	/* Perform HTTP request */
 	if (MENDER_OK != (ret = mender_http_perform(
 			NULL, 
@@ -407,7 +409,7 @@ mender_api_download_artifact(char* uri, mender_err_t (*callback)(char*, cJSON*, 
 			&mender_api_http_artifact_callback,
 			callback,
 			&status))) {
-		mender_log_error("Unable to perform HTTP request");
+		mender_log_error("Unable to perform HTTP request %d", ret);
 		goto END;
 	}
 
