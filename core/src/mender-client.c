@@ -749,7 +749,6 @@ REBOOT:
 static mender_err_t
 mender_client_authentication_work_function(void)
 {
-
 	mender_err_t ret;
 
 	/* Perform authentication with the mender server */
@@ -821,13 +820,22 @@ mender_client_authentication_work_function(void)
 		}
 
 		/* Check if artifact running is the pending one */
+		mender_log_info("chacking if success");
+
 		bool   success   = true;
 		cJSON* json_type = NULL;
 		cJSON_ArrayForEach(json_type, json_types) {
 			if (NULL != mender_client_artifact_types_list) {
 				for (size_t artifact_type_index = 0; artifact_type_index < mender_client_artifact_types_count; artifact_type_index++) {
+					mender_log_info("type: <%s> jdon:<%s>",
+						mender_client_artifact_types_list[artifact_type_index]->type,
+						cJSON_GetStringValue(json_type));
+
 					if (!strcmp(mender_client_artifact_types_list[artifact_type_index]->type, cJSON_GetStringValue(json_type))) {
 						if (NULL != mender_client_artifact_types_list[artifact_type_index]->artifact_name) {
+							mender_log_info("artifact_name: <%s> artifact_name:<%s>",
+								mender_client_artifact_types_list[artifact_type_index]->artifact_name, artifact_name);
+
 							if (strcmp(mender_client_artifact_types_list[artifact_type_index]->artifact_name, artifact_name)) {
 								/* Deployment status failure */
 								success = false;
@@ -841,6 +849,7 @@ mender_client_authentication_work_function(void)
 		/* Release mutex used to protect access to the artifact types management list */
 		mender_scheduler_mutex_give(mender_client_artifact_types_mutex);
 
+		mender_log_info("about to mender_client_publish_deployment_status %d", success);
 		/* Publish deployment status */
 		if (true == success) {
 			mender_client_publish_deployment_status(id, MENDER_DEPLOYMENT_STATUS_SUCCESS);
